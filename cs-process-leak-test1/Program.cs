@@ -11,30 +11,18 @@ namespace cs_process_leak_test1
             {
                 if ((i % 100) == 0)
                 {
-                    Console.WriteLine(i);
+                    long mem = GC.GetTotalMemory(false);
+                    Console.WriteLine(mem);
                     GC.Collect();
                 }
 
                 try
                 {
-                    ProcessStartInfo info = new ProcessStartInfo()
+                    using (var proc = Process.Start("/bin/true"))
                     {
-                        FileName = "/bin/uname",
-                        UseShellExecute = false,
-
-                        RedirectStandardOutput = false,
-                        RedirectStandardError = false,
-                        RedirectStandardInput = false,
-
-                        CreateNoWindow = false,
-                        Arguments = "-a",
-                        WorkingDirectory = "/",
-                    };
-
-                    using var Proc = Process.Start(info);
-
-                    Proc.WaitForExit();
-
+                        proc.WaitForExit();
+                        proc.Kill(false);
+                    }
                 }
                 catch (Exception ex)
                 {
