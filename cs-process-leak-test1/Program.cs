@@ -22,7 +22,7 @@ namespace cs_process_leak_test1
                         FileName = "/bin/uname",
                         UseShellExecute = false,
 
-                        RedirectStandardOutput = true,
+                        RedirectStandardOutput = false,
                         RedirectStandardError = false,
                         RedirectStandardInput = false,
 
@@ -31,15 +31,10 @@ namespace cs_process_leak_test1
                         WorkingDirectory = "/",
                     };
 
-                    var Proc = Process.Start(info);
+                    using var Proc = Process.Start(info);
 
                     Proc.WaitForExit();
 
-                    Proc.StandardOutput.ReadToEnd();
-                    Proc.StandardOutput.Close();
-                    Proc.StandardOutput.Dispose();
-
-                    Proc.Dispose();
                 }
                 catch (Exception ex)
                 {
