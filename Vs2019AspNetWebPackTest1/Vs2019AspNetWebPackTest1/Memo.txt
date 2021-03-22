@@ -1,3 +1,8 @@
+﻿## Windows 上の Visual Studio 2019 で必要なもの
+## 
+## https://marketplace.visualstudio.com/items?itemName=MadsKristensen.WebPackTaskRunner
+## node-v14.16.0-x64.msi
+
 npm init -y
 
 npm install --save-dev typescript tslint
