@@ -5,6 +5,9 @@ const config = {
 	mode: "development",
     devtool: "inline-source-map",
     entry: path.resolve(__dirname, "Scripts/DnApp.ts"),
+    optimization: {
+        moduleIds: 'deterministic',
+    },
     output: {
         filename: "bundle.js",
         path: path.resolve(__dirname, "wwwroot/js")
