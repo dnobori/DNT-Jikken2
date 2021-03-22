@@ -1,0 +1,4 @@
+*.js        -text
+*.js.map    -text
+*.ts        -text
+
