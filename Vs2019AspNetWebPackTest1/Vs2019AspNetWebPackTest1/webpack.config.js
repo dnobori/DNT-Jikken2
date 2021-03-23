@@ -12,16 +12,20 @@ const config = {
         filename: "bundle.js",
         path: path.resolve(__dirname, "wwwroot/js")
     },
+    target: ['web', 'es3'],
     module: {
-        rules: [
-            { test: /\.ts$/, loader: "ts-loader" }
-        ]
+        rules: [{
+            test: /\.ts$/,
+            loader: "ts-loader",
+            include: path.join(__dirname, "Scripts"),
+            exclude: /node_modules/
+        }]
     },
     resolve: {
         extensions: [".ts", ".js"],
         modules: [
             "node_modules",
-            path.resolve(__dirname, "scripts")
+            path.resolve(__dirname, "Scripts")
         ]
     }
 };

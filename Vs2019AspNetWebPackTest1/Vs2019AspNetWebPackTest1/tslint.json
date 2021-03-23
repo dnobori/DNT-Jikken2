@@ -15,7 +15,13 @@
     "space-before-function-paren": false,
     "trailing-comma": false,
     "no-empty": false,
-    "no-unused-variable": false
+    "no-unused-variable": false,
+    "await-promise": true,
+    "binary-expression-operand-order": false,
+    "curly": true,
+    "encoding": true,
+    "eofline": true,
+    "newline-before-return": true
   },
   "rulesDirectory": []
 }
