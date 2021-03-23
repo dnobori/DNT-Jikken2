@@ -4,7 +4,13 @@ import { TestClass1, TestClass2 } from "DnLib";
 //alert(Greeter.greet("world 021"));
 TestClass2.Hello2("Inu");
 TestClass1.Hello("Neko");
-console.log("--a");
-TestClass1.HelloAsync();
-console.log("--b");
+TestFunc1();
+function TestFunc1() {
+    console.log("--a");
+    var task = TestClass1.HelloAsync();
+    task["catch"](function (x) {
+        alert(x);
+    });
+    console.log("--b");
+}
 //# sourceMappingURL=DnApp.js.map

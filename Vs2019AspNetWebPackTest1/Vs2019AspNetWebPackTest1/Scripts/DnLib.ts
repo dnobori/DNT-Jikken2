@@ -43,8 +43,12 @@ export class TestClass1
         console.log("start");
         for (let i = 0; i < 20; i++)
         {
+            if (i >= 10)
+            {
+                throw "This is Error !!!";
+            }
             await this.SleepAsync(50);
-            console.log("Neko_ 789 : " +i);
+            console.log("Neko_ 7810 : " +i);
         }
         console.log("end");
     }

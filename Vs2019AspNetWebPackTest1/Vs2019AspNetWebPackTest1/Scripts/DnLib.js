@@ -82,10 +82,13 @@ var TestClass1 = /** @class */ (function () {
                         _a.label = 1;
                     case 1:
                         if (!(i < 20)) return [3 /*break*/, 4];
+                        if (i >= 10) {
+                            throw "This is Error !!!";
+                        }
                         return [4 /*yield*/, this.SleepAsync(50)];
                     case 2:
                         _a.sent();
-                        console.log("Neko_ 789 : " + i);
+                        console.log("Neko_ 7810 : " + i);
                         _a.label = 3;
                     case 3:
                         i++;

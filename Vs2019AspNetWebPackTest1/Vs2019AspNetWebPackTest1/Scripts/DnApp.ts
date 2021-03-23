@@ -10,7 +10,16 @@ TestClass2.Hello2("Inu");
 
 TestClass1.Hello("Neko");
 
-console.log("--a");
-TestClass1.HelloAsync();
-console.log("--b");
+TestFunc1();
+
+function TestFunc1()
+{
+    console.log("--a");
+    const task = TestClass1.HelloAsync();
+    task.catch(x =>
+    {
+        alert(x);
+    });
+    console.log("--b");
+}
 
