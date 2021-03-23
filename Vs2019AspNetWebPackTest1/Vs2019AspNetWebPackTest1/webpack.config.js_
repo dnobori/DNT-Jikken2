@@ -18,7 +18,6 @@ const config = {
             test: /\.ts$/,
             loader: "ts-loader",
             include: path.join(__dirname, "Scripts"),
-            exclude: /node_modules/
         }]
     },
     resolve: {

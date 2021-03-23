@@ -10,14 +10,14 @@ module.exports = {
     "env": { "node": true, "es6": true },
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
-        "ecmaVersion": 2019,
+        "ecmaVersion": 2018,
         "tsconfigRootDir": __dirname,
         "project": ["./tsconfig.json"]
     },
     "ignorePatterns": ["**/*.js"],
     "rules": {
         "quotes": ["warn", "double"],
-        "no-unused-vars": "off",
+        "no-unused-vars": "warn",
         "@typescript-eslint/no-unused-vars": "off",
     }
 };
