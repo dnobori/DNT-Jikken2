@@ -3,7 +3,7 @@ import "core-js/es/promise";
 import { Greeter, TestClass1, TestClass2 } from "./DnLib";
 
 import Guacamole from "guacamole-common-js";
-//import Guacamole from "./guacamole-common-js";
+//import * as Guacamole from "./guacamole-common";
 
 
 //console.log("Hello World");
@@ -38,6 +38,7 @@ export class Tom
     {
         const tunnel = new Guacamole.WebSocketTunnel("Model.WebSocketUrl");
 
+        // @ts-ignore
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tunnel.onerror = function (status: any): void
         {
@@ -46,6 +47,7 @@ export class Tom
         };
 
         // Instantiate client, using a WebSocket tunnel for communications.
+        // @ts-ignore
         const guac = new Guacamole.Client(tunnel);
 
         // Add client to display div

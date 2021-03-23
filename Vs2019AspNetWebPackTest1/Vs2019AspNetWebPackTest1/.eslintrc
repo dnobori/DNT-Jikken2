@@ -122,7 +122,7 @@
 
         // The below is some, but not all, of the rules from @typescript-eslint/recommended https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/src/configs/recommended.json (all errors set to warn)
         "@typescript-eslint/adjacent-overload-signatures": 1,
-        "@typescript-eslint/ban-ts-ignore": 1,
+        "@typescript-eslint/ban-ts-ignore": 0,
         "@typescript-eslint/ban-types": 1,
         "camelcase": 0,
         "@typescript-eslint/camelcase": 1,

@@ -1,7 +1,7 @@
 import "core-js/es/promise";
 import { TestClass1, TestClass2 } from "./DnLib";
 import Guacamole from "guacamole-common-js";
-//import Guacamole from "./guacamole-common-js";
+//import * as Guacamole from "./guacamole-common";
 //console.log("Hello World");
 //alert(Greeter.greet("world 021"));
 TestClass2.Hello2("Inu");
@@ -23,12 +23,14 @@ var Tom = /** @class */ (function () {
     };
     Tom.GuacamoleTest1 = function (display) {
         var tunnel = new Guacamole.WebSocketTunnel("Model.WebSocketUrl");
+        // @ts-ignore
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tunnel.onerror = function (status) {
             console.log(status);
             alert("Tunnel Error Code: " + status.code);
         };
         // Instantiate client, using a WebSocket tunnel for communications.
+        // @ts-ignore
         var guac = new Guacamole.Client(tunnel);
         // Add client to display div
         display.appendChild(guac.getDisplay().getElement());
