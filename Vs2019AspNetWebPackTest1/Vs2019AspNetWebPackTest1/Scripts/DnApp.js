@@ -1,4 +1,4 @@
-import "core-js/es/promise";
+//import "core-js/es/promise";
 import { TestClass1, TestClass2 } from "DnLib";
 //console.log("Hello World");
 //alert(Greeter.greet("world 021"));

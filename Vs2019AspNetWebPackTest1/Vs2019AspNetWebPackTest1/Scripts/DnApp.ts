@@ -1,4 +1,4 @@
-import "core-js/es/promise";
+//import "core-js/es/promise";
 
 import { Greeter, TestClass1, TestClass2 } from "DnLib";
 
