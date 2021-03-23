@@ -45,7 +45,7 @@ export class TestClass1
                 throw "This is Error !!!";
             }
             await this.SleepAsync(50);
-            console.log("Neko_ 7810 : " + i);
+            console.log("Neko_ 111 : " + i);
         }
         console.log("end");
     }
