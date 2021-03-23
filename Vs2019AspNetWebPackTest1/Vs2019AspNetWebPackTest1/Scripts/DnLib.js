@@ -61,11 +61,9 @@ var TestClass1 = /** @class */ (function () {
     TestClass1.SleepAsync = function (msec) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, new Promise(function (resolve, reject) {
+                return [2 /*return*/, new Promise(function (resolve) {
                         setTimeout(function () {
-                            //throw "Hello Error";
-                            //reject("neko");
-                            resolve(0);
+                            resolve();
                         }, msec);
                     })];
             });

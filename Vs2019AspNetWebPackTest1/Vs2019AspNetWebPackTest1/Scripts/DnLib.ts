@@ -8,7 +8,7 @@
 
 export class TestClass2
 {
-    public static Hello2(message: string)
+    public static Hello2(message: string): void
     {
         console.log("Hello " + message);
     }
@@ -16,29 +16,26 @@ export class TestClass2
 
 export class TestClass1
 {
-    public static Hello(message: string)
+    public static Hello(message: string): void
     {
         console.log("Hello " + message);
     }
 
-    public static async SleepAsync(msec: number)
+    public static async SleepAsync(msec: number): Promise<void>
     {
         return new Promise(
-            function (resolve, reject)
+            function (resolve)
             {
                 setTimeout(function ()
                 {
-                    //throw "Hello Error";
-                    //reject("neko");
-                    resolve(0);
-                },
-                    msec);
+                    resolve();
+                }, msec);
             }
         );
 
     }
 
-    public static async HelloAsync()
+    public static async HelloAsync(): Promise<void>
     {
         console.log("start");
         for (let i = 0; i < 20; i++)
@@ -48,7 +45,7 @@ export class TestClass1
                 throw "This is Error !!!";
             }
             await this.SleepAsync(50);
-            console.log("Neko_ 7810 : " +i);
+            console.log("Neko_ 7810 : " + i);
         }
         console.log("end");
     }
