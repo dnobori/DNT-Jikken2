@@ -17,4 +17,5 @@ npm install --save core-js
 
 npm install --save guacamole-common-js
 
+npm install --save bulma bulma-extensions @fortawesome/fontawesome-free prismjs vue buefy axios lodash moment
 
