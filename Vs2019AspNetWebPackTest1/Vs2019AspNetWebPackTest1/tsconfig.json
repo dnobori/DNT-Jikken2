@@ -58,9 +58,6 @@
     // "emitDecoratorMetadata": true,         /* Enables experimental support for emitting type metadata for decorators. */
     "watch": false
   },
-  "typeAcquisition": {
-    "enable": true
-  },
   "include": [
     "Scripts/**/*.ts"
   ],

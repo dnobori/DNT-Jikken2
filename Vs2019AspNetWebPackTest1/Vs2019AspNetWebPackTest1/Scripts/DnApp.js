@@ -7,6 +7,7 @@ import Guacamole from "guacamole-common-js";
 TestClass2.Hello2("Inu");
 TestClass1.Hello("Neko");
 //TestFunc1();
+function x() { }
 function TestFunc1() {
     console.log("--a");
     var task = TestClass1.HelloAsync();

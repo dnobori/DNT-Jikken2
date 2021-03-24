@@ -15,6 +15,8 @@ TestClass1.Hello("Neko");
 
 //TestFunc1();
 
+function x(): void
+{ }
 
 function TestFunc1(): void
 {
