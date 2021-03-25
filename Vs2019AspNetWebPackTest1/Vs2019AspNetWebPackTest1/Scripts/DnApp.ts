@@ -1,13 +1,37 @@
+
 import "core-js/es/promise";
+
 require('./mystyles.scss');
+
 import "@fortawesome/fontawesome-free/js/all";
+
 import "prismjs";
 import "prismjs/components/prism-json";
+import "prismjs/components/prism-bash";
 import "prismjs/plugins/line-numbers/prism-line-numbers";
+import "prismjs/plugins/autolinker/prism-autolinker";
+import "prismjs/plugins/command-line/prism-command-line";
+import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
+import "buefy";
+import "axios";
+
+// @ts-ignore
+Prism.plugins.NormalizeWhitespace.setDefaults({
+    'remove-trailing': true,
+    'remove-indent': false,
+    'left-trim': true,
+    'right-trim': true,
+    'indent': 0,
+    'remove-initial-line-feed': false,
+});
+
+//Prism.plugins.customClass.prefix('prism-');
 
 import { Greeter, TestClass1, TestClass2 } from "./DnLib";
 
 import Guacamole from "guacamole-common-js";
+
+
 //import * as Guacamole from "./guacamole-common";
 
 
@@ -38,7 +62,7 @@ export class Tom
 {
     public static HtmlTest1(): void
     {
-        console.log("Tom Html test 1");
+        Tom.HtmlGetTestAsync();
     }
 
     public static GuacamoleTest1(display: HTMLElement): void
@@ -74,6 +98,22 @@ export class Tom
         {
             guac.disconnect();
         }
+    }
+
+    public static async HtmlGetTestAsync(): Promise<void>
+    {
+        console.log("#1");
+        try
+        {
+            const html = await axios.get("/");
+
+            console.log(html);
+        }
+        catch (e)
+        {
+            console.log(e);
+        }
+        console.log("#2");
     }
 }
 

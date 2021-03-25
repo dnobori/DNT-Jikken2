@@ -86,7 +86,7 @@ var TestClass1 = /** @class */ (function () {
                         return [4 /*yield*/, this.SleepAsync(50)];
                     case 2:
                         _a.sent();
-                        console.log("Neko_ 198 : " + i);
+                        console.log("Neko_ 200 : " + i);
                         _a.label = 3;
                     case 3:
                         i++;

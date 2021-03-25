@@ -7,5 +7,27 @@ $footer-padding: 0.2rem 1rem 0.2rem;
 @import "~@fortawesome/fontawesome-free/scss/fontawesome";
 @import "~prismjs/themes/prism-coy";
 @import "~prismjs/plugins/line-numbers/prism-line-numbers";
+@import "~prismjs/plugins/autolinker/prism-autolinker";
+@import "~prismjs/plugins/command-line/prism-command-line";
+@import "~buefy/src/scss/buefy";
 
+
+/* Solve the conflict between Bulma and Prism */
+code[class*="language-"] .tag,
+code[class*="language-"] .number {
+    align-items: stretch;
+    background-color: transparent;
+    border-radius: 0;
+    display: inline;
+    font-size: 1em;
+    height: auto;
+    justify-content: flex-start;
+    line-height: normal;
+    padding: 0;
+    white-space: pre;
+    margin-right: 0;
+    min-width: auto;
+    text-align: left;
+    vertical-align: baseline;
+}
 

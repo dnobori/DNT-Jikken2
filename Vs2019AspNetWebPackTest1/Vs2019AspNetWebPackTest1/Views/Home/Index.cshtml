@@ -7,22 +7,109 @@
 <div class="box">
     <div class="content">
         <p>本文です。</p>
+
+        <div class="field">
+            <label class="label">テキストボックス:</label>
+            <div class="control has-icons-left has-icons-right">
+                <input class="input is-primary" type="text" placeholder="へんな説明" name="recipient" value="">
+                <span class="icon is-small is-left">
+                    <i class="fas fa-user"></i>
+                </span>
+            </div>
+            <p class="help is-primary">
+                補足説明。
+            </p>
+        </div>
         <p>　</p>
-        <p>JSON ビューアー</p>
+
+
+        <div class="field">
+            <label class="label">オプション:</label>
+        </div>
+
+        <div class="field is-horizontal">
+            <div class="field-label">
+                <label class="label">こんにちは:</label>
+            </div>
+            <div class="field-body">
+                <div class="field is-narrow">
+                    <div class="control">
+                        <label class="checkbox">
+                            <input type="checkbox" name="auth" value="true">
+                            <i class="fas fa-lock"></i> チェックボックス 1
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="field is-horizontal">
+            <div class="field-label">
+                <label class="label">さようなら:</label>
+            </div>
+            <div class="field-body">
+                <div class="field is-narrow">
+                    <div class="control">
+                        <label class="checkbox">
+                            <input type="checkbox" name="zip" value="true">
+                            <i class="far fa-file-archive"></i> チェックボックス 2
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="field is-horizontal">
+            <div class="field-label">
+                <label class="label">ヘンなチェックボックス:</label>
+            </div>
+            <div class="field-body">
+                <div class="field is-narrow">
+                    <div class="control">
+                        <input type="checkbox" id="instId" name="cb1" value="instId" class="switch"><label for="instId">こんにちは</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p>　</p>
+        <p class="title is-5">C 言語ビューア</p>
         <div class="control">
-            <pre class="line-numbers"><code class="language-json">
-{
+            <pre class="line-numbers"><code class="language-json">{
+  // http://www.ipa.go.jp/
   "Logging": {
     "LogLevel": {
       "Default": "Information",
       "Microsoft": "Warning",
-      "Microsoft.Hosting.Lifetime": "Information"
+      "Microsoft.Hosting.Lifetime": "Information A B C 12345 Information A B C 12345 Information A B C 12345 Information A B C 12345 Information A B C 12345 Information A B C 12345 "
     }
   },
   "AllowedHosts": "*"
-}
-                </code></pre>
+}</code></pre>
         </div>
+
+        <p>　</p>
+        <p class="title is-5">コマンドラインビューア</p>
+        <div class="control">
+            <pre class="command-line" data-prompt="[root@dnlinux ~]#" data-filter-output="|"><code class="language-bash">
+uptime 111 222 333
+| 11:42:24 up 150 days, 18:32,  1 user,  load average: 0.00, 0.00, 0.00
+|
+w
+| 11:42:25 up 150 days, 18:32,  1 user,  load average: 0.00, 0.00, 0.00
+|USER     TTY      FROM              LOGIN   IDLE   JCPU   PCPU WHAT
+|root     pts/0    10.21.1.2        11:42    0.00s  0.00s  0.00s w
+|
+uname -a                                                                                                                                                                                                                  
+|Linux dnlinux.sec.softether.co.jp 2.6.32-696.20.1.el6.x86_64 #1 SMP Fri Jan 26 17:51:45 UTC 2018 x86_64 x86_64 x86_64 GNU/Linux
+|
+ps
+|  PID TTY          TIME CMD
+|54779 pts/0    00:00:00 bash
+|54802 pts/0    00:00:00 ps
+</code></pre>
+        </div>
+
         <p>　</p>
     </div>
 </div>
@@ -33,7 +120,7 @@
         console.log(Hoge);
         //Hoge.default();
         //Hoge.TestFunc2();
-        //Hoge.Tom.HtmlTest1();
+        Hoge.Tom.HtmlTest1();
         //Hoge.Tom.GuacamoleTest1(document.getElementById("display"));
         Hoge.TestFunc1();
     </script>
