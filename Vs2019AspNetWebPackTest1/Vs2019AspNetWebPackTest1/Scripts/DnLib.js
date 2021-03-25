@@ -81,12 +81,12 @@ var TestClass1 = /** @class */ (function () {
                     case 1:
                         if (!(i < 20)) return [3 /*break*/, 4];
                         if (i >= 10) {
-                            throw "This is Error !!!";
+                            //throw "This is Error !!!";
                         }
                         return [4 /*yield*/, this.SleepAsync(50)];
                     case 2:
                         _a.sent();
-                        console.log("Neko_ 111 : " + i);
+                        console.log("Neko_ 198 : " + i);
                         _a.label = 3;
                     case 3:
                         i++;

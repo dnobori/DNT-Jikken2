@@ -1,4 +1,9 @@
 import "core-js/es/promise";
+require('./mystyles.scss');
+import "@fortawesome/fontawesome-free/js/all";
+import "prismjs";
+import "prismjs/components/prism-json";
+import "prismjs/plugins/line-numbers/prism-line-numbers";
 import { TestClass1, TestClass2 } from "./DnLib";
 import Guacamole from "guacamole-common-js";
 //import * as Guacamole from "./guacamole-common";
@@ -8,7 +13,7 @@ TestClass2.Hello2("Inu");
 TestClass1.Hello("Neko");
 //TestFunc1();
 function x() { }
-function TestFunc1() {
+export function TestFunc1() {
     console.log("--a");
     var task = TestClass1.HelloAsync();
     task["catch"](function (x) {

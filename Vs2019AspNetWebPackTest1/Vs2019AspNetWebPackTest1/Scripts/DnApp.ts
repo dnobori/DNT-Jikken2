@@ -1,4 +1,9 @@
 import "core-js/es/promise";
+require('./mystyles.scss');
+import "@fortawesome/fontawesome-free/js/all";
+import "prismjs";
+import "prismjs/components/prism-json";
+import "prismjs/plugins/line-numbers/prism-line-numbers";
 
 import { Greeter, TestClass1, TestClass2 } from "./DnLib";
 
@@ -18,7 +23,7 @@ TestClass1.Hello("Neko");
 function x(): void
 { }
 
-function TestFunc1(): void
+export function TestFunc1(): void
 {
     console.log("--a");
     const task = TestClass1.HelloAsync();

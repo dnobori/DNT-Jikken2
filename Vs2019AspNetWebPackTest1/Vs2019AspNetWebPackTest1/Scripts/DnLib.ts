@@ -42,10 +42,10 @@ export class TestClass1
         {
             if (i >= 10)
             {
-                throw "This is Error !!!";
+                //throw "This is Error !!!";
             }
             await this.SleepAsync(50);
-            console.log("Neko_ 111 : " + i);
+            console.log("Neko_ 198 : " + i);
         }
         console.log("end");
     }

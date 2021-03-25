@@ -1,8 +1,11 @@
 /// <binding Clean='Run - Development' ProjectOpened='Watch - Development' />
 const path = require("path");
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
-const config = {
-	mode: "development",
+
+// From: https://bulma.io/documentation/customize/with-webpack/
+module.exports = {
+    mode: "development",
     devtool: "inline-source-map",
     entry: path.resolve(__dirname, "Scripts/DnApp.ts"),
     optimization: {
@@ -18,11 +21,28 @@ const config = {
     },
     target: ['web', 'es3'],
     module: {
-        rules: [{
-            test: /\.ts$/,
-            loader: "ts-loader",
-            include: path.join(__dirname, "Scripts"),
-        }]
+        rules: [
+            {
+                test: /\.ts$/,
+                loader: "ts-loader",
+                include: path.join(__dirname, "Scripts"),
+            },
+            {
+                test: /\.scss$/,
+                use: [
+                    MiniCssExtractPlugin.loader,
+                    {
+                        loader: 'css-loader'
+                    },
+                    {
+                        loader: 'sass-loader',
+                        options: {
+                            sourceMap: true,
+                            // options...
+                        }
+                    }
+                ]
+            }]
     },
     resolve: {
         extensions: [".ts", ".js"],
@@ -30,7 +50,12 @@ const config = {
             "node_modules",
             path.resolve(__dirname, "Scripts")
         ]
-    }
+    },
+    plugins: [
+        new MiniCssExtractPlugin({
+            filename: 'css/mystyles.css'
+        }),
+    ]
 };
 
-module.exports = config;
+
