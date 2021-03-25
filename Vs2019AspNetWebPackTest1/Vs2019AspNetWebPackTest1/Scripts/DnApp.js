@@ -34,6 +34,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+//import "../TypeDefs/types.d.ts"
 import "core-js/es/promise";
 require('./mystyles.scss');
 import "@fortawesome/fontawesome-free/js/all";
@@ -45,7 +46,7 @@ import "prismjs/plugins/autolinker/prism-autolinker";
 import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
-import "axios";
+import Axios from "axios";
 // @ts-ignore
 Prism.plugins.NormalizeWhitespace.setDefaults({
     'remove-trailing': true,
@@ -91,8 +92,9 @@ var Tom = /** @class */ (function () {
         // @ts-ignore
         var guac = new Guacamole.Client(tunnel);
         // Add client to display div
-        display.appendChild(guac.getDisplay().getElement());
+        //display.appendChild(guac.getDisplay().getElement());
         // Error handler
+        // @ts-ignore
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         guac.onerror = function (status) {
             console.log(status);
@@ -113,7 +115,7 @@ var Tom = /** @class */ (function () {
                         _a.label = 1;
                     case 1:
                         _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, axios.get("/")];
+                        return [4 /*yield*/, Axios.get("/")];
                     case 2:
                         html = _a.sent();
                         console.log(html);

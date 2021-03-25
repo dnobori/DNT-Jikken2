@@ -1,4 +1,4 @@
-
+//import "../TypeDefs/types.d.ts"
 import "core-js/es/promise";
 
 require('./mystyles.scss');
@@ -13,7 +13,7 @@ import "prismjs/plugins/autolinker/prism-autolinker";
 import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
-import "axios";
+import Axios from "axios";
 
 // @ts-ignore
 Prism.plugins.NormalizeWhitespace.setDefaults({
@@ -82,9 +82,10 @@ export class Tom
         const guac = new Guacamole.Client(tunnel);
 
         // Add client to display div
-        display.appendChild(guac.getDisplay().getElement());
+        //display.appendChild(guac.getDisplay().getElement());
 
         // Error handler
+        // @ts-ignore
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         guac.onerror = function (status: any): void
         {
@@ -105,7 +106,7 @@ export class Tom
         console.log("#1");
         try
         {
-            const html = await axios.get("/");
+            const html = await Axios.get("/");
 
             console.log(html);
         }
