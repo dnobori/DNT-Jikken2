@@ -1,4 +1,16 @@
-﻿export class Greeter
+﻿////import { default as Axios } from "axios";
+////import { default as _ } from "lodash";
+////import { default as $ } from "jquery";
+////import { default as Moment } from "moment";
+
+import { Moment } from "./DnImports";
+
+//Moment
+
+//import "moment/locale/ja";
+//Moment.locale("ja");
+
+export class Greeter
 {
     public static greet(message: string): string
     {
@@ -10,7 +22,12 @@ export class TestClass2
 {
     public static Hello2(message: string): void
     {
-        console.log("Hello " + message);
+        console.log("Test2 - " + Moment().format("M - D （dd）")) // => 12月３日（日）
+    }
+
+    public static GetMoment(): Moment.unitOfTime.All
+    {
+        return "year";
     }
 }
 

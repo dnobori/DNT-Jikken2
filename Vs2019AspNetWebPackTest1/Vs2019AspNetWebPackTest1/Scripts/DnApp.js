@@ -35,6 +35,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 require('./mystyles.scss');
+// Web App
 import "core-js/es/promise";
 import "@fortawesome/fontawesome-free/js/all";
 import "prismjs";
@@ -45,13 +46,13 @@ import "prismjs/plugins/autolinker/prism-autolinker";
 import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
-import Axios from "axios";
-import Moment from "moment";
-import "moment/locale/ja";
-Moment.locale("ja");
+// Codes
+import { default as Axios } from "axios";
+//import { default as Moment } from "moment";
+//import "moment/locale/ja";
+//Moment.locale("ja");
 var d1 = new Date(2017, 0, 1);
-console.log("テスト");
-console.log(Moment().format("M - D （dd）")); // => 12月３日（日）
+//console.log("Test1 - " + Moment().format("M - D （dd）")) // => 12月３日（日）
 // @ts-ignore
 Prism.plugins.NormalizeWhitespace.setDefaults({
     'remove-trailing': true,
@@ -63,6 +64,8 @@ Prism.plugins.NormalizeWhitespace.setDefaults({
 });
 //Prism.plugins.customClass.prefix('prism-');
 import { TestClass1, TestClass2 } from "./DnLib";
+TestClass2.Hello2("neko");
+var abc = TestClass2.GetMoment();
 import Guacamole from "guacamole-common-js";
 //import * as Guacamole from "./guacamole-common";
 //console.log("Hello World");

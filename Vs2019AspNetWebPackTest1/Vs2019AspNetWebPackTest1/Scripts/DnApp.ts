@@ -1,4 +1,6 @@
 ﻿require('./mystyles.scss');
+
+// Web App
 import "core-js/es/promise";
 import "@fortawesome/fontawesome-free/js/all";
 import "prismjs";
@@ -9,17 +11,18 @@ import "prismjs/plugins/autolinker/prism-autolinker";
 import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
-import Axios from "axios";
-import _ from "lodash";
-import $ from "jquery";
-import Moment from "moment";
-import "moment/locale/ja";
-Moment.locale("ja")
+
+// Codes
+import { default as Axios } from "axios";
+import { default as _ } from "lodash";
+import { default as $ } from "jquery";
+//import { default as Moment } from "moment";
+//import "moment/locale/ja";
+//Moment.locale("ja");
 
 let d1 = new Date(2017, 0, 1);
 
-console.log("テスト");
-console.log(Moment().format("M - D （dd）")) // => 12月３日（日）
+//console.log("Test1 - " + Moment().format("M - D （dd）")) // => 12月３日（日）
 
 
 // @ts-ignore
@@ -35,6 +38,11 @@ Prism.plugins.NormalizeWhitespace.setDefaults({
 //Prism.plugins.customClass.prefix('prism-');
 
 import { Greeter, TestClass1, TestClass2 } from "./DnLib";
+
+TestClass2.Hello2("neko");
+
+let abc = TestClass2.GetMoment();
+
 
 import Guacamole from "guacamole-common-js";
 
