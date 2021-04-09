@@ -47,10 +47,13 @@ import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
 // Codes
-import { default as Axios } from "axios";
+//import { default as Axios } from "axios";
+//import { default as _ } from "lodash";
+//import { default as $ } from "jquery";
 //import { default as Moment } from "moment";
 //import "moment/locale/ja";
 //Moment.locale("ja");
+import { Axios } from "./DnImports";
 var d1 = new Date(2017, 0, 1);
 //console.log("Test1 - " + Moment().format("M - D （dd）")) // => 12月３日（日）
 // @ts-ignore

@@ -8,6 +8,7 @@ var BomPlugin = require('webpack-utf8-bom');
 // From: https://bulma.io/documentation/customize/with-webpack/
 module.exports = {
     mode: "development",
+    //mode: "production",
     devtool: "inline-source-map",
     entry: path.resolve(__dirname, "Scripts/DnApp.ts"),
     optimization: {
