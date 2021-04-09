@@ -2,6 +2,8 @@
 const path = require("path");
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
+// https://www.npmjs.com/package/webpack-utf8-bom
+var BomPlugin = require('webpack-utf8-bom');
 
 // From: https://bulma.io/documentation/customize/with-webpack/
 module.exports = {
@@ -55,6 +57,7 @@ module.exports = {
         new MiniCssExtractPlugin({
             filename: 'css/mystyles.css'
         }),
+        new BomPlugin(true),
     ]
 };
 

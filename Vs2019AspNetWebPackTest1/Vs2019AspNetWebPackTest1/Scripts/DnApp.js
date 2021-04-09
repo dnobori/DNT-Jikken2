@@ -34,9 +34,8 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-//import "../TypeDefs/types.d.ts"
-import "core-js/es/promise";
 require('./mystyles.scss');
+import "core-js/es/promise";
 import "@fortawesome/fontawesome-free/js/all";
 import "prismjs";
 import "prismjs/components/prism-json";
@@ -47,6 +46,12 @@ import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
 import Axios from "axios";
+import Moment from "moment";
+import "moment/locale/ja";
+Moment.locale("ja");
+var d1 = new Date(2017, 0, 1);
+console.log("テスト");
+console.log(Moment().format("M - D （dd）")); // => 12月３日（日）
 // @ts-ignore
 Prism.plugins.NormalizeWhitespace.setDefaults({
     'remove-trailing': true,
@@ -54,7 +59,7 @@ Prism.plugins.NormalizeWhitespace.setDefaults({
     'left-trim': true,
     'right-trim': true,
     'indent': 0,
-    'remove-initial-line-feed': false,
+    'remove-initial-line-feed': false
 });
 //Prism.plugins.customClass.prefix('prism-');
 import { TestClass1, TestClass2 } from "./DnLib";

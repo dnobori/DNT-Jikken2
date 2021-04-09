@@ -1,10 +1,6 @@
-//import "../TypeDefs/types.d.ts"
+﻿require('./mystyles.scss');
 import "core-js/es/promise";
-
-require('./mystyles.scss');
-
 import "@fortawesome/fontawesome-free/js/all";
-
 import "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/components/prism-bash";
@@ -14,6 +10,17 @@ import "prismjs/plugins/command-line/prism-command-line";
 import "prismjs/plugins/normalize-whitespace/prism-normalize-whitespace";
 import "buefy";
 import Axios from "axios";
+import _ from "lodash";
+import $ from "jquery";
+import Moment from "moment";
+import "moment/locale/ja";
+Moment.locale("ja")
+
+let d1 = new Date(2017, 0, 1);
+
+console.log("テスト");
+console.log(Moment().format("M - D （dd）")) // => 12月３日（日）
+
 
 // @ts-ignore
 Prism.plugins.NormalizeWhitespace.setDefaults({
