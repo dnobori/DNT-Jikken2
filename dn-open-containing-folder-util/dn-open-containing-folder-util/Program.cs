@@ -21,21 +21,33 @@ namespace dn_open_containing_folder_util
                 else
                 {
                     string filePath = args[0];
-                    string dirPath;
 
                     if (Directory.Exists(filePath))
                     {
-                        dirPath = filePath;
+                        string dirPath = filePath;
+                        ProcessStartInfo ps = new ProcessStartInfo(dirPath);
+                        ps.UseShellExecute = true;
+
+                        Process.Start(ps);
+                    }
+                    else if (File.Exists(filePath))
+                    {
+                        string explorerPath = Path.Combine(Directory.GetParent(Environment.GetFolderPath(Environment.SpecialFolder.System)).FullName, "explorer.exe");
+
+                        ProcessStartInfo ps = new ProcessStartInfo(explorerPath, $"/select,\"{filePath}\"");
+                        ps.UseShellExecute = false;
+
+                        Process.Start(ps);
                     }
                     else
                     {
-                        dirPath = Path.GetDirectoryName(filePath);
+                        string dirPath = Directory.GetParent(filePath).FullName;
+                        ProcessStartInfo ps = new ProcessStartInfo(dirPath);
+                        ps.UseShellExecute = true;
+
+                        Process.Start(ps);
                     }
 
-                    ProcessStartInfo ps = new ProcessStartInfo(dirPath);
-                    ps.UseShellExecute = true;
-
-                    Process.Start(ps);
                 }
             }
             catch (Exception ex)
