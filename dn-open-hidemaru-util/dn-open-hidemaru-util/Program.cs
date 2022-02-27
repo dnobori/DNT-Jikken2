@@ -15,7 +15,7 @@ namespace dn_open_containing_folder_util
         {
             try
             {
-                string filePath = args.Length == 0 ? "" : args[0];
+                string cmdLine = initCommandLine(Environment.CommandLine);
 
                 using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Hidemaru"))
                 {
@@ -33,7 +33,7 @@ namespace dn_open_containing_folder_util
                         throw new ApplicationException("No hidemaru installed.");
                     }
 
-                    ProcessStartInfo ps = new ProcessStartInfo(hmPath, string.IsNullOrEmpty(filePath) ? "" : $"\"{filePath}\"");
+                    ProcessStartInfo ps = new ProcessStartInfo(hmPath, cmdLine);
                     ps.UseShellExecute = false;
 
                     Process.Start(ps);
@@ -42,6 +42,36 @@ namespace dn_open_containing_folder_util
             catch (Exception ex)
             {
                 MessageBox.Show(ex.ToString(), "Hidemaru Opener", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            }
+        }
+
+        static string initCommandLine(string src)
+        {
+            try
+            {
+                int i;
+                // 実行可能ファイル本体の部分を除去する
+                if (src.Length >= 1 && src[0] == '\"')
+                {
+                    i = src.IndexOf('\"', 1);
+                }
+                else
+                {
+                    i = src.IndexOf(' ');
+                }
+
+                if (i == -1)
+                {
+                    return "";
+                }
+                else
+                {
+                    return src.Substring(i + 1).TrimStart(' ');
+                }
+            }
+            catch
+            {
+                return "";
             }
         }
     }
