@@ -17,27 +17,29 @@ namespace dn_open_containing_folder_util
             {
                 string cmdLine = initCommandLine(Environment.CommandLine);
 
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Hidemaru"))
+                var key1 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Hidemaru");
+                var key2 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Hidemaru");
+
+                var key = (key1 != null ? key1 : key2); // wow64
+
+                var value = key.GetValue("InstallLocation");
+
+                if (value == null || string.IsNullOrEmpty((string)value))
                 {
-                    var value = key.GetValue("InstallLocation");
-
-                    if (value == null || string.IsNullOrEmpty((string)value))
-                    {
-                        throw new ApplicationException("No hidemaru installed.");
-                    }
-
-                    string hmPath = Path.Combine((string)value, "hidemaru.exe");
-
-                    if (File.Exists(hmPath) == false)
-                    {
-                        throw new ApplicationException("No hidemaru installed.");
-                    }
-
-                    ProcessStartInfo ps = new ProcessStartInfo(hmPath, cmdLine);
-                    ps.UseShellExecute = false;
-
-                    Process.Start(ps);
+                    throw new ApplicationException("No hidemaru installed.");
                 }
+
+                string hmPath = Path.Combine((string)value, "hidemaru.exe");
+
+                if (File.Exists(hmPath) == false)
+                {
+                    throw new ApplicationException("No hidemaru installed.");
+                }
+
+                ProcessStartInfo ps = new ProcessStartInfo(hmPath, cmdLine);
+                ps.UseShellExecute = false;
+
+                Process.Start(ps);
             }
             catch (Exception ex)
             {
