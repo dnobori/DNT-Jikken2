@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.4.33122.133
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dn-text-normalize-hotkey-app", "dn-text-normalize-hotkey-app\dn-text-normalize-hotkey-app.vcxproj", "{70E87718-0E69-4448-B4DA-2F9ED084D557}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D14DABC2-F6C1-446C-8EC5-D0DE0CCC73DD} = {D14DABC2-F6C1-446C-8EC5-D0DE0CCC73DD}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dn-text-normalize-hotkey-dll", "dn-text-normalize-hotkey-dll\dn-text-normalize-hotkey-dll.vcxproj", "{D14DABC2-F6C1-446C-8EC5-D0DE0CCC73DD}"
 EndProject

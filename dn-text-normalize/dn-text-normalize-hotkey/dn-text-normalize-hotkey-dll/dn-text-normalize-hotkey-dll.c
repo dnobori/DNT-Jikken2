@@ -2,6 +2,7 @@
 // https://gup.monster/entry/2015/04/10/051454
 
 #define EXPORT_
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,7 @@
 #pragma data_seg(".shareddata")
 HHOOK hKeyHook = 0;
 HWND g_hWnd = 0;        // キーコードの送り先のウインドウハンドル
+BOOL is_ctrl_key_pressed = FALSE;
 #pragma data_seg()
 
 HINSTANCE hInst;
@@ -48,39 +50,47 @@ EXPORT_API_ int ResetHook()
 	return 0;
 }
 
-EXPORT_API_ LRESULT CALLBACK KeyHookProc(int nCode, WPARAM wp, LPARAM lp)
+EXPORT_API_ LRESULT CALLBACK KeyHookProc(int code, WPARAM vk, LPARAM bits)
 {
-	TCHAR msg[64] = { 0 };
-	if (nCode < 0)    // 決まり事
-		return CallNextHookEx(hKeyHook, nCode, wp, lp);
-	if (nCode == HC_ACTION)
+	char msg[64] = { 0 };
+	if (code < 0)    // 決まり事
+		return CallNextHookEx(hKeyHook, code, vk, bits);
+	if (code == HC_ACTION)
 	{
 		//目的のウインドウにキーボードメッセージと、キーコードの転送
 
-		// どこで押してもHOOKする
-		// ボタンが押された状態の時限定(離しはスルー)
-		if ((lp & 0x80000000) == 0)
+		if ((bits & 0x80000000) == 0)
 		{
-			// 通常キー
-			if ((lp & 0x20000000) == 0)
+			// 押された！
+			if (vk == VK_CONTROL)
 			{
-				// Enter以外
-				if (wp != VK_RETURN)
+				// Ctrl キーが押された
+				is_ctrl_key_pressed = TRUE;
+			}
+			else if (vk == 'Q')
+			{
+				// Q キーが押された
+				if (is_ctrl_key_pressed)
 				{
-					//_stprintf_s(msg, "pressed %c !", int(wp));
-					//MessageBox(NULL, msg, NULL, MB_OK);
-					//PostMessage(g_hWnd, WM_KEYDOWN, wp, 0);
+					// Ctrl + Q が押された
+					MessageBox(NULL, "Pressed Ctrl + Q !!", NULL, MB_OK);
+
+					// 他のアプリケーションには伝えない
+					return 1;
 				}
 			}
-			// システムキー(Alt(+何か)、もしくはF10の時)
-			else
+		}
+		else
+		{
+			// 離された！
+			if (vk == VK_CONTROL)
 			{
-				//MessageBox(NULL, TEXT("システムキーが押されたよ！"), NULL, MB_OK);
-				//PostMessage(g_hWnd, WM_SYSKEYDOWN, wp, 0);
+				// Ctrl キーが離された
+				is_ctrl_key_pressed = FALSE;
 			}
 		}
 	}
-	return CallNextHookEx(hKeyHook, nCode, wp, lp);
+	return CallNextHookEx(hKeyHook, code, vk, bits);
 }
 
 // エントリポイント
