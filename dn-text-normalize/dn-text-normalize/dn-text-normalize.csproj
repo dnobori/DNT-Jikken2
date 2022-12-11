@@ -5,7 +5,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{EFDB2703-9140-48EF-8748-813076BF64FC}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <RootNamespace>dn_text_normalize</RootNamespace>
     <AssemblyName>dn-text-normalize</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>

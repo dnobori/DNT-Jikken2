@@ -50,6 +50,9 @@ public static class Lib
     {
         bool b = false;
         str = str._NonNull();
+
+        str = ReplaceStr(str, "", "\n"); // Power Point
+
         StringReader sr = new StringReader(str);
         StringWriter sw = new StringWriter();
         while (true)
@@ -436,8 +439,8 @@ public static class Lib
     {
         NormalizeString(ref str);
 
-        str = ReplaceStr(str, "“", " \"");
-        str = ReplaceStr(str, "”", "\" ");
+        str = ReplaceStr(str, "“", "\"");
+        str = ReplaceStr(str, "”", "\"");
         str = ReplaceStr(str, "‘", "'");
         str = ReplaceStr(str, "’", "'");
 
