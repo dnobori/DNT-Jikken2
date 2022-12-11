@@ -16,7 +16,7 @@ internal class Program
         try
         {
             //Console.WriteLine("send key 1");
-            SendKeys.SendWait("^X");
+            SendKeys.SendWait("^C");
 
             //Console.WriteLine("read");
             string str = Lib.ClipboardRead();
