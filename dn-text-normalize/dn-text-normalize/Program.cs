@@ -10,15 +10,33 @@ using System.Diagnostics;
 
 internal class Program
 {
+    [Flags]
+    public enum Mode
+    {
+        CutAndPaste = 0,
+        Paste = 1,
+        NormalizeOnly = 2,
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
+        int i = 0;
+        int.TryParse(args.ElementAtOrDefault(0), out i);
+
+        Mode mode = (Mode)i;
+
+        //MessageBox.Show(args.ElementAtOrDefault(0));
+
         try
         {
-            //Console.WriteLine("send key 1");
-            SendKeys.SendWait("^x");
+            if (mode == Mode.CutAndPaste)
+            {
+                //Console.WriteLine("send key 1");
+                SendKeys.SendWait("^x");
 
-            //Thread.Sleep(100);
+                Thread.Sleep(100);
+            }
 
             //Console.WriteLine("read");
             string str = Lib.ClipboardRead();
@@ -34,7 +52,10 @@ internal class Program
             //Thread.Sleep(100);
 
             //Console.WriteLine("send key 2");
-            SendKeys.SendWait("^v");
+            if (mode != Mode.NormalizeOnly)
+            {
+                SendKeys.SendWait("^v");
+            }
         }
         catch { }
     }

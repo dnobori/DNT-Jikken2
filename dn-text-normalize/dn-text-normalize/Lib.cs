@@ -20,15 +20,6 @@ public static class Lib
     {
         var data = Clipboard.GetDataObject();
 
-        if (data == null)
-        {
-            Console.WriteLine("null");
-        }
-        else
-        {
-            Console.WriteLine("non null");
-        }
-
         if (data != null)
         {
             if (data.GetDataPresent(DataFormats.Text) || data.GetDataPresent(DataFormats.UnicodeText))
