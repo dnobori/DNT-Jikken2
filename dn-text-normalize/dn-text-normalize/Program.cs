@@ -16,7 +16,7 @@ internal class Program
         try
         {
             //Console.WriteLine("send key 1");
-            SendKeys.SendWait("^C");
+            SendKeys.SendWait("C");
 
             //Console.WriteLine("read");
             string str = Lib.ClipboardRead();
@@ -30,7 +30,7 @@ internal class Program
             Lib.ClipboardWrite(str);
 
             //Console.WriteLine("send key 2");
-            SendKeys.SendWait("^V");
+            SendKeys.SendWait("V");
         }
         catch { }
     }

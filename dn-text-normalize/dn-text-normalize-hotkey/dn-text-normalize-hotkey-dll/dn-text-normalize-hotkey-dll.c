@@ -19,6 +19,7 @@
 HHOOK hKeyHook = 0;
 HWND g_hWnd = 0;        // キーコードの送り先のウインドウハンドル
 BOOL is_ctrl_key_pressed = FALSE;
+BOOL is_q_key_pressed = FALSE;
 #pragma data_seg()
 
 wchar_t dll_dir[520] = CLEAN;
@@ -26,7 +27,7 @@ wchar_t dll_dir[520] = CLEAN;
 HINSTANCE hInst;
 EXPORT_API_ int SetHook(HWND hWnd)
 {
-	hKeyHook = SetWindowsHookEx(WH_KEYBOARD, KeyHookProc, hInst, 0);
+	hKeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyHookProc, hInst, 0);
 	if (hKeyHook == NULL)
 	{
 		// フック失敗
@@ -102,7 +103,8 @@ EXPORT_API_ LRESULT CALLBACK KeyHookProc(int code, WPARAM vk, LPARAM bits)
 				if (is_ctrl_key_pressed)
 				{
 					// Ctrl + Q が押された
-					Run(L"dn-text-normalize.exe", L"");
+
+					is_q_key_pressed = TRUE;
 
 					// 他のアプリケーションには伝えない
 					return 1;
@@ -116,6 +118,18 @@ EXPORT_API_ LRESULT CALLBACK KeyHookProc(int code, WPARAM vk, LPARAM bits)
 			{
 				// Ctrl キーが離された
 				is_ctrl_key_pressed = FALSE;
+			}
+			else if (vk == 'Q')
+			{
+				if (is_q_key_pressed)
+				{
+					is_q_key_pressed = FALSE;
+
+					// Ctrl + Q における Q が離された
+					Run(L"dn-text-normalize.exe", L"");
+
+					return 1;
+				}
 			}
 		}
 	}
