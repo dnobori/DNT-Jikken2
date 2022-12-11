@@ -13,29 +13,28 @@ internal class Program
     [STAThread]
     static void Main(string[] args)
     {
-        while (true)
+        try
         {
-            Thread.Sleep(1000);
+            //Console.WriteLine("send key 1");
+            SendKeys.SendWait("^X");
 
-            Console.WriteLine("send key 1");
-            SendKeys.SendWait("^C");
-
-            Console.WriteLine("read");
+            //Console.WriteLine("read");
             string str = Lib.ClipboardRead();
-            Console.WriteLine($" str1 = '{str}'");
+            //Console.WriteLine($" str1 = '{str}'");
 
             str = Lib.NormalizeStrSoftEther(str);
 
-            Console.WriteLine($" str2 = '{str}'");
+            //Console.WriteLine($" str2 = '{str}'");
 
-            Console.WriteLine("write");
+            //Console.WriteLine("write");
             Lib.ClipboardWrite(str);
 
-            Console.WriteLine("send key 2");
+            //Console.WriteLine("send key 2");
             SendKeys.SendWait("^V");
         }
+        catch { }
     }
-    }
+}
 
 
 
