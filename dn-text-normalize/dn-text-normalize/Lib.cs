@@ -16,21 +16,102 @@ public static class Lib
         Clipboard.SetDataObject(str, true);
     }
 
-    public static string ClipboardRead()
+    public static string ClipboardRead(out bool doNothing)
     {
+        doNothing = false;
+
         var data = Clipboard.GetDataObject();
 
-        if (data != null)
+        if (data != null && data.GetDataPresent(DataFormats.Text) || data.GetDataPresent(DataFormats.UnicodeText))
         {
-            if (data.GetDataPresent(DataFormats.Text) || data.GetDataPresent(DataFormats.UnicodeText))
-            {
-                string str = (string)data.GetData(DataFormats.UnicodeText);
+            string str = (string)data.GetData(DataFormats.UnicodeText);
 
-                return str._NonNull();
+            return str._NonNull();
+        }
+        else if (Clipboard.ContainsFileDropList())
+        {
+            var fileList = Clipboard.GetFileDropList();
+
+            StringBuilder sb = new StringBuilder();
+
+            foreach (var file in fileList)
+            {
+                string file2 = NormalizeFileOrDirPath(file);
+
+                sb.Append(file2);
+
+                if (fileList.Count >= 2)
+                {
+                    sb.AppendLine();
+                }
             }
+
+            doNothing = true;
+
+            return sb.ToString();
         }
 
         return "";
+    }
+
+    public static string NormalizeFileOrDirPath(string str)
+    {
+        bool backSlashToSlash = false;
+
+        bool isDir = false;
+
+        if (str.StartsWith(@"C:\Dropbox\", StringComparison.OrdinalIgnoreCase))
+        {
+            isDir = IsDir(str);
+            str = str.Substring(3);
+            backSlashToSlash = true;
+        }
+        else if (str.StartsWith(@"C:\GoogleDrive\", StringComparison.OrdinalIgnoreCase))
+        {
+            isDir = IsDir(str);
+            str = "GoogleDrive/" + str.Substring(15);
+            backSlashToSlash = true;
+        }
+        else if (str.StartsWith(@"G:\共有ドライブ\", StringComparison.OrdinalIgnoreCase))
+        {
+            isDir = IsDir(str);
+            str = "GoogleDrive/" + str.Substring(3);
+            backSlashToSlash = true;
+        }
+        else if (str.StartsWith(@"M:\", StringComparison.OrdinalIgnoreCase))
+        {
+            isDir = IsDir(str);
+            str = @"\\labfs.lab.coe.ad.jp\SHARE\" + str.Substring(3);
+        }
+
+        if (isDir)
+        {
+            char last = str.LastOrDefault();
+            if (last == '\\' || last == '/') { }
+            else
+            {
+                str = str + @"\";
+            }
+        }
+
+        if (backSlashToSlash)
+        {
+            str = str.Replace(@"\", "/");
+        }
+
+        return str;
+    }
+
+    static bool IsDir(string path)
+    {
+        try
+        {
+            return Directory.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static string _NonNull(this string s) { if (s == null) return ""; else return s; }
