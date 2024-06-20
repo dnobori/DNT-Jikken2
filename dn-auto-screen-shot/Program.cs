@@ -48,40 +48,47 @@ namespace dn_auto_screen_shot
             string lastHash = "";
             while (true)
             {
-                var ret = TakeScreenShotIfChanged(lastHash);
-
-                if (ret != null)
+                try
                 {
-                    lastHash = ret.Hash;
+                    var ret = TakeScreenShotIfChanged(lastHash);
 
-                    var dt = ret.Dt.LocalDateTime;
-
-                    string fn = startDt.ToString("yyyyMMddHHmmss") + "-" + seqno.ToString("D8") + "-" + dt.ToString("yyyyMMdd") + "-" + dt.ToString("HHmmss") + ".png";
-                    seqno++;
-
-                    string fullPath = Path.Combine(destDir, fn);
-
-                    string dirName = Path.GetDirectoryName(fullPath);
-
-                    try
+                    if (ret != null)
                     {
-                        if (Directory.Exists(dirName) == false)
+                        lastHash = ret.Hash;
+
+                        var dt = ret.Dt.LocalDateTime;
+
+                        string fn = startDt.ToString("yyyyMMddHHmmss") + "-" + seqno.ToString("D8") + "-" + dt.ToString("yyyyMMdd") + "-" + dt.ToString("HHmmss") + ".png";
+                        seqno++;
+
+                        string fullPath = Path.Combine(destDir, fn);
+
+                        string dirName = Path.GetDirectoryName(fullPath);
+
+                        try
                         {
-                            Directory.CreateDirectory(dirName);
+                            if (Directory.Exists(dirName) == false)
+                            {
+                                Directory.CreateDirectory(dirName);
+                            }
+                        }
+                        catch { }
+
+                        try
+                        {
+                            File.WriteAllBytes(fullPath, ret.Data);
+                            Console.WriteLine($"OK: {Path.GetFileNameWithoutExtension(fn)}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error writing to {fullPath}");
+                            Console.WriteLine(ex.ToString());
                         }
                     }
-                    catch { }
-
-                    try
-                    {
-                        File.WriteAllBytes(fullPath, ret.Data);
-                        Console.WriteLine($"OK: {Path.GetFileNameWithoutExtension(fn)}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error writing to {fullPath}");
-                        Console.WriteLine(ex.ToString());
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
                 }
 
                 Thread.Sleep(10);
