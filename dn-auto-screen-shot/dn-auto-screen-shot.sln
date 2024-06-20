@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34902.65
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dn-auto-screen-shot", "dn-auto-screen-shot.csproj", "{198BE503-5EA3-4183-A8D4-BA5FEA3380EF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{198BE503-5EA3-4183-A8D4-BA5FEA3380EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{198BE503-5EA3-4183-A8D4-BA5FEA3380EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{198BE503-5EA3-4183-A8D4-BA5FEA3380EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{198BE503-5EA3-4183-A8D4-BA5FEA3380EF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {72D3E7CC-98CD-4A89-9F58-9B55CD7C8D73}
+	EndGlobalSection
+EndGlobal
