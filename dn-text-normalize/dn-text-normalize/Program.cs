@@ -21,6 +21,22 @@ internal class Program
     [STAThread]
     static void Main(string[] args)
     {
+        if (false) // Test mode
+        {
+            StringWriter testin = new StringWriter();
+            testin.WriteLine("   こんにちは");
+            testin.WriteLine("   　こんにちは2");
+            testin.WriteLine("   　abcこんにちは2");
+            testin.WriteLine("　こんにちは2");
+            testin.WriteLine("　　abcこんにちは2");
+
+            string test1 = Lib.NormalizeStrSoftEther(testin.ToString());
+
+            Console.WriteLine(test1);
+
+            return;
+        }
+
         int i = 0;
         int.TryParse(args.ElementAtOrDefault(0), out i);
 

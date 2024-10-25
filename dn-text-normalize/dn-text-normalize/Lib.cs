@@ -167,12 +167,72 @@ public static class Lib
     }
     static string normalizeStrSoftEtherInternal(string str)
     {
+        int i;
         if (str.Trim().Length == 0)
         {
             return "";
         }
 
-        int i;
+        // 数個の半角スペースが続いた後に全角スペース 1 個が登場し、その後に半角スペース・全角スペースのいずれでも
+        // ない文字が登場する場合は、それぞれのスペースの個数を記憶したのちに、それらのスペースを削除する
+        int prefixHankakuSpecialMode = 0;
+        int prefixHankakuSpaceNum = 0;
+        string prefixSpaceBodyText = "";
+        for (i = 0; i < str.Length; i++)
+        {
+            char c = str[i];
+            switch (prefixHankakuSpecialMode)
+            {
+                case 0:
+                    if (c == ' ')
+                    {
+                        prefixHankakuSpaceNum++;
+                        prefixHankakuSpecialMode = 1;
+                    }
+                    else if (c == '　')
+                    {
+                        prefixHankakuSpecialMode = 2;
+                    }
+                    else
+                    {
+                        prefixHankakuSpecialMode = 99;
+                    }
+                    break;
+
+                case 1:
+                    if (c == ' ')
+                    {
+                        prefixHankakuSpaceNum++;
+                    }
+                    else if (c == '　')
+                    {
+                        prefixHankakuSpecialMode = 2;
+                    }
+                    else
+                    {
+                        prefixHankakuSpecialMode = 99;
+                    }
+                    break;
+
+                case 2:
+                    if (c == ' ' || c == '　')
+                    {
+                        prefixHankakuSpecialMode = 99;
+                    }
+                    else
+                    {
+                        prefixHankakuSpecialMode = 3;
+                        prefixSpaceBodyText = str.Substring(i);
+                    }
+                    break;
+            }
+        }
+
+        if (prefixHankakuSpecialMode == 3)
+        {
+            str = prefixSpaceBodyText;
+        }
+
         StringBuilder sb1 = new StringBuilder();
         for (i = 0; i < str.Length; i++)
         {
@@ -194,7 +254,22 @@ public static class Lib
         str1 = ReplaceStr(str1, "　", "  ");
         str1 = ReplaceStr(str1, "\t", "    ");
 
-        return str1 + normalizeStrSoftEtherInternal2(str2);
+        string ret = (str1 + normalizeStrSoftEtherInternal2(str2));
+
+        if (prefixHankakuSpecialMode == 3)
+        {
+            StringBuilder sb2 = new StringBuilder();
+            for (i = 0; i < prefixHankakuSpaceNum; i++)
+            {
+                sb2.Append(' ');
+            }
+            sb2.Append('　');
+            sb2.Append(ret);
+
+            ret = sb2.ToString();
+        }
+
+        return ret;
     }
     static string normalizeStrSoftEtherInternal2(string str)
     {
