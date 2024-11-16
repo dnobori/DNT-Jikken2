@@ -50,6 +50,7 @@ internal class Program
             {
                 //Console.WriteLine("send key 1");
                 SendKeys.SendWait("^x");
+                SendKeys.Flush();
 
                 Thread.Sleep(100);
             }
@@ -113,6 +114,7 @@ internal class Program
             if (mode != Mode.NormalizeOnly)
             {
                 SendKeys.SendWait("^v");
+                SendKeys.Flush();
             }
         }
         catch { }
