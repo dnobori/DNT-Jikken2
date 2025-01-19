@@ -4,9 +4,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Text;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using Microsoft.Win32;
 using System.Windows.Forms;
 using System.Diagnostics;
+
+#pragma warning disable CS0162 // 到達できないコードが検出されました
 
 internal class Program
 {
@@ -73,6 +78,18 @@ internal class Program
                 string strTrimed = str.Trim();
 
                 bool isPath = false;
+                bool isIpAddress = false;
+
+                string ipTmp = Lib.ZenkakuToHankaku(strTrimed);
+
+                ipTmp = ipTmp.Replace("．", ".");
+
+                IPAddress ip;
+                if ((ipTmp.IndexOf(".") != -1 || ipTmp.IndexOf(":") != -1) && IPAddress.TryParse(ipTmp, out ip))
+                {
+                    isIpAddress = true;
+                    ipTmp = ip.ToString();
+                }
 
                 if (strTrimed.StartsWith("\"") && strTrimed.EndsWith("\"") && strTrimed.Length >= 3)
                 {
@@ -88,11 +105,7 @@ internal class Program
                     isPath = true;
                 }
 
-                if (isPath == false)
-                {
-                    str = Lib.NormalizeStrSoftEther(str);
-                }
-                else
+                if (isPath)
                 {
                     str = str.Trim();
 
@@ -100,6 +113,14 @@ internal class Program
                     {
                         str = str.Substring(1, str.Length - 2);
                     }
+                }
+                else if (isIpAddress)
+                {
+                    str = ipTmp;
+                }
+                else
+                {
+                    str = Lib.NormalizeStrSoftEther(str);
                 }
 
                 str = Lib.NormalizeFileOrDirPath(str);
