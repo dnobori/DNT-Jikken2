@@ -131,6 +131,8 @@ namespace dn_timecard_util
                 return;
             }
 
+            var lastState = LoadStateDataFromFile();
+
             if (manualSet)
             {
                 StateData newState = new StateData
@@ -138,8 +140,6 @@ namespace dn_timecard_util
                     StartDt = DateTime.Now,
                     Title = item.Title,
                 };
-
-                var lastState = LoadStateDataFromFile();
 
                 if (lastState == null)
                 {
@@ -161,7 +161,12 @@ namespace dn_timecard_util
             CurrentSelected = item;
 
             Notify.Icon = item.Icon;
-            Notify.Text = $"{item.Title} - タスク状態";
+            string since = "";
+            if (lastState != null)
+            {
+                since = " (" + lastState.StartDt.ToString("MM/dd HH:mm") + " から)";
+            }
+            Notify.Text = $"{item.Title}{since}";
 
             foreach (ToolStripItem menuItem in PopupMenu.Items)
             {
