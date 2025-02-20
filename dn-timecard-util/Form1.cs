@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 
@@ -38,6 +39,8 @@ namespace dn_timecard_util
 
         System.Globalization.CultureInfo Japanese = new System.Globalization.CultureInfo("ja-JP");
 
+        string LastSavedPath;
+
         public Form1()
         {
             ModeList.Add(new ModeItem { Title = "IPA", Icon = Properties.Resources.IPA });
@@ -64,8 +67,24 @@ namespace dn_timecard_util
             }
 
             Notify.MouseClick += Notify_MouseClick;
+            Notify.MouseDoubleClick += Notify_MouseDoubleClick;
 
             InitializeComponent();
+        }
+
+        private void Notify_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                if (string.IsNullOrEmpty(LastSavedPath))
+                {
+                    Process.Start("explorer.exe", StateLogBaseDir);
+                }
+                else
+                {
+                    Process.Start(LastSavedPath);
+                }
+            }
         }
 
         private void Notify_MouseClick(object sender, MouseEventArgs e)
@@ -210,6 +229,7 @@ namespace dn_timecard_util
                 if (start != end)
                 {
                     File.AppendAllLines(fullPath, lines);
+                    LastSavedPath = fullPath;
                 }
             }
             catch (Exception ex)
