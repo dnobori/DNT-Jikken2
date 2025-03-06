@@ -131,7 +131,9 @@ namespace dn_timecard_util
                 return;
             }
 
-            var lastState = LoadStateDataFromFile();
+            StateData lastState = LoadStateDataFromFile();
+
+            StateData lastState2 = lastState;
 
             if (manualSet)
             {
@@ -156,15 +158,16 @@ namespace dn_timecard_util
                     AppendTimecardLogToFile(lastState.StartDt, newState.StartDt, lastState.Title);
                     AppendTimecardLogToFile2(lastState.StartDt, newState.StartDt, lastState.Title);
                 }
+                lastState2 = newState;
             }
 
             CurrentSelected = item;
 
             Notify.Icon = item.Icon;
             string since = "";
-            if (lastState != null)
+            if (lastState2 != null)
             {
-                since = " (" + lastState.StartDt.ToString("M/d H:mm") + " から)";
+                since = " (" + lastState2.StartDt.ToString("M/d H:mm:ss") + " から)";
             }
             Notify.Text = $"{item.Title}{since}";
 
@@ -365,7 +368,7 @@ namespace dn_timecard_util
             }
             finally
             {
-                timer1.Interval = (int)(random.NextDouble() * 5 * 60 * 1000);
+                timer1.Interval = (int)(random.NextDouble() * 5 * 60 * 1000) + 1;
                 timer1.Enabled = true;
             }
         }
