@@ -164,7 +164,7 @@ namespace dn_timecard_util
             string since = "";
             if (lastState != null)
             {
-                since = " (" + lastState.StartDt.ToString("MM/dd HH:mm") + " から)";
+                since = " (" + lastState.StartDt.ToString("M/d H:mm") + " から)";
             }
             Notify.Text = $"{item.Title}{since}";
 
@@ -221,12 +221,12 @@ namespace dn_timecard_util
 
                 List<string> lines = new List<string>();
 
-                string startStr = start.ToString("MM/dd HH:mm");
-                string endStr = end.ToString("MM/dd HH:mm");
+                string startStr = start.ToString("M/d H:mm");
+                string endStr = end.ToString("M/d H:mm");
 
                 if (start.Date == end.Date)
                 {
-                    endStr = end.ToString("HH:mm");
+                    endStr = end.ToString("H:mm");
                 }
 
                 lines.Add(startStr + "-" + endStr);
