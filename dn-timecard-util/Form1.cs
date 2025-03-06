@@ -167,7 +167,7 @@ namespace dn_timecard_util
             string since = "";
             if (lastState2 != null)
             {
-                since = " (" + lastState2.StartDt.ToString("M/d H:mm:ss") + " から)";
+                since = " (" + lastState2.StartDt.ToString("M/d H:mm") + " から)";
             }
             Notify.Text = $"{item.Title}{since}";
 
