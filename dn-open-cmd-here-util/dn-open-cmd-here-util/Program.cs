@@ -9,10 +9,17 @@ using System.Reflection;
 
 namespace dn_open_containing_folder_util
 {
-    enum Mode
+    enum Mode1
     {
         Cmd = 0,
         Wt,
+    }
+
+    enum Mode2
+    {
+        Normal = 0,
+        Git,
+        GitBash,
     }
 
     internal class Program
@@ -21,6 +28,8 @@ namespace dn_open_containing_folder_util
         {
             try
             {
+                bool parseArgs = true;
+
                 string fullCmdLine = initCommandLine(Environment.CommandLine);
                 if (fullCmdLine != "" && fullCmdLine.StartsWith("/") == false && fullCmdLine.StartsWith("\\") == false)
                 {
@@ -34,43 +43,61 @@ namespace dn_open_containing_folder_util
                         if (fullCmdLine != "")
                         {
                             args = new string[] { fullCmdLine };
+                            parseArgs = false;
                         }
                     }
                 }
 
-                Mode mode = Mode.Cmd;
+                Mode1 mode = Mode1.Cmd;
+                Mode2 mode2 = Mode2.Normal;
 
-                int index = 0;
+                int argsIndex = 0;
 
-                if (args.Length > index)
+                if (parseArgs)
                 {
-                    if (args[index].StartsWith("-") || args[index].StartsWith("/"))
+                    while (args.Length > argsIndex)
                     {
-                        string modeStr = args[index].Substring(1).ToLowerInvariant();
-
-                        if (modeStr == "w" || modeStr == "wt")
+                        if (args[argsIndex].StartsWith("-") || args[argsIndex].StartsWith("/"))
                         {
-                            mode = Mode.Wt;
-                        }
+                            string modeStr = args[argsIndex].Substring(1).ToLowerInvariant();
 
-                        index++;
+                            if (modeStr == "w" || modeStr == "wt")
+                            {
+                                mode = Mode1.Wt;
+                            }
+                            else if (modeStr == "git")
+                            {
+                                mode2 = Mode2.Git;
+                            }
+                            else if (modeStr == "gitbash")
+                            {
+                                mode2 = Mode2.GitBash;
+                            }
+
+                            argsIndex++;
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
                 }
 
                 string myExePath = Assembly.GetEntryAssembly().Location;
-                string myExeFileName = Path.GetFileNameWithoutExtension(myExePath).ToLowerInvariant();
-                if (myExeFileName == "cw" || myExeFileName == "wth" || myExeFileName == "wh")
+                string myExeDirPath = Path.GetDirectoryName(myExePath);
+                string myExeSimpleFileNameLower = Path.GetFileNameWithoutExtension(myExePath).ToLowerInvariant();
+                if (myExeSimpleFileNameLower == "cw" || myExeSimpleFileNameLower == "wth" || myExeSimpleFileNameLower == "wh")
                 {
-                    mode = Mode.Wt;
+                    mode = Mode1.Wt;
                 }
 
                 //MessageBox.Show(args[index]);
 
                 string fileOrDirectoryPath = "";
 
-                if (args.Length > index)
+                if (args.Length > argsIndex)
                 {
-                    fileOrDirectoryPath = args[index];
+                    fileOrDirectoryPath = args[argsIndex];
                 }
 
                 string directoryPath = "";
@@ -122,20 +149,46 @@ namespace dn_open_containing_folder_util
                     }
                 }
 
-                if (directoryPath == "")
+                string myHomeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string systemDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+
+                bool specialCurrentDirectory = true;
+                string cdPath = Environment.CurrentDirectory;
+                if (string.Equals(cdPath, myHomeDir, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(cdPath, systemDir, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(cdPath, myExeDirPath, StringComparison.OrdinalIgnoreCase))
                 {
-                    string tmp = @"c:\tmp";
-                    if (Directory.Exists(tmp)) directoryPath = tmp;
+                    specialCurrentDirectory = false;
+                }
+                if (string.IsNullOrEmpty(cdPath) || Directory.Exists(cdPath) == false)
+                {
+                    specialCurrentDirectory = false;
                 }
 
-                if (directoryPath == "")
+                if (specialCurrentDirectory == false)
                 {
-                    directoryPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    if (directoryPath == "")
+                    {
+                        string tmp = @"c:\tmp";
+                        if (Directory.Exists(tmp)) directoryPath = tmp;
+                    }
+
+                    if (directoryPath == "")
+                    {
+                        directoryPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    }
+                }
+                else
+                {
+                    if (directoryPath == "")
+                    {
+                        directoryPath = cdPath;
+                    }
                 }
 
                 switch (mode)
                 {
-                    case Mode.Wt:
+                    case Mode1.Wt:
                         exePath = "wt.exe";
                         if (directoryPath.Contains(" "))
                         {
@@ -145,11 +198,30 @@ namespace dn_open_containing_folder_util
                         {
                             exeArgs = "/d " + directoryPath;
                         }
+
+                        if (mode2 == Mode2.Git)
+                        {
+                            exeArgs += " cmd /c \"C:\\Program Files\\Git\\git-cmd.exe\"";
+                        }
+                        else if (mode2 == Mode2.GitBash)
+                        {
+                            exeArgs += " cmd /c \"C:\\Program Files\\Git\\bin\\bash.exe\"";
+                        }
+
                         break;
 
                     default:
                         exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
                         exeArgs = "";
+
+                        if (mode2 == Mode2.Git)
+                        {
+                            exeArgs = "/c \"C:\\Program Files\\Git\\git-cmd.exe\"";
+                        }
+                        else if (mode2 == Mode2.GitBash)
+                        {
+                            exeArgs = "/c \"C:\\Program Files\\Git\\bin\\bash.exe\"";
+                        }
                         break;
                 }
 
