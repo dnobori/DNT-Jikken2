@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace dn_open_containing_folder_util
 {
@@ -54,6 +55,13 @@ namespace dn_open_containing_folder_util
 
                         index++;
                     }
+                }
+
+                string myExePath = Assembly.GetEntryAssembly().Location;
+                string myExeFileName = Path.GetFileNameWithoutExtension(myExePath).ToLowerInvariant();
+                if (myExeFileName == "cw" || myExeFileName == "wth" || myExeFileName == "wh")
+                {
+                    mode = Mode.Wt;
                 }
 
                 //MessageBox.Show(args[index]);
@@ -106,7 +114,7 @@ namespace dn_open_containing_folder_util
                 string exePath;
                 string exeArgs;
 
-                if (directoryPath.Length >= 2)
+                if (directoryPath.Length >= 4)
                 {
                     if (directoryPath[directoryPath.Length - 1] == '\\')
                     {
@@ -129,7 +137,14 @@ namespace dn_open_containing_folder_util
                 {
                     case Mode.Wt:
                         exePath = "wt.exe";
-                        exeArgs = "/d \"" + directoryPath + "\"";
+                        if (directoryPath.Contains(" "))
+                        {
+                            exeArgs = "/d \"" + directoryPath + "\"";
+                        }
+                        else
+                        {
+                            exeArgs = "/d " + directoryPath;
+                        }
                         break;
 
                     default:
