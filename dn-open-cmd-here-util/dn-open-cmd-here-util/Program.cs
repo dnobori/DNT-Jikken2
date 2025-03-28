@@ -36,6 +36,8 @@ namespace dn_open_containing_folder_util
                     index++;
                 }
 
+                //MessageBox.Show(args[index]);
+
                 string fileOrDirectoryPath = args[index];
 
                 string directoryPath;
@@ -75,6 +77,14 @@ namespace dn_open_containing_folder_util
 
                 string exePath;
                 string exeArgs;
+
+                if (directoryPath.Length >= 2)
+                {
+                    if (directoryPath[directoryPath.Length - 1] == '\\')
+                    {
+                        directoryPath = directoryPath.Substring(0, directoryPath.Length - 1);
+                    }
+                }
 
                 switch (mode)
                 {
