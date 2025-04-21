@@ -131,7 +131,7 @@ internal class Program
             else
             {
                 // ファイル作成モード
-                if (inputName[0] == '?')
+                if (inputName.StartsWith("?"))
                 {
                     targetDir = baseDirSpecial;
                     inputName = inputName.Substring(1);
