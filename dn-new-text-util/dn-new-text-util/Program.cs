@@ -34,6 +34,8 @@ internal class Program
         }
         catch { }
 
+        byte[] emptyFileData = new byte[] { 0xef, 0xbb, 0xbf, 0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a, };
+
         try
         {
             string inputName = Interaction.InputBox(
@@ -73,7 +75,7 @@ internal class Program
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = now.ToString("HHmmss") + "_memo";
+                    name2 = now.ToString("HHmmss") + " memo";
                 }
 
                 if (inputName.StartsWith("!"))
@@ -138,6 +140,7 @@ internal class Program
 
                 using (var file = File.Open(filePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read))
                 {
+                    file.Write(emptyFileData, 0, emptyFileData.Length);
                     file.Close();
                 }
 
@@ -158,7 +161,7 @@ internal class Program
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = now.ToString("HHmmss") + "_memo";
+                    name2 = now.ToString("HHmmss") + " memo";
                 }
 
                 string filePathToCreate = "";
@@ -203,6 +206,7 @@ internal class Program
 
                 using (var file = File.Open(filePathToCreate, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read))
                 {
+                    file.Write(emptyFileData, 0, emptyFileData.Length);
                     file.Close();
                 }
 
