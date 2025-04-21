@@ -18,12 +18,13 @@ internal class Program
 
     public static void Main(string[] args)
     {
-        if (args.Length < 2)
+        if (args.Length < 3)
         {
-            MessageBox.Show("引数を指定してください。\r\n\r\n第一引数: 標準ディレクトリ名\r\n第二引数: 特別ディリレクトリ名", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("引数を指定してください。\r\n\r\n第一引数: 標準ディレクトリ名\r\n第二引数: 特別ディリレクトリ名\r\n第三引数: AI プロンプトディリレクトリ名", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         string baseDirNormal = args[0];
         string baseDirSpecial = args[1];
+        string baseDirPrompt = args[1];
 
         try
         {
@@ -36,7 +37,7 @@ internal class Program
         try
         {
             string inputName = Interaction.InputBox(
-                    "新しい文書の名前を入力してください。\r\n\"_untitled_\" のままでも構いません。\r\n\r\n1 文字目を '/' にすると、サブフォルダも新規作成します。\r\n1 文字目を '?' にすると、特別ディリクトリに作成します。\r\n1 文字目を '!' にすると、特別ディレクトリかつサブフォルダに作成します。",
+                    "新しい文書の名前を入力してください。\r\n\"_untitled_\" のままでも構いません。\r\n\r\n(1) 1 文字目を '/' にすると、サブフォルダも新規作成します。\r\n(2-1) 1 文字目を '?' にすると、特別ディリクトリに作成します。\r\n(2-2) 1 文字目を '!' にすると、特別ディレクトリかつサブフォルダに作成します。\r\n(3) 1 文字目を '+' にすると、AI プロンプトディレクトリかつサブフォルダに作成します。",
                     AppTitle,
                     "_untitled_");
 
@@ -57,23 +58,33 @@ internal class Program
                 inputName = inputName.Substring(0, 64);
             }
 
-            string yymmdd = DateTime.Now.ToString("yyMMdd");
+            var now = DateTime.Now;
+
+            string yymmdd = now.ToString("yyMMdd");
 
             string targetDir = baseDirNormal;
 
-            if (inputName.StartsWith("/") || inputName.StartsWith("!"))
+            if (inputName.StartsWith("/") || inputName.StartsWith("!") || inputName.StartsWith("+"))
             {
+                bool promptMode = false;
+
                 // フォルダ作成モード
                 string name2 = inputName.Substring(1).Trim();
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = "Memo";
+                    name2 = now.ToString("HHmmss") + "_memo";
                 }
 
-                if (inputName[0] == '!')
+                if (inputName.StartsWith("!"))
                 {
                     targetDir = baseDirSpecial;
+                }
+                else if (inputName.StartsWith("+"))
+                {
+                    targetDir = baseDirPrompt;
+                    promptMode = true;
+                    yymmdd = now.ToString("yyMMdd") + "_" + now.ToString("HHmmss");
                 }
 
                 string dirToCreate = "";
@@ -86,11 +97,13 @@ internal class Program
                     if (i == 0)
                     {
                         fileBaseNameToCreate = yymmdd + " " + name2;
+
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
                     else
                     {
                         fileBaseNameToCreate = yymmdd + " " + name2 + $" ({(i + 1).ToString()})";
+
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
 
@@ -108,6 +121,11 @@ internal class Program
                 if (dirToCreate == "")
                 {
                     throw new ApplicationException("Unknown error");
+                }
+
+                if (promptMode)
+                {
+                    fileBaseNameToCreate += " - InputPrompt";
                 }
 
                 string filePath = Path.Combine(dirToCreate, fileBaseNameToCreate + ".txt");
@@ -140,7 +158,7 @@ internal class Program
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = "Memo";
+                    name2 = now.ToString("HHmmss") + "_memo";
                 }
 
                 string filePathToCreate = "";
