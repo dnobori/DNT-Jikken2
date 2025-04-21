@@ -105,7 +105,7 @@ internal class Program
 
         if (numKilled >= 1)
         {
-            MessageBox.Show($"{numKilled} 個の秀丸プロセスを終了しました。", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            //MessageBox.Show($"{numKilled} 個の秀丸プロセスを終了しました。", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         else
         {
