@@ -14,6 +14,12 @@ internal class Program
 
     public static void Main(string[] args)
     {
+        if (args.Length >= 1)
+        {
+            MessageBox.Show($"このプログラムは、コマンドライン引数を付けずに起動する必要があります。", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         KillMain();
     }
 
