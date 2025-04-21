@@ -69,7 +69,7 @@ internal class Program
 
         if (processListToKill.Count == 0)
         {
-            MessageBox.Show($"終了すべき秀丸プロセスは 1 個もありませんでした。", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"起動している秀丸プロセスは 1 個もありませんでした。", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
