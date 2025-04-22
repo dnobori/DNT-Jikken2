@@ -24,7 +24,7 @@ internal class Program
         }
         string baseDirNormal = args[0];
         string baseDirSpecial = args[1];
-        string baseDirPrompt = args[1];
+        string baseDirPrompt = args[2];
 
         try
         {
