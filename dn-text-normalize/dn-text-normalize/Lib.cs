@@ -841,6 +841,8 @@ public static class Lib
                     "index.phtml",
                     "index.jsp",
                     "index.wml",
+                    "index.asp",
+                    "index.aspx",
                     "welcome.html",
                     "index.nginx-debian.html",
                 };
@@ -889,9 +891,9 @@ public static class Lib
                         // 末尾が index.html などの場合、これを削除
                         foreach (var defFileName in defaultFileNamesList)
                         {
-                            if (absolutePath.EndsWith(defFileName, StringComparison.OrdinalIgnoreCase))
+                            if (absolutePath.EndsWith("/" + defFileName, StringComparison.OrdinalIgnoreCase))
                             {
-                                absolutePath = absolutePath.Substring(absolutePath.Length - defFileName.Length);
+                                absolutePath = absolutePath.Substring(0, absolutePath.Length - defFileName.Length);
                             }
                         }
 
