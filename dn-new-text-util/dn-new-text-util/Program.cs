@@ -96,15 +96,21 @@ internal class Program
                 {
                     string candidate;
 
+                    string extraStr = "";
+                    if (promptMode)
+                    {
+                        extraStr = "InputPrompt - ";
+                    }
+
                     if (i == 0)
                     {
-                        fileBaseNameToCreate = yymmdd + " " + name2;
+                        fileBaseNameToCreate = yymmdd + " " + extraStr + name2;
 
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
                     else
                     {
-                        fileBaseNameToCreate = yymmdd + " " + name2 + $" ({(i + 1).ToString()})";
+                        fileBaseNameToCreate = yymmdd + " " + extraStr + name2 + $" ({(i + 1).ToString()})";
 
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
@@ -123,11 +129,6 @@ internal class Program
                 if (dirToCreate == "")
                 {
                     throw new ApplicationException("Unknown error");
-                }
-
-                if (promptMode)
-                {
-                    fileBaseNameToCreate += "InputPrompt - ";
                 }
 
                 string filePath = Path.Combine(dirToCreate, fileBaseNameToCreate + ".txt");

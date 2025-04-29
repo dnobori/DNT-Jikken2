@@ -18,9 +18,14 @@ internal class Program
     [Flags]
     public enum Mode
     {
-        CutAndPaste = 0,
-        Paste = 1,
+        CutNormalizePaste = 0,
+        NormalizePaste = 1,
         NormalizeOnly = 2,
+        YymmddPaste = 3,
+        CutNormalizeOnly = 4,
+        YymmddOnly = 5,
+        YyyymmddOnly = 6,
+        YyyymmddExOnly = 7,
     }
 
     [STAThread]
@@ -51,21 +56,37 @@ internal class Program
 
         try
         {
-            if (mode == Mode.CutAndPaste)
-            {
-                //Console.WriteLine("send key 1");
-                SendKeys.SendWait("^x");
-                SendKeys.Flush();
-
-                Thread.Sleep(100);
-            }
-
-            //Console.WriteLine("read");
-            //Console.WriteLine($" str1 = '{str}'");
-
             bool doNothing = false;
+            string str;
 
-            string str = Lib.ClipboardRead(out doNothing);
+            if (mode == Mode.YymmddPaste || mode == Mode.YymmddOnly)
+            {
+                str = DateTime.Now.ToString("yyMMdd");
+            }
+            else if (mode == Mode.YyyymmddOnly)
+            {
+                str = DateTime.Now.ToString("yyyyMMdd");
+            }
+            else if (mode == Mode.YyyymmddExOnly)
+            {
+                str = DateTime.Now.ToString("yyyy") + "/" + DateTime.Now.ToString("MM") + "/" + DateTime.Now.ToString("dd");
+            }
+            else
+            {
+                if (mode == Mode.CutNormalizePaste || mode == Mode.CutNormalizeOnly)
+                {
+                    //Console.WriteLine("send key 1");
+                    SendKeys.SendWait("^x");
+                    SendKeys.Flush();
+
+                    Thread.Sleep(100);
+                }
+
+                //Console.WriteLine("read");
+                //Console.WriteLine($" str1 = '{str}'");
+
+                str = Lib.ClipboardRead(out doNothing);
+            }
 
             if (str.StartsWith("Dropbox", StringComparison.OrdinalIgnoreCase) ||
                 str.StartsWith("GoogleDrive", StringComparison.OrdinalIgnoreCase))
@@ -123,6 +144,8 @@ internal class Program
                     str = Lib.NormalizeStrSoftEther(str);
                 }
 
+                str = Lib.NormalizeComfortableUrl(str);
+
                 str = Lib.NormalizeFileOrDirPath(str);
             }
 
@@ -132,7 +155,7 @@ internal class Program
             //Thread.Sleep(100);
 
             //Console.WriteLine("send key 2");
-            if (mode != Mode.NormalizeOnly)
+            if (mode == Mode.NormalizePaste || mode == Mode.CutNormalizePaste || mode == Mode.YymmddPaste)
             {
                 SendKeys.SendWait("^v");
                 SendKeys.Flush();
