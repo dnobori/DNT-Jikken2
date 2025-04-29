@@ -127,7 +127,7 @@ internal class Program
 
                 if (promptMode)
                 {
-                    fileBaseNameToCreate += " - InputPrompt";
+                    fileBaseNameToCreate += "InputPrompt - ";
                 }
 
                 string filePath = Path.Combine(dirToCreate, fileBaseNameToCreate + ".txt");
