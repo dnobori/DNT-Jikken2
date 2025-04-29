@@ -58,18 +58,22 @@ internal class Program
         {
             bool doNothing = false;
             string str;
+            string strAppendTail = "";
 
             if (mode == Mode.YymmddPaste || mode == Mode.YymmddOnly)
             {
                 str = DateTime.Now.ToString("yyMMdd");
+                strAppendTail = " ";
             }
             else if (mode == Mode.YyyymmddOnly)
             {
                 str = DateTime.Now.ToString("yyyyMMdd");
+                strAppendTail = " ";
             }
             else if (mode == Mode.YyyymmddExOnly)
             {
                 str = DateTime.Now.ToString("yyyy") + "/" + DateTime.Now.ToString("MM") + "/" + DateTime.Now.ToString("dd");
+                strAppendTail = " ";
             }
             else
             {
@@ -148,6 +152,8 @@ internal class Program
 
                 str = Lib.NormalizeFileOrDirPath(str);
             }
+
+            str += strAppendTail;
 
             //Console.WriteLine("write");
             Lib.ClipboardWrite(str);
