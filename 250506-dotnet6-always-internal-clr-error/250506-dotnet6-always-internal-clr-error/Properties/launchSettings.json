@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "250506-dotnet6-always-internal-clr-error": {
+      "commandName": "Project",
+      "hotReloadEnabled": true,
+      "nativeDebugging": true
+    }
+  }
+}

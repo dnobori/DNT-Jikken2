@@ -1,0 +1,352 @@
+﻿OS: Windows 10 22H2 x64 上で、
+Visual Studio 2022 (17.13.4) で、
+新しい .NET 6.0 コンソールアプリを作成する。
+構成は、「Debug」-「Any CPU」とする。
+システムには、.NET: 6.0.321 (Microsoft.NETCore.App 6.0.36) がインストールされている。
+
+--- csproj の内容 ここから ---
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <RootNamespace>_250506_dotnet6_always_internal_clr_error</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+--- csproj の内容 ここまで ---
+
+--- Program.c の内容 ここから ---
+using System.Text;
+
+public static class TestClass250506
+{
+    public static void Test()
+    {
+        TestFunc1(Encoding.UTF8, () => 123);
+    }
+
+    public static Encoding TestFunc1(Encoding encoding1, Func<int> proc)
+    {
+        bool flag1 = false; // [Break point here]
+        if (encoding1 == null || encoding1.CodePage == 12345)
+        {
+            Console.WriteLine("Hello 1");
+        }
+        else
+        {
+            try
+            {
+                string str1 = "aaa";
+                string str2 = encoding1.GetString(encoding1.GetBytes("bbb"));
+                Console.WriteLine("Hello 2");
+            }
+            catch
+            {
+            }
+        }
+
+        if (flag1) return encoding1!;
+
+        return Encoding.GetEncoding(proc());
+    }
+}
+internal class Program
+{
+    static void Main(string[] args)
+    {
+        Console.WriteLine("Hello, World!");
+        TestClass250506.Test();
+    }
+}
+
+--- Program.c の内容 ここまで ---
+
+Visual Studio の C# コードエディタで、上記の「// [Break point here]」の部分にブレークポイントを設定し、実行する。
+
+すると、「// [Break point here]」の行まで実行が進み、ここで、正常にブレークポイントがかかって、デバッガ実行が休止する。
+
+ここまでは、問題無い。
+
+しかし、この状態で、デバッガメニューで「続行」/「ステップイン」/「ステップオーバー」のいずれかの操作を行うと、
+
+「型 'System.ExecutionEngineException' のハンドルされていない例外が 不明なモジュールです。 で発生しました」
+というメッセージが表示され、プログラムの実行やデバッガが異常終了してしまう。
+
+このとき、コンソール上には
+--- ここから ---
+Hello, World!
+Fatal error. Internal CLR error. (0x80131506)
+--- ここまで ---
+
+というメッセージが表示される。
+
+なお、Visual Studio のデバッガ出力領域には、
+--- ここから ---
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: DefaultDomain): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Private.CoreLib.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\git\DNT-Jikken2\250506-dotnet6-always-internal-clr-error\250506-dotnet6-always-internal-clr-error\bin\Debug\net6.0\250506-dotnet6-always-internal-clr-error.dll' が読み込まれました。シンボルが読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Runtime.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Console.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Threading.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Text.Encoding.Extensions.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+型 'System.ExecutionEngineException' のハンドルされていない例外が 不明なモジュールです。 で発生しました
+
+プログラム '[32868] 250506-dotnet6-always-internal-clr-error.exe' はコード 3221225786 (0xc000013a) で終了しました。
+--- ここまで ---
+
+というメッセージが表示される。
+
+デバッグ起動プロファイルで、「ネイティブコードのデバッグを有効にする」(混合モードデバッグ) を有効にすると、追加的に、
+
+--- ここから ---
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\git\DNT-Jikken2\250506-dotnet6-always-internal-clr-error\250506-dotnet6-always-internal-clr-error\bin\Debug\net6.0\250506-dotnet6-always-internal-clr-error.exe' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\ntdll.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\kernel32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\KernelBase.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\user32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\win32u.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\gdi32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\gdi32full.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\msvcp_win.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\ucrtbase.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\shell32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\advapi32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\msvcrt.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\sechost.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\rpcrt4.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\bcrypt.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\imm32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\host\fxr\9.0.3\hostfxr.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\hostpolicy.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\coreclr.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\ole32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\combase.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\oleaut32.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\bcryptprimitives.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+スレッド 15656 はコード 0 (0x0) で終了しました。
+Profiler was prevented from loading notification profiler due to app settings.
+  Process ID (decimal): 27844.  Message ID: [0x2509].
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Private.CoreLib.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\clrjit.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: DefaultDomain): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Private.CoreLib.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\kernel.appcore.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+スレッド 47360 はコード 0 (0x0) で終了しました。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Windows\System32\icu.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\git\DNT-Jikken2\250506-dotnet6-always-internal-clr-error\250506-dotnet6-always-internal-clr-error\bin\Debug\net6.0\250506-dotnet6-always-internal-clr-error.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\git\DNT-Jikken2\250506-dotnet6-always-internal-clr-error\250506-dotnet6-always-internal-clr-error\bin\Debug\net6.0\250506-dotnet6-always-internal-clr-error.dll' が読み込まれました。シンボルが読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Runtime.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Runtime.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Console.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Console.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Threading.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Threading.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+'250506-dotnet6-always-internal-clr-error.exe' (Win32): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Text.Encoding.Extensions.dll' が読み込まれました。
+'250506-dotnet6-always-internal-clr-error.exe' (CoreCLR: clrhost): 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.36\System.Text.Encoding.Extensions.dll' が読み込まれました。含める/除外するの設定でシンボルの読み込みが無効になっています。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFB25785FDD (coreclr.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x00000000000000F8 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+0x00007FFC47701548 (ntdll.dll) で例外がスローされました (250506-dotnet6-always-internal-clr-error.exe 内): 0xC0000005: 場所 0x0000000000000060 の読み取り中にアクセス違反が発生しました
+共通言語ランタイムは、この例外で停止できません。一般的な原因は、正しくない COM 相互運用機能のマーシャリングやメモリの破損などです。さらに調べるには、ネイティブのみのデバッグを使用します。
+--- ここまで ---
+
+というデバッガ出力メッセージが表示される。
+
+なお、この「bool flag1 = false; // [Break point here]」の部分でブレークポイントを仕掛けた上で .NET が生成するアセンブリコードを確認すると、次のようになっている。
+
+--- ここから ---
+
+    public static Encoding TestFunc1(Encoding encoding1, Func<int> proc)
+    {
+00007FFAD620D520 55                   push        rbp  
+00007FFAD620D521 57                   push        rdi  
+00007FFAD620D522 56                   push        rsi  
+00007FFAD620D523 48 81 EC A0 00 00 00 sub         rsp,0A0h  
+00007FFAD620D52A 48 8B EC             mov         rbp,rsp  
+00007FFAD620D52D C5 D8 57 E4          vxorps      xmm4,xmm4,xmm4  
+00007FFAD620D531 C5 F9 7F 65 30       vmovdqa     xmmword ptr [rbp+30h],xmm4  
+00007FFAD620D536 48 B8 A0 FF FF FF FF FF FF FF mov         rax,0FFFFFFFFFFFFFFA0h  
+00007FFAD620D540 C5 F9 7F A4 05 A0 00 00 00 vmovdqa     xmmword ptr [rbp+rax+0A0h],xmm4  
+00007FFAD620D549 C5 F9 7F A4 05 B0 00 00 00 vmovdqa     xmmword ptr [rbp+rax+0B0h],xmm4  
+00007FFAD620D552 C5 F9 7F A4 05 C0 00 00 00 vmovdqa     xmmword ptr [rbp+rax+0C0h],xmm4  
+00007FFAD620D55B 48 83 C0 30          add         rax,30h  
+00007FFAD620D55F 75 DF                jne         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+020h (07FFAD620D540h)  
+00007FFAD620D561 48 89 65 20          mov         qword ptr [rbp+20h],rsp  
+00007FFAD620D565 48 89 8D C0 00 00 00 mov         qword ptr [rbp+0C0h],rcx  
+00007FFAD620D56C 48 89 95 C8 00 00 00 mov         qword ptr [rbp+0C8h],rdx  
+00007FFAD620D573 83 3D 46 E6 10 00 00 cmp         dword ptr [7FFAD631BBC0h],0  
+00007FFAD620D57A 74 05                je          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+061h (07FFAD620D581h)  
+00007FFAD620D57C E8 FF FF C9 5F       call        00007FFB35EAD580  
+00007FFAD620D581 90                   nop  
+        bool flag1 = false; // [Break point here]
+00007FFAD620D582 CC                   int         3  
+00007FFAD620D583 C9                   leave  
+00007FFAD620D584 89 8D 9C 00 00 00    mov         dword ptr [rbp+9Ch],ecx  
+        if (encoding1 == null || encoding1.CodePage == 12345)
+00007FFAD620D58A 48 83 BD C0 00 00 00 00 cmp         qword ptr [rbp+0C0h],0  
+00007FFAD620D592 74 2D                je          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0A1h (07FFAD620D5C1h)  
+00007FFAD620D594 48 8B 8D C0 00 00 00 mov         rcx,qword ptr [rbp+0C0h]  
+00007FFAD620D59B 48 8B 85 C0 00 00 00 mov         rax,qword ptr [rbp+0C0h]  
+00007FFAD620D5A2 48 8B 00             mov         rax,qword ptr [rax]  
+00007FFAD620D5A5 48 8B 40 60          mov         rax,qword ptr [rax+60h]  
+00007FFAD620D5A9 FF 50 38             call        qword ptr [rax+38h]  
+00007FFAD620D5AC 89 45 3C             mov         dword ptr [rbp+3Ch],eax  
+00007FFAD620D5AF 81 7D 3C 39 30 00 00 cmp         dword ptr [rbp+3Ch],3039h  
+00007FFAD620D5B6 0F 94 C1             sete        cl  
+00007FFAD620D5B9 0F B6 C9             movzx       ecx,cl  
+00007FFAD620D5BC 89 4D 74             mov         dword ptr [rbp+74h],ecx  
+00007FFAD620D5BF EB 07                jmp         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0A8h (07FFAD620D5C8h)  
+00007FFAD620D5C1 C7 45 74 01 00 00 00 mov         dword ptr [rbp+74h],1  
+00007FFAD620D5C8 8B 4D 74             mov         ecx,dword ptr [rbp+74h]  
+00007FFAD620D5CB 0F B6 C9             movzx       ecx,cl  
+00007FFAD620D5CE 89 8D 98 00 00 00    mov         dword ptr [rbp+98h],ecx  
+00007FFAD620D5D4 83 BD 98 00 00 00 00 cmp         dword ptr [rbp+98h],0  
+00007FFAD620D5DB 74 1B                je          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0D8h (07FFAD620D5F8h)  
+        {
+00007FFAD620D5DD 90                   nop  
+            Console.WriteLine("Hello 1");
+00007FFAD620D5DE 48 B9 A0 61 39 B8 C4 01 00 00 mov         rcx,1C4B83961A0h  
+00007FFAD620D5E8 48 8B 09             mov         rcx,qword ptr [rcx]  
+00007FFAD620D5EB E8 C0 B6 46 60       call        System.Console.WriteLine(System.String) (07FFB36678CB0h)  
+00007FFAD620D5F0 90                   nop  
+        }
+00007FFAD620D5F1 90                   nop  
+00007FFAD620D5F2 90                   nop  
+00007FFAD620D5F3 E9 87 00 00 00       jmp         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+015Fh (07FFAD620D67Fh)  
+        else
+        {
+00007FFAD620D5F8 90                   nop  
+            try
+            {
+00007FFAD620D5F9 90                   nop  
+                string str1 = "aaa";
+00007FFAD620D5FA 48 BA A8 61 39 B8 C4 01 00 00 mov         rdx,1C4B83961A8h  
+00007FFAD620D604 48 8B 12             mov         rdx,qword ptr [rdx]  
+00007FFAD620D607 48 89 95 90 00 00 00 mov         qword ptr [rbp+90h],rdx  
+                string str2 = encoding1.GetString(encoding1.GetBytes("bbb"));
+00007FFAD620D60E 48 8B 95 C0 00 00 00 mov         rdx,qword ptr [rbp+0C0h]  
+00007FFAD620D615 48 89 55 68          mov         qword ptr [rbp+68h],rdx  
+00007FFAD620D619 48 BA B0 61 39 B8 C4 01 00 00 mov         rdx,1C4B83961B0h  
+00007FFAD620D623 48 8B 12             mov         rdx,qword ptr [rdx]  
+00007FFAD620D626 48 8B 8D C0 00 00 00 mov         rcx,qword ptr [rbp+0C0h]  
+00007FFAD620D62D 48 8B 85 C0 00 00 00 mov         rax,qword ptr [rbp+0C0h]  
+00007FFAD620D634 48 8B 00             mov         rax,qword ptr [rax]  
+00007FFAD620D637 48 8B 40 58          mov         rax,qword ptr [rax+58h]  
+00007FFAD620D63B FF 50 10             call        qword ptr [rax+10h]  
+00007FFAD620D63E 48 89 45 60          mov         qword ptr [rbp+60h],rax  
+00007FFAD620D642 48 8B 4D 68          mov         rcx,qword ptr [rbp+68h]  
+00007FFAD620D646 48 8B 55 60          mov         rdx,qword ptr [rbp+60h]  
+00007FFAD620D64A 48 8B 45 68          mov         rax,qword ptr [rbp+68h]  
+00007FFAD620D64E 48 8B 00             mov         rax,qword ptr [rax]  
+00007FFAD620D651 48 8B 40 68          mov         rax,qword ptr [rax+68h]  
+00007FFAD620D655 FF 50 28             call        qword ptr [rax+28h]  
+00007FFAD620D658 48 89 45 58          mov         qword ptr [rbp+58h],rax  
+00007FFAD620D65C 48 8B 4D 58          mov         rcx,qword ptr [rbp+58h]  
+00007FFAD620D660 48 89 8D 88 00 00 00 mov         qword ptr [rbp+88h],rcx  
+                Console.WriteLine("Hello 2");
+00007FFAD620D667 48 B9 B8 61 39 B8 C4 01 00 00 mov         rcx,1C4B83961B8h  
+00007FFAD620D671 48 8B 09             mov         rcx,qword ptr [rcx]  
+00007FFAD620D674 E8 37 B6 46 60       call        System.Console.WriteLine(System.String) (07FFB36678CB0h)  
+00007FFAD620D679 90                   nop  
+            }
+00007FFAD620D67A 90                   nop  
+00007FFAD620D67B 90                   nop  
+00007FFAD620D67C EB 00                jmp         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+015Eh (07FFAD620D67Eh)  
+        }
+00007FFAD620D67E 90                   nop  
+
+        if (flag1) return encoding1!;
+00007FFAD620D67F 8B 8D 9C 00 00 00    mov         ecx,dword ptr [rbp+9Ch]  
+00007FFAD620D685 89 8D 84 00 00 00    mov         dword ptr [rbp+84h],ecx  
+00007FFAD620D68B 83 BD 84 00 00 00 00 cmp         dword ptr [rbp+84h],0  
+00007FFAD620D692 74 0E                je          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0182h (07FFAD620D6A2h)  
+        if (flag1) return encoding1!;
+00007FFAD620D694 48 8B 8D C0 00 00 00 mov         rcx,qword ptr [rbp+0C0h]  
+00007FFAD620D69B 48 89 4D 78          mov         qword ptr [rbp+78h],rcx  
+00007FFAD620D69F 90                   nop  
+00007FFAD620D6A0 EB 34                jmp         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+01B6h (07FFAD620D6D6h)  
+
+        return Encoding.GetEncoding(proc());
+00007FFAD620D6A2 48 8B 8D C8 00 00 00 mov         rcx,qword ptr [rbp+0C8h]  
+00007FFAD620D6A9 48 89 4D 30          mov         qword ptr [rbp+30h],rcx  
+00007FFAD620D6AD 48 8B 4D 30          mov         rcx,qword ptr [rbp+30h]  
+00007FFAD620D6B1 48 8B 49 08          mov         rcx,qword ptr [rcx+8]  
+00007FFAD620D6B5 48 8B 45 30          mov         rax,qword ptr [rbp+30h]  
+00007FFAD620D6B9 FF 50 18             call        qword ptr [rax+18h]  
+00007FFAD620D6BC 89 45 54             mov         dword ptr [rbp+54h],eax  
+00007FFAD620D6BF 8B 4D 54             mov         ecx,dword ptr [rbp+54h]  
+00007FFAD620D6C2 E8 B9 DD 0B 5F       call        System.Text.Encoding.GetEncoding(Int32) (07FFB352CB480h)  
+00007FFAD620D6C7 48 89 45 48          mov         qword ptr [rbp+48h],rax  
+00007FFAD620D6CB 48 8B 45 48          mov         rax,qword ptr [rbp+48h]  
+00007FFAD620D6CF 48 89 45 78          mov         qword ptr [rbp+78h],rax  
+00007FFAD620D6D3 90                   nop  
+00007FFAD620D6D4 EB 00                jmp         TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+01B6h (07FFAD620D6D6h)  
+    }
+00007FFAD620D6D6 48 8B 45 78          mov         rax,qword ptr [rbp+78h]  
+00007FFAD620D6DA 48 8D A5 A0 00 00 00 lea         rsp,[rbp+0A0h]  
+00007FFAD620D6E1 5E                   pop         rsi  
+00007FFAD620D6E2 5F                   pop         rdi  
+00007FFAD620D6E3 5D                   pop         rbp  
+00007FFAD620D6E4 C3                   ret  
+
+    public static Encoding TestFunc1(Encoding encoding1, Func<int> proc)
+    {
+00007FFAD620D6E5 55                   push        rbp  
+00007FFAD620D6E6 57                   push        rdi  
+00007FFAD620D6E7 56                   push        rsi  
+00007FFAD620D6E8 48 83 EC 30          sub         rsp,30h  
+00007FFAD620D6EC 48 8B 69 20          mov         rbp,qword ptr [rcx+20h]  
+00007FFAD620D6F0 48 89 6C 24 20       mov         qword ptr [rsp+20h],rbp  
+            catch
+00007FFAD620D6F5 48 89 55 40          mov         qword ptr [rbp+40h],rdx  
+            {
+00007FFAD620D6F9 90                   nop  
+            }
+00007FFAD620D6FA 90                   nop  
+00007FFAD620D6FB 90                   nop  
+00007FFAD620D6FC 48 8D 05 7B FF FF FF lea         rax,[TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+015Eh (07FFAD620D67Eh)]  
+00007FFAD620D703 48 83 C4 30          add         rsp,30h  
+00007FFAD620D707 5E                   pop         rsi  
+00007FFAD620D708 5F                   pop         rdi  
+00007FFAD620D709 5D                   pop         rbp  
+00007FFAD620D70A C3                   ret  
+00007FFAD620D70B CC                   int         3  
+00007FFAD620D70C CC                   int         3  
+00007FFAD620D70D CC                   int         3  
+00007FFAD620D70E CC                   int         3  
+00007FFAD620D70F CC                   int         3  
+00007FFAD620D710 19 0D 06 05 0D 03    sbb         dword ptr [7FFAD92DDC1Ch],ecx  
+00007FFAD620D716 0A 01                or          al,byte ptr [rcx]  
+00007FFAD620D718 14 00                adc         al,0  
+00007FFAD620D71A 03 60 02             add         esp,dword ptr [rax+2]  
+00007FFAD620D71D 70 01                jo          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0200h (07FFAD620D720h)  
+00007FFAD620D71F 50                   push        rax  
+00007FFAD620D720 00 00                add         byte ptr [rax],al  
+00007FFAD620D722 00 00                add         byte ptr [rax],al  
+00007FFAD620D724 19 07                sbb         dword ptr [rdi],eax  
+00007FFAD620D726 04 00                add         al,0  
+00007FFAD620D728 07                   ?? ?????? 
+            }
+00007FFAD620D729 52                   push        rdx  
+00007FFAD620D72A 03 60 02             add         esp,dword ptr [rax+2]  
+00007FFAD620D72D 70 01                jo          TestClass250506.TestFunc1(System.Text.Encoding, System.Func`1<Int32>)+0210h (07FFAD620D730h)  
+00007FFAD620D72F 50                   push        rax  
+00007FFAD620D730 00 00                add         byte ptr [rax],al  
+00007FFAD620D732 00 00                add         byte ptr [rax],al  
+00007FFAD620D734 00                   ?? ?????? 
+--- ここまで ---
+
+
+
+
+
