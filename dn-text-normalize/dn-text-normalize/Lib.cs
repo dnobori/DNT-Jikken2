@@ -928,6 +928,12 @@ public static class Lib
                                     query = "";
                                     fragment = "";
                                 }
+                                else if (tokens.Length >= 2 && tokens[0].Equals("dp", StringComparison.OrdinalIgnoreCase) && tokens[1].Length == 10)
+                                {
+                                    absolutePath = "/dp/" + tokens[1] + "/";
+                                    query = "";
+                                    fragment = "";
+                                }
                                 else if (tokens.Length >= 3 && tokens[0].Equals("gp", StringComparison.OrdinalIgnoreCase) && tokens[1].Equals("product", StringComparison.OrdinalIgnoreCase) && tokens[2].Length == 10)
                                 {
                                     absolutePath = "/dp/" + tokens[2] + "/";
