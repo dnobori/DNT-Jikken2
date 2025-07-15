@@ -39,7 +39,11 @@ internal class Program
         try
         {
             string inputName = Interaction.InputBox(
-                    "新しい文書の名前を入力してください。\r\n\"_untitled_\" のままでも構いません。\r\n\r\n(1) 1 文字目を '/' にすると、サブフォルダも新規作成します。\r\n(2-1) 1 文字目を '?' にすると、特別ディリクトリに作成します。\r\n(2-2) 1 文字目を '!' にすると、特別ディレクトリかつサブフォルダに作成します。\r\n(3) 1 文字目を '+' にすると、AI プロンプトディレクトリかつサブフォルダに作成します。",
+                    "新しい文書の名前を入力してください。\r\n\"_untitled_\" のままでも構いません。\r\n\r\n" +
+                    "(1) 1 文字目を '/' にすると、サブフォルダも新規作成します。\r\n(2-1) 1 文字目を '?' にすると、特別ディリクトリに作成します。\r\n" +
+                    "(2-2) 1 文字目を '!' にすると、特別ディレクトリかつサブフォルダに作成します。\r\n" +
+                    "(3) 1 文字目を '+' にすると、AI プロンプトディレクトリかつサブフォルダに作成します。\r\n" +
+                    "    なお、'+' のみ入力すると、AI プロンプトディレクトリを開きます。",
                     AppTitle,
                     "_untitled_");
 
@@ -47,6 +51,17 @@ internal class Program
 
             if (inputName == null || inputName == "")
             {
+                return;
+            }
+
+            if (inputName == "+")
+            {
+                string lastDirPath = Directory.EnumerateDirectories(baseDirPrompt).OrderByDescending(x => x).FirstOrDefault();
+
+                ProcessStartInfo ps = new ProcessStartInfo("explorer.exe", $"/select,\"{lastDirPath}\"");
+                ps.UseShellExecute = false;
+
+                Process.Start(ps);
                 return;
             }
 
