@@ -1906,6 +1906,7 @@ public static class UnicodeStdKangxiMapUtil
         (char)0xF0FC, // ✓
         (char)0xF0D8, // ➢
         (char)0xf075, // ◆
+        (char)0x00A5, // 円記号 (¥)
         };
 
 
@@ -2224,6 +2225,7 @@ public static class UnicodeStdKangxiMapUtil
         '✓', // ✓
         '➢', // ➢
         '◆', // ◆
+        '\\', // バックスラッシュ (円記号は必ずバックスラッシュに)
     };
 
     public static readonly string StrangeCharArrayStr;
