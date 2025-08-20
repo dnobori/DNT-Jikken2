@@ -830,12 +830,13 @@ public static class Lib
     public static string GenerateRandTagWithYyymmdd(DateTimeOffset now, int numCharsInTagTotal)
     {
         string dstr = now.LocalDateTime.ToString("yyMMdd"); 
-        string timeCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        string hourCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        string minSecCandidates = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-        int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)timeCandidates.Length), timeCandidates.Length), 0);
-        int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)timeCandidates.Length), timeCandidates.Length), 0);
+        int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
+        int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
 
-        return dstr + "_" + timeCandidates[now.LocalDateTime.Hour] + timeCandidates[v1] + timeCandidates[v2] + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsInTagTotal - 3, "23456789");
+        return dstr + "_" + hourCandidates[now.LocalDateTime.Hour] + minSecCandidates[v1] + minSecCandidates[v2] + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsInTagTotal - 3, "23456789");
     }
 
     public static string GenerateRandTag(int numCharsTotal)
