@@ -3,9 +3,26 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Security.Cryptography;
 using Microsoft.Win32;
 using System.Windows.Forms;
 using System.Diagnostics;
+
+
+public static class RandGen
+{
+    static RandomNumberGenerator gen = RandomNumberGenerator.Create();
+
+    public static int GenRandSInt31()
+    {
+        byte[] bytes = new byte[4];
+        gen.GetBytes(bytes);
+        int value = BitConverter.ToInt32(bytes, 0);
+
+        // 31bit の範囲に収める (最上位ビットをマスクする)
+        return value & 0x7FFFFFFF;
+    }
+}
 
 public static class Lib
 {
@@ -810,6 +827,67 @@ public static class Lib
         }
     }
 
+    public static string GenerateRandTagWithYyymmdd(DateTimeOffset now, int numCharsInTagTotal)
+    {
+        string dstr = now.LocalDateTime.ToString("yyMMdd"); 
+        string timeCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+        int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)timeCandidates.Length), timeCandidates.Length), 0);
+        int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)timeCandidates.Length), timeCandidates.Length), 0);
+
+        return dstr + "_" + timeCandidates[now.LocalDateTime.Hour] + timeCandidates[v1] + timeCandidates[v2] + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsInTagTotal - 3, "23456789");
+    }
+
+    public static string GenerateRandTag(int numCharsTotal)
+    {
+        return GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ", 1) + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsTotal - 1, "23456789");
+    }
+
+    static string GenerateRandTagCore(string candidates, int numChars, string mustContainChars = "")
+    {
+        int numRetry = 0;
+
+        L_RETRY:
+
+        StringBuilder sb = new StringBuilder(numChars);
+
+        for (int i = 0; i < numChars; i++)
+        {
+            int r = RandGen.GenRandSInt31() % candidates.Length;
+            sb.Append(candidates[r]);
+        }
+
+        string ret = sb.ToString();
+
+        if (mustContainChars._IsFilled())
+        {
+            bool ok = false;
+
+            foreach (char c in ret)
+            {
+                if (mustContainChars.IndexOf(c) != -1)
+                {
+                    ok = true;
+                    break;
+                }
+            }
+
+            if (ok == false)
+            {
+                if (numRetry >= 1000)
+                {
+                    throw new Exception("numRetry >= 1000");
+                }
+
+                numRetry++;
+
+                goto L_RETRY;
+            }
+        }
+
+        return ret;
+    }
+
     public static string NormalizeComfortableUrl(string srcUrl)
     {
         if (srcUrl == null) return "";
@@ -965,6 +1043,36 @@ public static class Lib
                                 absolutePath = "/p/" + tokens[1] + "/";
                                 query = "";
                                 fragment = "";
+                            }
+                        }
+
+                        if (query.IndexOf("utm_source=", StringComparison.OrdinalIgnoreCase) != -1)
+                        {
+                            bool changed = false;
+                            var list = QueryStringList.Parse(query);
+
+                            QueryStringList qs2 = new QueryStringList();
+
+                            foreach (var kv in list)
+                            {
+                                if (kv.Key.Equals("utm_source", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    changed = true;
+                                }
+                                else
+                                {
+                                    qs2.Add(kv);
+                                }
+                            }
+
+                            if (changed)
+                            {
+                                query = qs2.ToString();
+
+                                if (query.Trim().Length >= 1)
+                                {
+                                    query = "?" + query;
+                                }
                             }
                         }
 
@@ -1261,7 +1369,7 @@ public class QueryStringList : KeyValueList<string, string>
 
                 // key と value を URL エンコードする
                 key = Lib.EncodeUrl(key, encoding, urlEncodeParam);
-                value = Lib.EncodeUrl(key, encoding, urlEncodeParam);
+                value = Lib.EncodeUrl(value, encoding, urlEncodeParam);
 
                 if (string.IsNullOrEmpty(value))
                 {

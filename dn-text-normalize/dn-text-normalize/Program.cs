@@ -26,6 +26,8 @@ internal class Program
         YymmddOnly = 5,
         YyyymmddOnly = 6,
         YyyymmddExOnly = 7,
+        YymmddAndRandTag5Only = 8,
+        RandTag8Only = 9,
     }
 
     [STAThread]
@@ -74,6 +76,14 @@ internal class Program
             {
                 str = DateTime.Now.ToString("yyyy") + "/" + DateTime.Now.ToString("MM") + "/" + DateTime.Now.ToString("dd");
                 strAppendTail = " ";
+            }
+            else if (mode == Mode.YymmddAndRandTag5Only)
+            {
+                str = Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6);
+            }
+            else if (mode == Mode.RandTag8Only)
+            {
+                str = Lib.GenerateRandTag(8);
             }
             else
             {
