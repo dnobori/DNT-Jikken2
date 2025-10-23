@@ -84,7 +84,8 @@ internal class Program
             }
             else if (mode == Mode.YymmddAndRandTag5AndBracket)
             {
-                str = "[" + Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6) + "] ";
+                str = "[" + Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6) + "]";
+                strAppendTail = " ";
             }
             else if (mode == Mode.RandTag8Only)
             {
