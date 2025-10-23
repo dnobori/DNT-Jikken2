@@ -1077,6 +1077,12 @@ public static class Lib
                             }
                         }
 
+                        int a1 = query.IndexOf("#");
+                        if (a1 != -1)
+                        {
+                            query = query.Substring(0, a1);
+                        }
+
                         string dstText = uri.Scheme + "://" + uri.Host + (uri.IsDefaultPort ? "" : ":" + uri.Port) + absolutePath + query + fragment;
                         trimmedLine = new Tuple<string, string, string>(dstText, trimmedLine.Item2, trimmedLine.Item3);
 

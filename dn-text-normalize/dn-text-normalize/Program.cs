@@ -28,6 +28,7 @@ internal class Program
         YyyymmddExOnly = 7,
         YymmddAndRandTag5Only = 8,
         RandTag8Only = 9,
+        YymmddAndRandTag5AndBracket = 10,
     }
 
     [STAThread]
@@ -80,6 +81,10 @@ internal class Program
             else if (mode == Mode.YymmddAndRandTag5Only)
             {
                 str = Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6);
+            }
+            else if (mode == Mode.YymmddAndRandTag5AndBracket)
+            {
+                str = "[" + Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6) + "] ";
             }
             else if (mode == Mode.RandTag8Only)
             {
