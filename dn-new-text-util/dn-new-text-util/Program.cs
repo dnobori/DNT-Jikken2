@@ -21,6 +21,7 @@ internal class Program
         if (args.Length < 3)
         {
             MessageBox.Show("引数を指定してください。\r\n\r\n第一引数: 標準ディレクトリ名\r\n第二引数: 特別ディリレクトリ名\r\n第三引数: AI プロンプトディリレクトリ名", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
         }
         string baseDirNormal = args[0];
         string baseDirSpecial = args[1];
@@ -35,6 +36,7 @@ internal class Program
         catch { }
 
         byte[] emptyFileData = new byte[] { 0xef, 0xbb, 0xbf, 0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a, };
+        byte[] bomData = new byte[] { 0xef, 0xbb, 0xbf, };
 
         try
         {
@@ -77,9 +79,11 @@ internal class Program
 
             var now = DateTime.Now;
 
-            string yymmdd = now.ToString("yyMMdd");
+            string yymmdd_and_tag = Lib.GenerateRandTagWithYyymmdd(now, 6);
 
             string targetDir = baseDirNormal;
+
+            string txtBody = "\r\n\r\n\r\n";
 
             if (inputName.StartsWith("/") || inputName.StartsWith("!") || inputName.StartsWith("+"))
             {
@@ -90,7 +94,7 @@ internal class Program
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = now.ToString("HHmmss") + " memo";
+                    name2 = "memo";
                 }
 
                 if (inputName.StartsWith("!"))
@@ -100,8 +104,8 @@ internal class Program
                 else if (inputName.StartsWith("+"))
                 {
                     targetDir = baseDirPrompt;
-                    promptMode = true;
-                    yymmdd = now.ToString("yyMMdd") + "_" + now.ToString("HHmmss");
+                    //promptMode = true;
+                    //yymmdd = Lib.GenerateRandTagWithYyymmdd(now, 6);
                 }
 
                 string dirToCreate = "";
@@ -119,13 +123,13 @@ internal class Program
 
                     if (i == 0)
                     {
-                        fileBaseNameToCreate = yymmdd + " " + extraStr + name2;
+                        fileBaseNameToCreate = yymmdd_and_tag + " " + extraStr + name2;
 
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
                     else
                     {
-                        fileBaseNameToCreate = yymmdd + " " + extraStr + name2 + $" ({(i + 1).ToString()})";
+                        fileBaseNameToCreate = yymmdd_and_tag + " " + extraStr + name2 + $" ({(i + 1).ToString()})";
 
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
@@ -139,6 +143,15 @@ internal class Program
                         dirToCreate = candidate;
                         break;
                     }
+                }
+
+                if (inputName.StartsWith("+"))
+                {
+                    txtBody = "\r\n\r\n\r\n\r\nメモ用タグ (この行は AI 処理の際には無視してください): " + yymmdd_and_tag + "\r\n\r\n===================================================================\r\n\r\nOpenAI 社 ChatGPT 5 Pro による推論出力結果:\r\n\r\n\r\n";
+                }
+                else
+                {
+                    txtBody = name2 + "\r\n\r\n" + "[" + yymmdd_and_tag + "] " + now.Year + "/" + now.Month + "/" + now.Day + " 登 大遊\r\n\r\n\r\n\r\n";
                 }
 
                 if (dirToCreate == "")
@@ -156,7 +169,9 @@ internal class Program
 
                 using (var file = File.Open(filePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read))
                 {
-                    file.Write(emptyFileData, 0, emptyFileData.Length);
+                    file.Write(bomData, 0, bomData.Length);
+                    byte[] data = Encoding.UTF8.GetBytes(txtBody);
+                    file.Write(data, 0, data.Length);
                     file.Close();
                 }
 
@@ -177,7 +192,7 @@ internal class Program
                 name2 = SanitizeFileName(name2);
                 if (name2.Length == 0)
                 {
-                    name2 = now.ToString("HHmmss") + " memo";
+                    name2 = "memo";
                 }
 
                 string filePathToCreate = "";
@@ -189,12 +204,12 @@ internal class Program
 
                     if (i == 0)
                     {
-                        fileBaseNameToCreate = yymmdd + " " + name2 + ".txt";
+                        fileBaseNameToCreate = yymmdd_and_tag + " " + name2 + ".txt";
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
                     else
                     {
-                        fileBaseNameToCreate = yymmdd + " " + name2 + $" ({(i + 1).ToString()}).txt";
+                        fileBaseNameToCreate = yymmdd_and_tag + " " + name2 + $" ({(i + 1).ToString()}).txt";
                         candidate = Path.Combine(targetDir, fileBaseNameToCreate);
                     }
 
@@ -209,6 +224,8 @@ internal class Program
                     }
                 }
 
+                txtBody = name2 + "\r\n\r\n" + "[" + yymmdd_and_tag + "] " + now.Year + "/" + now.Month + "/" + now.Day + " 登 大遊\r\n\r\n\r\n\r\n";
+
                 if (filePathToCreate == "")
                 {
                     throw new ApplicationException("Unknown error");
@@ -222,7 +239,9 @@ internal class Program
 
                 using (var file = File.Open(filePathToCreate, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read))
                 {
-                    file.Write(emptyFileData, 0, emptyFileData.Length);
+                    file.Write(bomData, 0, bomData.Length);
+                    byte[] data = Encoding.UTF8.GetBytes(txtBody);
+                    file.Write(data, 0, data.Length);
                     file.Close();
                 }
 
