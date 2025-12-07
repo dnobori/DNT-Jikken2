@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import socketserver
 
 from bleak import BleakClient, BleakScanner
-from bleakheart import HeartRate
+from bleakheart import HeartRate, PolarMeasurementData
 
 # =============================================================================
 # 共通ユーティリティ / データ構造
@@ -969,6 +969,7 @@ async def part2_find_polar_device() -> Optional[Any]:
 async def part2_heart_stream_loop(
     client: BleakClient,
     hr_queue: "asyncio.Queue[Tuple]",
+    ecg_queue: "asyncio.Queue[Tuple]",
     device_mac: str,
 ) -> None:
     """
@@ -1010,6 +1011,10 @@ async def part2_heart_stream_loop(
                 finally:
                     hr_queue.task_done()
 
+            # この 100ms 中に溜まった ECG フレームを全部取り出して捨てる
+            while not ecg_queue.empty():
+                _ = ecg_queue.get_nowait()
+                ecg_queue.task_done()
         except Exception as e:
             print(f"[PART2][LOOP] Error in heart stream loop: {e!r}", file=sys.stderr, flush=True)
             break
@@ -1028,6 +1033,7 @@ async def part2_connect_and_stream(device: Any) -> None:
     print(f"[PART2][CONN] Trying to connect to {device} ...", flush=True)
 
     hr_queue: asyncio.Queue = asyncio.Queue()
+    ecg_queue: asyncio.Queue = asyncio.Queue()
 
     def _disconnected_callback(client: BleakClient) -> None:
         print("[PART2][CONN] Sensor disconnected (disconnected_callback).", flush=True)
@@ -1057,15 +1063,36 @@ async def part2_connect_and_stream(device: Any) -> None:
                 unpack=True,
             )
 
-            # --- 心拍ストリーミング開始 ------------------------------
+            pmd = PolarMeasurementData(client, ecg_queue=ecg_queue)
+
+            try:
+                settings = await pmd.available_settings("ECG")
+                print("[PART2] [PMD] ECG settings reported by device:", flush=True)
+                for k, v in settings.items():
+                    print(f"[PART2]        {k}: {v}", flush=True)
+            except Exception as e:
+                print(f"[PART2] [PMD] Could not read ECG settings: {e!r}", file=sys.stderr, flush=True)
+
             try:
                 await heartrate.start_notify()
                 print("[PART2][HR ] Heart rate notifications started.", flush=True)
             except Exception as e:
                 print(f"[PART2][HR ] Failed to start heart rate notifications: {e!r}", file=sys.stderr, flush=True)
 
-            # --- 小ループ --------------------------------------------
-            await part2_heart_stream_loop(client, hr_queue, device_mac)
+            try:
+                err_code, err_msg, _ = await pmd.start_streaming("ECG")
+                if err_code != 0:
+                    print(
+                        f"[PART2] [PMD] start_streaming('ECG') error {err_code}: {err_msg}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                else:
+                    print("[PART2] [PMD] ECG streaming started.", flush=True)
+            except Exception as e:
+                print(f"[PART2] [PMD] Failed to start ECG streaming: {e!r}", file=sys.stderr, flush=True)
+
+            await part2_heart_stream_loop(client, hr_queue, ecg_queue, device_mac)
 
             # --- 停止処理 --------------------------------------------
             if client.is_connected:
@@ -1074,6 +1101,11 @@ async def part2_connect_and_stream(device: Any) -> None:
                     await heartrate.stop_notify()
                 except Exception as e:
                     print(f"[PART2][HR ] Error in stop_notify: {e!r}", file=sys.stderr, flush=True)
+
+                try:
+                    await pmd.stop_streaming("ECG")
+                except Exception as e:
+                    print(f"[PART2] [PMD] Error in stop_streaming('ECG'): {e!r}", file=sys.stderr, flush=True)
 
             print("[PART2][CONN] Connection closed. Returning to outer loop.", flush=True)
 
