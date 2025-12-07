@@ -51,8 +51,21 @@ export DEBIAN_FRONTEND=noninteractive && apt-get -y update && apt-get -y install
 
 systemctl status bluetooth
 
+#rfkill list
+
+#rfkill unblock 2
+
+#rfkill list
+
+
 # Bluetooth ペアリング
 bluetoothctl
+
+# 複数のコントローラがある場合
+#list
+
+# USB 増設コントローラを選択
+#select 98:BA:5F:CF:8A:B5
 
 --- ここから ---
 power on
@@ -130,6 +143,9 @@ pip freeze > ../requirements.txt
 
 
 screen
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
 
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
 python dn_pysensors_server1.py
