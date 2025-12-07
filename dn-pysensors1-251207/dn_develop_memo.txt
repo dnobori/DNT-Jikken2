@@ -44,15 +44,76 @@ python test.py
 
 ################ 開発時 (Linux)
 
+## Ubuntu 24.04 でのメモ
+
+# Bluetooth 準備
+export DEBIAN_FRONTEND=noninteractive && apt-get -y update && apt-get -y install bluetooth bluez rfkill
+
+systemctl status bluetooth
+
+# Bluetooth ペアリング
+bluetoothctl
+
+--- ここから ---
+power on
+agent on
+default-agent
+
+scan on
+# ここで Polar H10 デバイスが表示される
+
+pair A0:9E:1A:D1:11:1C
+
+trust A0:9E:1A:D1:11:1C
+
+# 通信できるか?
+connect A0:9E:1A:D1:11:1C
+
+# 情報表示
+info A0:9E:1A:D1:11:1C
+
+# ペア済みデバイス一覧表示
+devices Paired
+
+# コマンドを抜ける
+quit
+--- ここまで ---
+
+
+
 # 初回
 cd ~/ && rm -fr ~/DNT-Jikken2/
 git clone --recursive git@github.com:dnobori/DNT-Jikken2.git
 
+# venv 作成方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/
+python3.11 -m venv .venv
+
+# venv アクティベート方法
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
+# pip で好きなパッケージをインストールする方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip install bleak blehrm bleakheart
+
+# インストール済みパッケージ一覧の表示
+pip list
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > ../requirements.txt
 
 
 # 2 回目以降
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/ && (cd ../../ && git pull origin master && git submodule update --init --recursive)
+
+# requirements.txt からインストール済みパッケージを復元する
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip install -r ../requirements.txt
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip freeze > ../requirements.txt
 
 
 
