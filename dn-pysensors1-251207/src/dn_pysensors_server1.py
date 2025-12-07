@@ -938,7 +938,7 @@ def part1_main_thread() -> None:
 
 # Polar H10 用タイムアウト / インターバル設定
 POLAR_CONNECT_TIMEOUT: float = 5.0
-POLAR_RETRY_INTERVAL: float = 5.0
+POLAR_RETRY_INTERVAL: float = 1.0
 POLAR_POLL_INTERVAL: float = 0.1  # 100 ms
 
 
