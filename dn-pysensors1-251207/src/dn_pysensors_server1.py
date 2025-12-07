@@ -144,6 +144,14 @@ class SensorDataStore:
     # ------------------------------------------------------------------
     # 内部ユーティリティ
     # ------------------------------------------------------------------
+    def get_debug_stats(self) -> Dict[str, Any]:
+        """デバッグ用: 現在のフレーム数やデバイス数の簡易統計を返す。"""
+        with self._lock:
+            return {
+                "num_frames": len(self._frames),
+                "num_devices": len(self._device_last_seen),
+                "last_prune_time": self._last_prune_time.isoformat(),
+            }
 
     def _next_frame_number_locked(self) -> int:
         """
@@ -360,20 +368,22 @@ class PartStats:
             self._counter += n
 
     def logging_loop(self) -> None:
-        """
-        1 秒ごとに NUM_DEVICES / DATA_PER_SECOND を出力し続ける無限ループ。
-        """
         while True:
             time.sleep(1.0)
             with self._lock:
                 data_per_second = self._counter
                 self._counter = 0
+
             num_devices = self.store.count_alive_devices(self.device_types, alive_within_sec=30.0)
+            debug = self.store.get_debug_stats()  # ★ 追加
+            num_frames = debug["num_frames"]
+
             print(
-                f"{self.part_name}: NUM_DEVICES = {num_devices}, DATA_PER_SECOND = {data_per_second}",
+                f"{self.part_name}: NUM_DEVICES = {num_devices}, "
+                f"DATA_PER_SECOND = {data_per_second}, "
+                f"TOTAL_FRAMES = {num_frames}",
                 flush=True,
             )
-
 
 # 共有データストアと統計カウンタ (モジュール全体で 1 つずつ)
 GLOBAL_STORE = SensorDataStore()
@@ -386,7 +396,11 @@ PART2_STATS = PartStats("PART2", GLOBAL_STORE, ["Polar_H10"])
 # =============================================================================
 
 # スキャン間隔 / 接続再試行間隔 (秒)
-BASE_INTERVAL_SEC = 5.0
+BASE_INTERVAL_SEC = 20.0
+# (1) すでに 1 台以上からデータ受信中のときに使う「長いスキャン間隔」(秒)
+# 例: 5 分おきにしかスキャンしない
+BASE_INTERVAL_LONG_SEC = 300.0
+
 JITTER_RATIO = 0.3  # ±30%
 
 # 接続タイムアウト (秒)
@@ -420,7 +434,7 @@ DEVICE_TYPE_OVERRIDES: Dict[str, str] = {}
 
 
 def jittered_interval(base: float = BASE_INTERVAL_SEC) -> float:
-    """5 秒 ± 30% のような乱数付きインターバルを返す。"""
+    """base ± (base * JITTER_RATIO) の乱数付きインターバルを返す。"""
     r = random.uniform(1.0 - JITTER_RATIO, 1.0 + JITTER_RATIO)
     return max(0.1, base * r)
 
@@ -800,22 +814,104 @@ def part1_scan_task_main(registry: DeviceRegistry) -> None:
     """
     スキャンタスク用スレッドのエントリーポイント。
 
-    永久ループで BLE スキャンを繰り返し、新規デバイスがあれば device_task_thread
-    を起動する。
+    (2) の仕様:
+      - まだ 1 台もデータ受信していない場合:
+          BASE_INTERVAL_SEC (±JITTER_RATIO) ごとにスキャン
+      - すでに 1 台以上からデータ受信している場合:
+          「前回スキャンから BASE_INTERVAL_LONG_SEC 秒経過するまでは」スキャンしない
     """
-    while True:
-        try:
-            asyncio.run(part1_scan_once_and_spawn_tasks(registry))
-        except KeyboardInterrupt:
-            print("[PART1] scan_task_thread: KeyboardInterrupt を無視して継続します", file=sys.stderr, flush=True)
-        except Exception as e:
-            print(f"[PART1] scan_task_thread: スキャン中に例外発生: {e!r}", file=sys.stderr, flush=True)
-            traceback.print_exc()
+    last_scan_time: float = 0.0          # 直近にスキャンを実行した時刻 (epoch 秒)
+    current_interval_sec: float = 0.0    # 「次にスキャンを許可するまでの間隔 (秒)」
+    last_alive: bool = False             # 直近判定時点で 1 台以上から受信中だったかどうか
 
-        delay = jittered_interval(BASE_INTERVAL_SEC)
-        print(f"[PART1] 次のスキャンまで {delay:.1f} 秒待機します", flush=True)
+    while True:
+        now = time.time()
+
+        # WT901 系で「最近 30 秒以内にデータが来ているデバイス」の台数を調べる
+        alive_devices = GLOBAL_STORE.count_alive_devices(
+            ["WT901BLECL", "WT9011DCL"],
+            alive_within_sec=30.0,
+        )
+        alive_now = alive_devices > 0
+
+        # --- 受信状況の変化に応じたインターバル調整 --------------------
+
+        # 0台 -> 1台以上 に変化したとき:
+        # 「前回スキャンから BASE_INTERVAL_LONG_SEC 秒経過するまではスキャンしない」
+        if alive_now and not last_alive and last_scan_time > 0.0:
+            elapsed = now - last_scan_time
+            if elapsed < BASE_INTERVAL_LONG_SEC and current_interval_sec < BASE_INTERVAL_LONG_SEC:
+                # まだ BASE_INTERVAL_LONG_SEC 経っていない場合は、
+                # 次回スキャン許可までの間隔を BASE_INTERVAL_LONG_SEC に引き上げる
+                current_interval_sec = BASE_INTERVAL_LONG_SEC
+
+        # 1台以上 -> 0台 に変化したとき:
+        # 「データ受信中のデバイスが 0 個に減ったら、またスキャンするようになる」
+        if (not alive_now) and last_alive:
+            # 次ループで即スキャン可能なように 0 にしておく
+            current_interval_sec = 0.0
+
+        last_alive = alive_now
+
+        # --- スキャン実行タイミングかどうか判定 ------------------------
+
+        elapsed_since_scan = (now - last_scan_time) if last_scan_time > 0.0 else None
+        should_scan = False
+
+        if last_scan_time == 0.0:
+            # 起動直後は即スキャン
+            should_scan = True
+        elif elapsed_since_scan is not None and elapsed_since_scan >= current_interval_sec:
+            should_scan = True
+
+        # --- 必要なら 1 回分スキャンを実行 -------------------------------
+
+        if should_scan:
+            try:
+                asyncio.run(part1_scan_once_and_spawn_tasks(registry))
+            except KeyboardInterrupt:
+                print(
+                    "[PART1] scan_task_thread: KeyboardInterrupt を無視して継続します",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except Exception as e:
+                print(
+                    f"[PART1] scan_task_thread: スキャン中に例外発生: {e!r}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                traceback.print_exc()
+
+            last_scan_time = time.time()
+
+            # スキャン直後の受信状況を再確認し、次のインターバルを決定
+            alive_devices_after = GLOBAL_STORE.count_alive_devices(
+                ["WT901BLECL", "WT9011DCL"],
+                alive_within_sec=30.0,
+            )
+            last_alive = alive_devices_after > 0
+
+            if last_alive:
+                # (2) データ受信中デバイスが 1 個以上 → BASE_INTERVAL_LONG_SEC 固定
+                current_interval_sec = BASE_INTERVAL_LONG_SEC
+                print(
+                    f"[PART1] {alive_devices_after} 台からデータ受信中のため、"
+                    f"次のスキャンは {current_interval_sec:.1f} 秒後に延期します。",
+                    flush=True,
+                )
+            else:
+                # データ受信中デバイスなし → 通常インターバル（±JITTER）
+                current_interval_sec = jittered_interval(BASE_INTERVAL_SEC)
+                print(
+                    f"[PART1] 受信中デバイスなし。"
+                    f"次のスキャンまで {current_interval_sec:.1f} 秒待機します。",
+                    flush=True,
+                )
+
+        # CPU 負荷を抑えるため、1 秒おきに状態を再評価
         try:
-            time.sleep(delay)
+            time.sleep(1.0)
         except KeyboardInterrupt:
             print("[PART1] scan_task_thread: KeyboardInterrupt 受信、スレッド終了", flush=True)
             return
@@ -988,6 +1084,12 @@ async def part2_connect_and_stream(device: Any) -> None:
 async def part2_monitor_polar_forever() -> None:
     """
     Polar H10 への接続を永久に試み続ける大ループ。
+
+    (3) の仕様について:
+      - スキャン (part2_find_polar_device) は「接続していないとき」にしか呼ばれない。
+      - 一度 part2_connect_and_stream() に入ると、接続中はそこで待ち続けるため、
+        データ受信中 (= 接続中) の間はスキャンは実行されない。
+      - 接続が切れて 0 台になると、外側ループに戻って再度スキャンする。
     """
     print("[PART2][MAIN] Starting POLAR H10 monitor.", flush=True)
 
