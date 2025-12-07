@@ -1,0 +1,30 @@
+﻿################ 開発用 PC で
+
+# venv 作成方法
+py -3.11 -m venv .venv
+
+# venv アクティベート方法
+.\.venv\Scripts\activate.bat
+
+# pip で好きなパッケージをインストールする方法
+pip install bleak blehrm
+
+# インストール済みパッケージ一覧の表示
+pip list
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > requirements.txt
+
+
+
+
+################ 別の PC で
+
+# venv アクティベート方法
+.\.venv\Scripts\activate.bat
+
+# requirements.txt からインストール済みパッケージを復元する
+pip install -r requirements.txt
+
+
+
