@@ -1,4 +1,6 @@
-﻿################ 開発用 PC で
+﻿################ 初期化時 (Windows)
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\
 
 # venv 作成方法
 py -3.11 -m venv .venv
@@ -7,7 +9,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\activate.bat
 
 # pip で好きなパッケージをインストールする方法
-pip install bleak blehrm
+pip install bleak blehrm bleakheart
 
 # インストール済みパッケージ一覧の表示
 pip list
@@ -18,13 +20,42 @@ pip freeze > requirements.txt
 
 
 
-################ 別の PC で
+################ 開発時 (Windows)
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\src\
 
 # venv アクティベート方法
-.\.venv\Scripts\activate.bat
+..\.venv\Scripts\activate.bat
 
 # requirements.txt からインストール済みパッケージを復元する
-pip install -r requirements.txt
+pip install -r ..\requirements.txt
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > requirements.txt
+
+
+# 実行
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\src\
+
+python test.py
+
+
+
+################ 開発時 (Linux)
+
+# 初回
+cd ~/ && rm -fr ~/DNT-Jikken2/
+git clone --recursive git@github.com:dnobori/DNT-Jikken2.git
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+
+
+# 2 回目以降
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/ && (cd ../../ && git pull origin master && git submodule update --init --recursive)
+
+
+
 
 
 
