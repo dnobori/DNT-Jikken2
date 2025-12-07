@@ -399,7 +399,7 @@ PART2_STATS = PartStats("PART2", GLOBAL_STORE, ["Polar_H10"])
 BASE_INTERVAL_SEC = 20.0
 # (1) すでに 1 台以上からデータ受信中のときに使う「長いスキャン間隔」(秒)
 # 例: 5 分おきにしかスキャンしない
-BASE_INTERVAL_LONG_SEC = 300.0
+BASE_INTERVAL_LONG_SEC = 36000.0
 
 JITTER_RATIO = 0.3  # ±30%
 
