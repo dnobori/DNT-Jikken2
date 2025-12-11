@@ -13,25 +13,50 @@ internal class Program
 
     static void Main(string[] args)
     {
-        Console.WriteLine("じゃんけんゲームを始めます。");
-        Console.WriteLine("0: グー, 1: チョキ, 2: パー");
+        Console.WriteLine("おこしやす。じゃんけんの宿『グー・チョキ・パー』どす。ごゆっくりしていっておくれやす！");
+        Console.WriteLine("0: グー, 1: チョキ, 2: パー でございます。");
+        Console.WriteLine("お好きなだけ遊んでおくれやす。おいとまの際は \"Q\" とお書きくださいな。");
+        Console.WriteLine();
 
-        var playerHand = ReadPlayerHand();
-        var computerHand = GetComputerHand();
+        while (true)
+        {
+            var playerHand = ReadPlayerHandOrQuit();
+            if (playerHand == null)
+            {
+                Console.WriteLine("本日はお付き合いありがとさんどした。またお越しやす。");
+                break;
+            }
 
-        Console.WriteLine($"あなた: {ToJapanese(playerHand)}");
-        Console.WriteLine($"コンピューター: {ToJapanese(computerHand)}");
+            var computerHand = GetComputerHand();
 
-        var result = Judge(playerHand, computerHand);
-        Console.WriteLine(ResultMessage(result));
+            Console.WriteLine($"あなた: {HandLabel(playerHand.Value)}");
+            Console.WriteLine($"お宿: {HandLabel(computerHand)}");
+
+            var result = Judge(playerHand.Value, computerHand);
+            Console.WriteLine(ResultMessage(result));
+
+            Console.WriteLine();
+            Console.WriteLine("— 次の手を思いつかはったら、いつでもどうぞ。おいとまは \"Q\" と書いておくれやす。");
+            Console.WriteLine();
+        }
     }
 
-    private static Hand ReadPlayerHand()
+    private static Hand? ReadPlayerHandOrQuit()
     {
         while (true)
         {
-            Console.Write("あなたの手を数字で入力してください: ");
+            Console.Write("お手をどうぞ (0: グー, 1: チョキ, 2: パー, Q: おいとま): ");
             var input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                continue;
+            }
+
+            if (input.Trim().Equals("q", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
 
             if (int.TryParse(input, out var value) &&
                 Enum.IsDefined(typeof(Hand), value))
@@ -39,7 +64,7 @@ internal class Program
                 return (Hand)value;
             }
 
-            Console.WriteLine("0, 1, 2 のいずれかを入力してください。");
+            Console.WriteLine("0, 1, 2 か Q をお選びくださいな。");
         }
     }
 
@@ -49,7 +74,7 @@ internal class Program
         return (Hand)value;
     }
 
-    private static string ToJapanese(Hand hand)
+    private static string HandLabel(Hand hand)
     {
         return hand switch
         {
@@ -70,10 +95,10 @@ internal class Program
     {
         return resultCode switch
         {
-            0 => "あいこです。",
-            1 => "あなたの負けです。",
-            2 => "あなたの勝ちです！",
-            _ => "結果が判定できませんでした。"
+            0 => "引き分けどすな。",
+            1 => "申し訳おへん、お宿の勝ちでおす。",
+            2 => "ようお勝ちなはりましたな！",
+            _ => "判じかねますわ。"
         };
     }
 }
