@@ -158,7 +158,7 @@ async def connect_and_stream(device: Any) -> None:
             heartrate = HeartRate(
                 client,
                 queue=hr_queue,
-                instant_rate=True,
+                instant_rate=False,
                 unpack=True,
             )
 

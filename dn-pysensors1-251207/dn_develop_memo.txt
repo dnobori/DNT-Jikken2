@@ -51,8 +51,21 @@ export DEBIAN_FRONTEND=noninteractive && apt-get -y update && apt-get -y install
 
 systemctl status bluetooth
 
+#rfkill list
+
+#rfkill unblock 2
+
+#rfkill list
+
+
 # Bluetooth ペアリング
 bluetoothctl
+
+# 複数のコントローラがある場合
+#list
+
+# USB 増設コントローラを選択
+#select 98:BA:5F:CF:8A:B5
 
 --- ここから ---
 power on
@@ -60,20 +73,30 @@ agent on
 default-agent
 
 scan on
-# ここで Polar H10 デバイスが表示される
 
+# Polar H10
 pair A0:9E:1A:D1:11:1C
-
 trust A0:9E:1A:D1:11:1C
-
-# 通信できるか?
 connect A0:9E:1A:D1:11:1C
-
-# 情報表示
 info A0:9E:1A:D1:11:1C
+
+# WT901BLECL 1 台目
+trust D5:2D:CF:03:96:E8
+connect D5:2D:CF:03:96:E8
+info D5:2D:CF:03:96:E8
+
+# WT901BLECL 2 台目
+trust D9:91:90:3A:C1:4A
+connect D9:91:90:3A:C1:4A
+info D9:91:90:3A:C1:4A
+
 
 # ペア済みデバイス一覧表示
 devices Paired
+
+# 接続済みデバイス一覧表示
+devices Connected
+
 
 # コマンドを抜ける
 quit
@@ -81,7 +104,7 @@ quit
 
 
 
-# 初回
+### 初回
 cd ~/ && rm -fr ~/DNT-Jikken2/
 git clone --recursive git@github.com:dnobori/DNT-Jikken2.git
 
@@ -104,7 +127,10 @@ pip list
 pip freeze > ../requirements.txt
 
 
-# 2 回目以降
+### 2 回目以降
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/ && (cd ../../ && git pull origin master && git submodule update --init --recursive)
 
 # requirements.txt からインストール済みパッケージを復元する
@@ -116,6 +142,17 @@ cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
 pip freeze > ../requirements.txt
 
 
+screen
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+python dn_pysensors_server1.py
+
+
+# メモリリーク検査
+watch -n 1 "ps -o pid,rss,vsz,cmd -p \$(ps aux | grep dn_pysensors_server1.py | grep -v grep | awk '{print \$2}')"
 
 
 
