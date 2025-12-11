@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 internal class Program
 {
@@ -31,6 +32,7 @@ internal class Program
 
             Console.WriteLine($"あなた: {HandLabel(playerHand.Value)}");
             Console.WriteLine($"お宿: {HandLabel(computerHand)}");
+            RenderDuel(playerHand.Value, computerHand);
 
             var result = Judge(playerHand.Value, computerHand);
             Console.WriteLine(ResultMessage(result));
@@ -85,6 +87,24 @@ internal class Program
         };
     }
 
+    private static void RenderDuel(Hand player, Hand computer)
+    {
+        var playerArt = HandArt(player, true);
+        var houseArt = HandArt(computer, false);
+        var height = Math.Max(playerArt.Length, houseArt.Length);
+
+        Console.WriteLine("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓");
+        Console.WriteLine("┃　お座敷での手合わせ、ようこそ　┃");
+        Console.WriteLine("┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫");
+        for (var i = 0; i < height; i++)
+        {
+            var left = i < playerArt.Length ? playerArt[i] : string.Empty;
+            var right = i < houseArt.Length ? houseArt[i] : string.Empty;
+            Console.WriteLine($"┃ {PadToWidth(left, 24)} お宿 {PadToWidth(right, 24)}┃");
+        }
+        Console.WriteLine("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛");
+    }
+
     private static int Judge(Hand player, Hand computer)
     {
         // 0 = draw, 1 = lose, 2 = win
@@ -100,5 +120,126 @@ internal class Program
             2 => "ようお勝ちなはりましたな！",
             _ => "判じかねますわ。"
         };
+    }
+
+    private static string PadToWidth(string text, int width)
+    {
+        if (text.Length >= width)
+        {
+            return text;
+        }
+
+        return text + new string(' ', width - text.Length);
+    }
+
+    private static string[] HandArt(Hand hand, bool isPlayer)
+    {
+        var accent = Accent(isPlayer);
+        var indent = Random.Next(0, 3);
+        var variants = hand switch
+        {
+            Hand.Rock => RockVariants(),
+            Hand.Scissors => ScissorVariants(),
+            Hand.Paper => PaperVariants(),
+            _ => RockVariants()
+        };
+
+        var chosen = variants[Random.Next(variants.Count)];
+        var lines = new string[chosen.Length];
+        for (var i = 0; i < chosen.Length; i++)
+        {
+            var line = chosen[i].Replace("{acc}", accent);
+            lines[i] = new string(' ', indent) + line;
+        }
+        return lines;
+    }
+
+    private static List<string[]> RockVariants()
+    {
+        return new List<string[]>
+        {
+            new[]
+            {
+                "   ___{acc}",
+                "  / __) ",
+                " | (__  ",
+                " |___)  ",
+                "  /  \\ ",
+                " (____)",
+                "  |_|  "
+            },
+            new[]
+            {
+                "   {acc}___",
+                "  ( ___)",
+                "  / ___)",
+                " ( (___ ",
+                "  \\___ )",
+                "  (___/ ",
+                "   |_|  "
+            }
+        };
+    }
+
+    private static List<string[]> ScissorVariants()
+    {
+        return new List<string[]>
+        {
+            new[]
+            {
+                "   {acc}  /\\",
+                "      /  \\",
+                "   __/\\__/__",
+                "     /  \\",
+                "    /____\\",
+                "      ||",
+                "      VV"
+            },
+            new[]
+            {
+                "    {acc}  /\\",
+                "   _/  \\",
+                "  (  () )",
+                "   \\    /",
+                "    \\  /",
+                "     \\\\",
+                "     VV"
+            }
+        };
+    }
+
+    private static List<string[]> PaperVariants()
+    {
+        return new List<string[]>
+        {
+            new[]
+            {
+                " {acc}┌───┬─┐",
+                " │ 手 │ ││",
+                " │    │ ││",
+                " │    │ ││",
+                " │    │ ││",
+                " └───┴─┘ ",
+                "    ||    "
+            },
+            new[]
+            {
+                " {acc}┌────┐",
+                " │ ひら │",
+                " │      │",
+                " │      │",
+                " │      │",
+                " └────┘",
+                "    ||   "
+            }
+        };
+    }
+
+    private static string Accent(bool isPlayer)
+    {
+        var options = isPlayer
+            ? new[] { "◇", "☆", "✿", "＊" }
+            : new[] { "◆", "★", "◎", "＋" };
+        return options[Random.Next(options.Length)];
     }
 }
