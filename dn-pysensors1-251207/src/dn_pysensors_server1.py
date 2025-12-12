@@ -78,11 +78,16 @@ class AxisData:
 class HeartData:
     """
     PySensorHeartData に対応する Python 側の内部データ構造。
+
+    BatteryLevel は 0〜100 (%) を想定する。
+    0   = 電池切れ状態
+    100 = フル充電状態
     """
 
-    bpm: int              # 心拍数 (BPM)
-    rr_msecs: int         # R-R 間隔 (ミリ秒)
-    internal_timestamp: int  # Polar H10 が報告する内部タイムスタンプ (ナノ秒など 64bit 値)
+    bpm: int                  # 心拍数 (BPM)
+    rr_msecs: int             # R-R 間隔 (ミリ秒)
+    internal_timestamp: int   # Polar H10 が報告する内部タイムスタンプ (ナノ秒など 64bit 値)
+    battery_level: int        # 残りバッテリーレベル (0=電池切れ, 100=フル)
 
 
 @dataclass
@@ -333,6 +338,8 @@ class SensorDataStore:
                     "Bpm": fr.heart_data.bpm,
                     "RrMsecs": fr.heart_data.rr_msecs,
                     "InternalTimeStamp": fr.heart_data.internal_timestamp,
+                    # ★ ここで BatteryLevel を追加
+                    "BatteryLevel": fr.heart_data.battery_level,
                 }
             frames_json.append(item)
 
@@ -941,6 +948,11 @@ POLAR_CONNECT_TIMEOUT: float = 5.0
 POLAR_RETRY_INTERVAL: float = 1.0
 POLAR_POLL_INTERVAL: float = 0.1  # 100 ms
 
+# Polar H10 の Battery Service / Battery Level Characteristic の標準 UUID
+# - Service UUID : 0x180F -> 0000180f-0000-1000-8000-00805f9b34fb
+# - Char UUID    : 0x2A19 -> 00002a19-0000-1000-8000-00805f9b34fb
+BATTERY_SERVICE_UUID: str = "0000180f-0000-1000-8000-00805f9b34fb"
+BATTERY_LEVEL_CHAR_UUID: str = "00002a19-0000-1000-8000-00805f9b34fb"
 
 async def part2_find_polar_device() -> Optional[Any]:
     """
@@ -966,11 +978,47 @@ async def part2_find_polar_device() -> Optional[Any]:
     return device
 
 
+async def read_polar_battery_level(client: BleakClient) -> Optional[int]:
+    """
+    Polar H10 の Battery Level characteristic (0x2A19) を読み取る。
+
+    戻り値:
+        0〜100 の整数値 (%)
+        失敗時は None
+
+    備考:
+        - 標準 Battery Service (0x180F) / Battery Level Characteristic (0x2A19)
+        - 値が 0〜100 の範囲外だった場合は 0〜100 にクランプする
+    """
+    try:
+        # Battery Level は 1 バイト (0〜100%)
+        raw = await client.read_gatt_char(BATTERY_LEVEL_CHAR_UUID)
+        if not raw:
+            print("[PART2][BATT] Empty battery value received.", flush=True)
+            return None
+
+        level = int(raw[0])
+        # 念のため範囲をクランプ
+        if level < 0:
+            level = 0
+        elif level > 100:
+            level = 100
+
+        print(f"[PART2][BATT] Battery level = {level} %", flush=True)
+        return level
+    except Exception as e:
+        # Battery Service を実装していない・一時的なエラー等
+        print(f"[PART2][BATT] Failed to read battery level: {e!r}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        return None
+
 async def part2_heart_stream_loop(
     client: BleakClient,
     hr_queue: "asyncio.Queue[Tuple]",
     ecg_queue: "asyncio.Queue[Tuple]",
     device_mac: str,
+    initial_battery_level: int,
+    battery_read_interval_sec: float = 60.0,
 ) -> None:
     """
     「小さなメインループ」: 100ms ごとに心拍フレームをキューから取り出し、
@@ -978,11 +1026,39 @@ async def part2_heart_stream_loop(
 
     ECG はこのサーバでは使用しないため、ストリーミング自体を行わず、
     心拍フレームのみ処理する。
+
+    Args:
+        client:
+            接続済みの BleakClient。
+        hr_queue:
+            bleakheart.HeartRate が push してくる心拍フレーム用キュー。
+        ecg_queue:
+            PolarMeasurementData が push してくる ECG フレーム用キュー。
+        device_mac:
+            Polar H10 デバイスの MAC アドレス (大文字)。
+        initial_battery_level:
+            接続直後に取得したバッテリーレベル (0〜100)。
+        battery_read_interval_sec:
+            バッテリーレベルを再取得する間隔 (秒)。デフォルトは 60 秒。
     """
     print("[PART2][LOOP] Entering heart stream loop (100 ms polling).", flush=True)
+    
+    # ★ 直近のバッテリーレベルと最終取得時刻を保持する
+    battery_level: int = initial_battery_level
+    last_battery_read_monotonic: float = time.monotonic()
 
     while client.is_connected:
         try:
+            # まず、必要ならバッテリーレベルを再取得する
+            # （1 秒に 1 回など高頻度ではなく、既定では 60 秒に 1 回程度）
+            now_mono = time.monotonic()
+            if (now_mono - last_battery_read_monotonic) >= battery_read_interval_sec:
+                new_level = await read_polar_battery_level(client)
+                if new_level is not None:
+                    battery_level = new_level
+                # 取得に成功したかどうかにかかわらず、次回判定の基準時間を更新
+                last_battery_read_monotonic = now_mono
+
             # 100ms の間に心拍フレームを 1 つ待つ
             try:
                 frame = await asyncio.wait_for(hr_queue.get(), timeout=POLAR_POLL_INTERVAL)
@@ -999,10 +1075,12 @@ async def part2_heart_stream_loop(
                         bpm_int = int(round(float(bpm)))
                         rr_int = int(round(float(rr_ms)))
 
+                        # ★ ここで現在保持している battery_level を HeartData に含める
                         heart = HeartData(
                             bpm=bpm_int,
                             rr_msecs=rr_int,
                             internal_timestamp=int(tstamp),
+                            battery_level=int(battery_level),
                         )
                         GLOBAL_STORE.add_heart_frame(device_id=device_mac, heart_data=heart)
                         PART2_STATS.increment(1)
@@ -1054,6 +1132,16 @@ async def part2_connect_and_stream(device: Any) -> None:
             if not client.is_connected:
                 print("[PART2][CONN] client.is_connected is False, aborting this cycle.", flush=True)
                 return
+            
+            # ★ 接続直後に 1 回、BatteryLevel を取得しておく
+            initial_battery_level: int = 0  # 取得失敗時は 0 (異常値) を報告
+            try:
+                batt = await read_polar_battery_level(client)
+                if batt is not None:
+                    initial_battery_level = batt
+            except Exception as e:
+                print(f"[PART2][BATT] Initial battery read failed: {e!r}", file=sys.stderr, flush=True)
+                traceback.print_exc()
 
             # --- bleakheart HeartRate の設定 --------------------------
             heartrate = HeartRate(
@@ -1092,8 +1180,15 @@ async def part2_connect_and_stream(device: Any) -> None:
             except Exception as e:
                 print(f"[PART2] [PMD] Failed to start ECG streaming: {e!r}", file=sys.stderr, flush=True)
 
-            await part2_heart_stream_loop(client, hr_queue, ecg_queue, device_mac)
-
+            await part2_heart_stream_loop(
+                client=client,
+                hr_queue=hr_queue,
+                ecg_queue=ecg_queue,
+                device_mac=device_mac,
+                initial_battery_level=initial_battery_level,
+                battery_read_interval_sec=60.0,  # ★ 60 秒ごとに BatteryLevel を更新
+            )
+            
             # --- 停止処理 --------------------------------------------
             if client.is_connected:
                 print("[PART2][CONN] Stopping heart rate notifications ...", flush=True)
