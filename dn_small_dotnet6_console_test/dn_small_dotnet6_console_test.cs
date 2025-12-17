@@ -56,8 +56,10 @@ namespace dn_small_dotnet6_console_test;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
+        await Task.CompletedTask; // await が 1 個もない警告を仮に非表示に
+        
         Console.WriteLine("Hello World");
     }
 }
