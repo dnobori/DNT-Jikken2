@@ -831,7 +831,7 @@ public static class Lib
     {
         string dstr = now.LocalDateTime.ToString("yyMMdd"); 
         string hourCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        string minSecCandidates = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+        string minSecCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
         int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
         int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
@@ -840,8 +840,8 @@ public static class Lib
     }
 
     public static string GenerateRandTag(int numCharsTotal)
-    {
-        return GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ", 1) + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsTotal - 1, "23456789");
+        {
+            return GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ", 1) + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsTotal - 1, "23456789");
     }
 
     static string GenerateRandTagCore(string candidates, int numChars, string mustContainChars = "")

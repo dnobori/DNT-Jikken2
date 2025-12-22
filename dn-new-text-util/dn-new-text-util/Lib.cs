@@ -829,9 +829,9 @@ public static class Lib
 
     public static string GenerateRandTagWithYyymmdd(DateTimeOffset now, int numCharsInTagTotal)
     {
-        string dstr = now.LocalDateTime.ToString("yyMMdd"); 
+        string dstr = now.LocalDateTime.ToString("yyMMdd");
         string hourCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        string minSecCandidates = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+        string minSecCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
         int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
         int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
