@@ -1,0 +1,159 @@
+﻿################ 初期化時 (Windows)
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\
+
+# venv 作成方法
+py -3.11 -m venv .venv
+
+# venv アクティベート方法
+.\.venv\Scripts\activate.bat
+
+# pip で好きなパッケージをインストールする方法
+pip install bleak blehrm bleakheart
+
+# インストール済みパッケージ一覧の表示
+pip list
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > requirements.txt
+
+
+
+
+################ 開発時 (Windows)
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\src\
+
+# venv アクティベート方法
+..\.venv\Scripts\activate.bat
+
+# requirements.txt からインストール済みパッケージを復元する
+pip install -r ..\requirements.txt
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > requirements.txt
+
+
+# 実行
+
+cd /d C:\git\DNT-Jikken2\dn-pysensors1-251207\src\
+
+python test.py
+
+
+
+################ 開発時 (Linux)
+
+## Ubuntu 24.04 でのメモ
+
+# Bluetooth 準備
+export DEBIAN_FRONTEND=noninteractive && apt-get -y update && apt-get -y install bluetooth bluez rfkill
+
+systemctl status bluetooth
+
+#rfkill list
+
+#rfkill unblock 2
+
+#rfkill list
+
+
+# Bluetooth ペアリング
+bluetoothctl
+
+# 複数のコントローラがある場合
+#list
+
+# USB 増設コントローラを選択
+#select 98:BA:5F:CF:8A:B5
+
+--- ここから ---
+power on
+agent on
+default-agent
+
+scan on
+
+# Polar H10
+pair A0:9E:1A:D1:11:1C
+trust A0:9E:1A:D1:11:1C
+connect A0:9E:1A:D1:11:1C
+info A0:9E:1A:D1:11:1C
+
+# WT901BLECL 1 台目
+trust D5:2D:CF:03:96:E8
+connect D5:2D:CF:03:96:E8
+info D5:2D:CF:03:96:E8
+
+# WT901BLECL 2 台目
+trust D9:91:90:3A:C1:4A
+connect D9:91:90:3A:C1:4A
+info D9:91:90:3A:C1:4A
+
+
+# ペア済みデバイス一覧表示
+devices Paired
+
+# 接続済みデバイス一覧表示
+devices Connected
+
+
+# コマンドを抜ける
+quit
+--- ここまで ---
+
+
+
+### 初回
+cd ~/ && rm -fr ~/DNT-Jikken2/
+git clone --recursive git@github.com:dnobori/DNT-Jikken2.git
+
+# venv 作成方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/
+python3.11 -m venv .venv
+
+# venv アクティベート方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
+# pip で好きなパッケージをインストールする方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip install bleak blehrm bleakheart
+
+# インストール済みパッケージ一覧の表示
+pip list
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+pip freeze > ../requirements.txt
+
+
+### 2 回目以降
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/ && (cd ../../ && git pull origin master && git submodule update --init --recursive)
+
+# requirements.txt からインストール済みパッケージを復元する
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip install -r ../requirements.txt
+
+# インストール済みパッケージのメモを requirements.txt に書き出す
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip freeze > ../requirements.txt
+
+
+screen
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+source ../.venv/bin/activate
+
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+python dn_pysensors_server1.py
+
+
+# メモリリーク検査
+watch -n 1 "ps -o pid,rss,vsz,cmd -p \$(ps aux | grep dn_pysensors_server1.py | grep -v grep | awk '{print \$2}')"
+
+
+
+
