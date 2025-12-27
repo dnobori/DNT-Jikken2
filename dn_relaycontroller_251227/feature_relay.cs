@@ -11,7 +11,7 @@ namespace dn_relaycontroller_251227;
 sealed class RelayWorker
 {
     /// <summary>
-    /// /keep_lock アクセス記録用の共有状態。
+    /// /keep_lock /unlock アクセス記録用の共有状態。
     /// </summary>
     readonly KeepLockState _keepLockState;
 
@@ -23,7 +23,7 @@ sealed class RelayWorker
     /// <summary>
     /// コンストラクタ。
     /// </summary>
-    /// <param name="keepLockState">/keep_lock アクセス記録用の共有状態。</param>
+    /// <param name="keepLockState">/keep_lock /unlock アクセス記録用の共有状態。</param>
     public RelayWorker(KeepLockState keepLockState)
     {
         _keepLockState = keepLockState ?? throw new ArgumentNullException(nameof(keepLockState));
@@ -71,7 +71,16 @@ sealed class RelayWorker
             {
                 Interlocked.Increment(ref _loopCounter);
 
-                bool shouldOn = _keepLockState.WasAccessedWithin(TimeSpan.FromSeconds(5));
+                TimeSpan accessWindow = TimeSpan.FromSeconds(5);
+                // (a) keep_lock / unlock の直近アクセス有無を確認する。
+                bool hasRecentAccess = _keepLockState.WasAnyAccessWithin(accessWindow);
+                bool shouldOn = hasRecentAccess && _keepLockState.WasKeepLockAccessedWithin(accessWindow);
+
+                // (b-2) unlock が keep_lock より後なら強制 OFF。
+                if (_keepLockState.IsUnlockAfterKeepLock())
+                {
+                    shouldOn = false;
+                }
 
                 // 0.1 秒ごとに状態を判定するが、実際の書き込みは状態変化時または未確定時に限定する。
                 if (lastConfirmedOn == null || lastConfirmedOn.Value != shouldOn)
@@ -277,4 +286,3 @@ sealed class RelayDeviceController
 #endif
     }
 }
-

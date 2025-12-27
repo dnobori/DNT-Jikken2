@@ -18,7 +18,7 @@ sealed class SimpleHttpServer
     readonly TcpListener _listener;
 
     /// <summary>
-    /// /keep_lock アクセス記録用の共有状態。
+    /// /keep_lock /unlock アクセス記録用の共有状態。
     /// </summary>
     readonly KeepLockState _keepLockState;
 
@@ -31,7 +31,7 @@ sealed class SimpleHttpServer
     /// コンストラクタ。
     /// </summary>
     /// <param name="listener">listen 済みの TcpListener。</param>
-    /// <param name="keepLockState">/keep_lock アクセス記録用の共有状態。</param>
+    /// <param name="keepLockState">/keep_lock /unlock アクセス記録用の共有状態。</param>
     /// <param name="connectionIdleTimeout">TCP コネクションのアイドルタイムアウト。</param>
     public SimpleHttpServer(TcpListener listener, KeepLockState keepLockState, TimeSpan connectionIdleTimeout)
     {
@@ -121,7 +121,7 @@ sealed class SimpleHttpServer
     /// 1 クライアント接続を処理する。
     /// </summary>
     /// <param name="client">TCP クライアント。</param>
-    /// <param name="keepLockState">/keep_lock アクセス記録用の共有状態。</param>
+    /// <param name="keepLockState">/keep_lock /unlock アクセス記録用の共有状態。</param>
     /// <param name="idleTimeout">アイドルタイムアウト。</param>
     /// <param name="serverCancel">サーバー停止要求。</param>
     static async Task HandleClientAsync(TcpClient client, KeepLockState keepLockState, TimeSpan idleTimeout, CancellationToken serverCancel)
@@ -193,14 +193,14 @@ sealed class SimpleHttpServer
                         }
                     }
 
-                    // リクエスト処理 (/keep_lock のみ)
+                    // リクエスト処理 (/keep_lock, /unlock のみ)
                     bool keepAlive = ShouldKeepAlive(req);
                     bool isHead = req.Method.Equals("HEAD", StringComparison.OrdinalIgnoreCase);
 
                     if (req.Path.Equals("/keep_lock", StringComparison.Ordinal) &&
                         (req.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) || isHead))
                     {
-                        keepLockState.MarkAccessNow();
+                        keepLockState.MarkKeepLockAccessNow();
 
                         if (req.IsHttp09)
                         {
@@ -229,6 +229,51 @@ sealed class SimpleHttpServer
                         }
 
                         // /keep_lock に対して GET/HEAD 以外の場合は 405 を返す。
+                        Dictionary<string, string> extraHeaders = new(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["Allow"] = "GET, HEAD",
+                        };
+
+                        await WriteHttpResponseAsync(stream, req.HttpMajor, req.HttpMinor, 405, "Method Not Allowed",
+                            contentType: "text/plain", body: Encoding.UTF8.GetBytes("Method Not Allowed."), keepAlive: keepAlive, isHead: isHead, serverCancel, extraHeaders);
+
+                        if (keepAlive == false)
+                        {
+                            break;
+                        }
+                    }
+                    else if (req.Path.Equals("/unlock", StringComparison.Ordinal) &&
+                        (req.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) || isHead))
+                    {
+                        keepLockState.MarkUnlockAccessNow();
+
+                        if (req.IsHttp09)
+                        {
+                            byte[] body = Encoding.UTF8.GetBytes("Ok.");
+                            await stream.WriteAsync(body, 0, body.Length, serverCancel);
+                            await stream.FlushAsync(serverCancel);
+                            break;
+                        }
+
+                        await WriteHttpResponseAsync(stream, req.HttpMajor, req.HttpMinor, 200, "OK",
+                            contentType: "text/plain", body: Encoding.UTF8.GetBytes("Ok."), keepAlive: keepAlive, isHead: isHead, serverCancel);
+
+                        if (keepAlive == false)
+                        {
+                            break;
+                        }
+                    }
+                    else if (req.Path.Equals("/unlock", StringComparison.Ordinal))
+                    {
+                        if (req.IsHttp09)
+                        {
+                            byte[] body = Encoding.UTF8.GetBytes("Not Found.");
+                            await stream.WriteAsync(body, 0, body.Length, serverCancel);
+                            await stream.FlushAsync(serverCancel);
+                            break;
+                        }
+
+                        // /unlock に対して GET/HEAD 以外の場合は 405 を返す。
                         Dictionary<string, string> extraHeaders = new(StringComparer.OrdinalIgnoreCase)
                         {
                             ["Allow"] = "GET, HEAD",

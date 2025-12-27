@@ -1,0 +1,33 @@
+===================================================================
+日時: 2025/12/28 02:02:05 (JST)
+開発者によって指示された指示の内容: 251228_BFM9SN の機能追加
+作業内容の概要: /unlock 対応とリレー強制OFF判定を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 既定
+AI 実行コンピュータ名: pc37
+関連タグ: 251228_BFM9SN, 251228_BFR2CM, 251227_YXW7W8, 251227_ZAMUX5, 251216_VP33AH
+編集したファイルの一覧: feature_httpserver.cs, feature_relay.cs, lib_common.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): KeepLockState (MarkKeepLockAccessNow/MarkUnlockAccessNow/WasKeepLockAccessedWithin/WasAnyAccessWithin/IsUnlockAfterKeepLock), RelayWorker.RelayLoopThreadProc, SimpleHttpServer.HandleClientAsync
+実装において迷った点 (もしあれば): 特になし
+参考文献 (複数あってよい): なし
+
+
+本文:
+指示ID「251228_BFM9SN」に従い、全体仕様「251227_YXW7W8」に記載の
+/unlock 追加要件 [251228_BFR2CM] を実装した。
+
+HTTP サーバー側では、/unlock の GET/HEAD を受け付けて
+共有状態にアクセス時刻を記録し、"Ok." を返すように変更した。
+また、/unlock に対する GET/HEAD 以外は 405 を返す扱いとした。
+
+共有状態 KeepLockState に /unlock の直近アクセス時刻を保持する
+フィールドと、keep_lock/unlock の判定メソッド群を追加した。
+これに合わせて /keep_lock の記録メソッド名を明確化した。
+
+リレー制御スレッドでは、直近 5 秒の keep_lock による ON 判定に加え、
+最後の /unlock が最後の /keep_lock より後であれば必ず OFF にする
+強制判定を追加した。
+
+ビルドは `dotnet build dn_relaycontroller_251227.sln` を実行し、
+エラーなしで完了した。
+
+
