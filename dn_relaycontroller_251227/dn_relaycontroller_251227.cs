@@ -37,30 +37,98 @@
 #pragma warning disable CA2235 // Mark all non-serializable fields
 
 using System;
-using System.Buffers;
-using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
-using System.Collections.Immutable;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.Serialization;
 
 namespace dn_relaycontroller_251227;
 
+/// <summary>
+/// 本プログラムのエントリポイントクラス。
+/// </summary>
 public class Program
 {
+    /// <summary>
+    /// エントリポイント。
+    /// </summary>
+    /// <param name="args">コマンドライン引数。</param>
     public static async Task Main(string[] args)
     {
-        await Task.CompletedTask; // await が 1 個もない警告を仮に非表示に
-        
-        Console.WriteLine("Hello World");
+        // 旧来エンコーディング対応 (Shift-JIS 等) を有効化する。
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        using CancellationTokenSource shutdownCts = new();
+
+        // Ctrl+C で終了要求を受け取る。
+        Console.CancelKeyPress += (_, e) =>
+        {
+            AppConsole.WriteLine("INFO: Ctrl+C received. Shutting down...");
+            shutdownCts.Cancel();
+        };
+
+        KeepLockState keepLockState = new();
+
+        // HTTP サーバーの bind/listen 試行 (失敗時は 10 秒ごとにリトライ)。
+        TcpListener? listener = null;
+        while (listener == null && shutdownCts.IsCancellationRequested == false)
+        {
+            try
+            {
+                listener = new TcpListener(IPAddress.Any, 7001);
+                listener.Start();
+                AppConsole.WriteLine("INFO: HTTP server listening on 0.0.0.0:7001");
+            }
+            catch (Exception ex)
+            {
+                AppConsole.WriteLine($"APPERROR: Failed to bind/listen on 0.0.0.0:7001. Detail: {ex}");
+                listener = null;
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10), shutdownCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (listener == null)
+        {
+            return;
+        }
+
+        // HTTP サーバー受け付けループ開始 (同時に多数接続を並列処理)。
+        SimpleHttpServer httpServer = new(listener, keepLockState, TimeSpan.FromSeconds(60));
+        Task httpServerTask = httpServer.RunAsync(shutdownCts.Token);
+
+        // リレー制御スレッドと watchdog スレッド開始。
+        RelayWorker relayWorker = new(keepLockState);
+        relayWorker.Start();
+
+        // プロセスを勝手に終了させないため、終了要求があるまで待機する。
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, shutdownCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        // HTTP サーバーを停止する。
+        httpServer.Stop();
+
+        try
+        {
+            await httpServerTask;
+        }
+        catch (Exception ex)
+        {
+            AppConsole.WriteLine($"APPERROR: HTTP server task ended with an error. Detail: {ex}");
+        }
     }
 }
 

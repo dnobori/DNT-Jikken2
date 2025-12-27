@@ -1,0 +1,49 @@
+===================================================================
+日時: 2025/12/27 23:56:46 (JST)
+開発者によって指示された指示の内容: 251227_ZNZE4X: 全体仕様(HTTP/リレー/監視)を実装
+作業内容の概要: TcpListener製HTTPサーバーとUSBリレー制御/Watchdogを実装しビルド成功
+AI エンジン: GPT-5.2 (Codex CLI), 推論レベル: 既定
+AI 実行コンピュータ名: pc37
+関連タグ: 251227_ZNZE4X, 251227_YXW7W8, 251227_ZAMUX5, 251227_ZDYJ3U, 251216_VP33AH
+編集したファイルの一覧:
+  - dn_relaycontroller_251227.cs
+  - dn_relaycontroller_251227.csproj
+  - lib_common.cs
+  - feature_httpserver.cs
+  - feature_relay.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい):
+  - Program.Main
+  - AppConsole.WriteLine
+  - KeepLockState.MarkAccessNow / WasAccessedWithin
+  - SimpleHttpServer.RunAsync / Stop
+  - RelayWorker.Start
+  - RelayDeviceController.TrySetRelayState
+実装において迷った点 (もしあれば):
+  - 仕様の「1秒に1回ループ」と、リレーON/OFFの「0.5秒×複数回待機」の整合: 書き込みは状態変化時/未確定時に限定して1秒ループを維持。
+  - System.IO.Ports が参照不足でコンパイル不可: csproj に PackageReference を追加して解決。
+参考文献 (複数あってよい): なし
+
+
+【実施内容】
+1. 指示ID「251227_ZNZE4X」に対応する指示ファイルを確認し、全体仕様ファイル「251227_YXW7W8」に記載の全機能(HTTPサーバー/keep_lock/リレー制御/Watchdog)を実装対象として確定した。
+
+2. HTTP サーバー
+  - TcpListener を用いて 0.0.0.0:7001 で bind/listen する実装を追加した。
+  - bind/listen 失敗時は例外内容をコンソール出力し、10秒ごとに再試行する。
+  - 接続ごとにタスクで並列処理し、HTTP 0.9/1.0/1.1 の最小実装として、リクエスト行・ヘッダを読み取り、Keep-Alive/Close を判定して応答する。
+  - /keep_lock の GET(および HEAD) に対しては、共有状態(直近アクセス時刻)を更新した上で "Ok." を text/plain で返す。それ以外は 404 を返す。
+  - 接続のアイドルタイムアウトを 60 秒とし、一定時間通信がない接続は切断する。
+
+3. リレー制御
+  - /dev/serial/by-id/ を列挙し、名称に "USB-RELAY" を含むシンボリックリンクを文字列ソート最小で選択する。
+  - 9600 8N1/フロー制御なしで open し、'1'(ON) または '0'(OFF) を 1バイト送付→flush→0.5秒待機→close を行なう。
+  - 念のため 3 回繰り返す (繰り返し間隔 0.5 秒)。例外発生時は内容を出力し、1秒間隔で最大 5 回リトライする。
+  - ループスレッド(タスクではない Thread)で、1秒ごとに keep_lock の直近5秒アクセス有無を判定し、必要時に ON/OFF を行なう。書き込み成功かつ推定状態が変化した場合にのみ、状態変化メッセージを出力する。
+
+4. Watchdog
+  - リレー制御ループのカウンタを監視し、30秒間まったく増加しない場合はフリーズとみなしてメッセージ出力後、Environment.FailFast で強制終了する。
+
+5. ビルド確認
+  - `dotnet build dn_relaycontroller_251227.sln -c Debug` を実施し、コンパイル成功を確認した。
+
+
