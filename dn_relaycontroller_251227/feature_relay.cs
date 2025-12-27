@@ -73,7 +73,7 @@ sealed class RelayWorker
 
                 bool shouldOn = _keepLockState.WasAccessedWithin(TimeSpan.FromSeconds(5));
 
-                // 1 秒ごとに状態を判定するが、実際の書き込みは状態変化時または未確定時に限定する。
+                // 0.1 秒ごとに状態を判定するが、実際の書き込みは状態変化時または未確定時に限定する。
                 if (lastConfirmedOn == null || lastConfirmedOn.Value != shouldOn)
                 {
                     if (relay.TrySetRelayState(shouldOn))
@@ -91,9 +91,10 @@ sealed class RelayWorker
             catch (Exception ex)
             {
                 AppConsole.WriteLine($"APPERROR: Unhandled error in relay loop. Detail: {ex}");
+                Thread.Sleep(TimeSpan.FromSeconds(0.9));
             }
 
-            Thread.Sleep(TimeSpan.FromSeconds(1));
+            Thread.Sleep(TimeSpan.FromSeconds(0.1));
         }
     }
 
