@@ -62,7 +62,7 @@ public class Program
         
         Console.WriteLine("Test Program");
 
-        JoplinMdToNotesnookHtmlExporter.Convert(@"c:\tmp\a\1.md", @"c:\tmp\b", @"c:\tmp\c.log");
+        JoplinMdToNotesnookHtmlExporter.Convert(@"H:\TMP\260104_XZVB5X_JoplinTest\07_MD_Export\DN\DELL PowerEdge R420 中古メモ.md", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Test1", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Log.log");
     }
 }
 

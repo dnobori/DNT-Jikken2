@@ -1,0 +1,24 @@
+===================================================================
+日時: 2026/01/07 01:18:04 (JST)
+開発者によって指示された指示の内容: 260107_BCCF37 の異常出力原因分析と修正
+作業内容の概要: HtmlEntityInline と LinkReferenceDefinitionGroup の出力を修正
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_BCCF37, 260107_BCN9DU
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderBlocks, JoplinMdToNotesnookHtmlExporter.RenderInlineContent, JoplinMdToNotesnookHtmlExporter.AppendInlinePlainText
+実装において迷った点 (もしあれば): HtmlEntityInline の Transcoded/Original が StringSlice である点の扱い
+参考文献 (複数あってよい): なし
+
+
+指定の Markdown/HTML サンプルを確認し、出力 HTML に「Markdig.Syntax.Inlines.HtmlEntityInline」「Markdig.Syntax.LinkReferenceDefinitionGroup」が
+混入している箇所を調査した。前者は HtmlEntityInline の ToString() が型名を返すためであり、後者は LinkReferenceDefinitionGroup を
+未対応ブロックとして出力していたことが原因と判断した。
+
+対策として、HtmlEntityInline については Transcoded/Original を StringSlice から文字列化し、&...; 形式は生 HTML として出力、
+それ以外は可視空白として扱うテキスト出力に切り替えた。さらに、プレーンテキスト化の処理でも同様に Transcoded/Original を用い、
+&nbsp; の場合は NBSP に変換するよう修正した。LinkReferenceDefinitionGroup は本文出力の対象外としてスキップするようにした。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+

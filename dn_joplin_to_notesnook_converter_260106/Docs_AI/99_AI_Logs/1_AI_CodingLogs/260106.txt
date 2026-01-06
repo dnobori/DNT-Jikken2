@@ -1,0 +1,25 @@
+===================================================================
+日時: 2026/01/06 10:58:54 (JST)
+開発者によって指示された指示の内容: 260106_LMGX7M に従い Convert 実装
+作業内容の概要: converter_lib.cs に変換ロジックと HTML 生成を実装
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 不明
+AI 実行コンピュータ名: pc34
+関連タグ: 260106_LMGX7M, 260106_LLNP8N, 260106_ANNK2H
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.Convert, FrontMatterInfo, RenderContext, HtmlWriter, SegmentedInlineWriter, InlineStringWriter, HtmlUtility, RenderBlocks, RenderInlineContent, ResolveAttachmentInfo, ResolveImageInfo, BuildImageHtml
+実装において迷った点 (もしあれば): タスクリスト判定の Markdig 表現、改行分割時の強調タグ入れ子順、updated/created のローカル時刻変換。
+参考文献 (複数あってよい): なし
+
+
+今回の作業では、Front Matter 解析、Markdown のブロック／インライン変換、HTML 出力、添付ファイル／画像コピー処理を実装した。
+主な内容は以下のとおり。
+
+・Front Matter の必須キー (title, created, updated) を検証し、日時は UTC として厳密解析した。  
+・Markdig のパイプラインで Markdown を解析し、段落を「data-spacing=double/single」に分割するロジックを追加した。  
+・画像は ImageSharp でサイズ取得し、Notesnook 仕様の <span class="image-container"> に出力した。  
+・添付ファイルは ../_resources/ 配下の存在チェックを行い、乱数付きファイル名で attachments にコピーした。  
+・Web リンクは target/rel/spellcheck 属性を付け、警告ログは必要時に追記する形で実装した。  
+
+ビルドは .vscode/tasks.json の build と同等の dotnet build を実行し、成功を確認した。
+
+

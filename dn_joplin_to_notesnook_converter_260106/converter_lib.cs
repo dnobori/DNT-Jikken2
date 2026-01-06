@@ -1,4 +1,7 @@
-﻿
+﻿// 制約事項:
+// - Joplin 固有のすべての Markdown 拡張や HTML タグの完全互換は未検証。
+// - updated/created のローカル時刻変換は実行環境のタイムゾーンに依存する。
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,7 +9,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
@@ -15,9 +17,1701 @@ using SixLabors.ImageSharp;
 
 public static class JoplinMdToNotesnookHtmlExporter
 {
+    /// <summary>
+    /// Joplin の Markdown (Front Matter 付き) を Notesnook 用 HTML に変換する。
+    /// </summary>
+    /// <param name="srcMdFileNameFullPath">入力 Markdown ファイルのフルパス。</param>
+    /// <param name="dstHtmlDirFullPath">出力 HTML を保存するディレクトリのフルパス。</param>
+    /// <param name="warningsLogFilePath">警告ログを追記するファイルパス。</param>
     public static void Convert(string srcMdFileNameFullPath, string dstHtmlDirFullPath, string warningsLogFilePath)
     {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+            if (string.IsNullOrWhiteSpace(srcMdFileNameFullPath))
+            {
+                throw new ArgumentException("APPERROR: srcMdFileNameFullPath is empty.", nameof(srcMdFileNameFullPath));
+            }
+
+            if (string.IsNullOrWhiteSpace(dstHtmlDirFullPath))
+            {
+                throw new ArgumentException("APPERROR: dstHtmlDirFullPath is empty.", nameof(dstHtmlDirFullPath));
+            }
+
+            if (string.IsNullOrWhiteSpace(warningsLogFilePath))
+            {
+                throw new ArgumentException("APPERROR: warningsLogFilePath is empty.", nameof(warningsLogFilePath));
+            }
+
+            if (!File.Exists(srcMdFileNameFullPath))
+            {
+                throw new FileNotFoundException($"APPERROR: Markdown file not found. Path: {srcMdFileNameFullPath}");
+            }
+
+            if (!string.Equals(Path.GetExtension(srcMdFileNameFullPath), ".md", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("APPERROR: Source file extension is not .md.");
+            }
+
+            string markdown = ReadAllTextNormalized(srcMdFileNameFullPath);
+            var warnings = new List<string>();
+
+            FrontMatterInfo frontMatter = ParseFrontMatter(markdown, Path.GetFileName(srcMdFileNameFullPath), warnings, out string bodyMarkdown);
+
+            string outputDir = Path.GetFullPath(dstHtmlDirFullPath);
+            Directory.CreateDirectory(outputDir);
+
+            string attachmentsDir = Path.Combine(outputDir, "attachments");
+            Directory.CreateDirectory(attachmentsDir);
+
+            string sourceDir = Path.GetDirectoryName(srcMdFileNameFullPath) ?? throw new InvalidOperationException("APPERROR: Source directory is not available.");
+            string resourcesDir = Path.GetFullPath(Path.Combine(sourceDir, "..", "_resources"));
+
+            var context = new RenderContext
+            {
+                SourceMarkdownPath = srcMdFileNameFullPath,
+                SourceDirectory = sourceDir,
+                OutputDirectory = outputDir,
+                AttachmentsDirectory = attachmentsDir,
+                ResourcesDirectoryFullPath = resourcesDir,
+                Warnings = warnings,
+            };
+
+            var pipeline = CreateMarkdownPipeline();
+            MarkdownDocument document = Markdown.Parse(bodyMarkdown, pipeline);
+
+            var writer = new HtmlWriter();
+            WriteHtmlHeader(writer, frontMatter);
+
+            writer.WriteLine("<body>");
+            writer.IncreaseIndent();
+            RenderBlocks(document, writer, context);
+            writer.DecreaseIndent();
+            writer.WriteLine("</body>");
+            writer.WriteBlankLine();
+            writer.WriteLine("</html>");
+
+            string dstHtmlPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(srcMdFileNameFullPath) + ".html");
+            File.WriteAllText(dstHtmlPath, writer.ToString(), new UTF8Encoding(true));
+
+            AppendWarningsLogIfNeeded(warningsLogFilePath, Path.GetFileName(srcMdFileNameFullPath), warnings);
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.StartsWith("APPERROR:", StringComparison.OrdinalIgnoreCase))
+            {
+                throw;
+            }
+
+            throw new InvalidOperationException($"APPERROR: Conversion failed. Detail: {ex}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Markdown の Front Matter を解析して情報を取得し、本文部分を切り出す。
+    /// </summary>
+    /// <param name="markdown">入力 Markdown 全文。</param>
+    /// <param name="srcFileName">元ファイル名。</param>
+    /// <param name="warnings">警告リスト。</param>
+    /// <param name="bodyMarkdown">本文部分。</param>
+    /// <returns>Front Matter 情報。</returns>
+    static FrontMatterInfo ParseFrontMatter(string markdown, string srcFileName, List<string> warnings, out string bodyMarkdown)
+    {
+        if (markdown.Length > 0 && markdown[0] == '\uFEFF')
+        {
+            markdown = markdown.TrimStart('\uFEFF');
+        }
+
+        string[] lines = NormalizeNewlines(markdown).Split('\n');
+
+        if (lines.Length == 0 || lines[0].Trim() != "---")
+        {
+            throw new InvalidOperationException("APPERROR: Front matter header is missing.");
+        }
+
+        int endIndex = -1;
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].Trim() == "---")
+            {
+                endIndex = i;
+                break;
+            }
+        }
+
+        if (endIndex < 0)
+        {
+            throw new InvalidOperationException("APPERROR: Front matter footer is missing.");
+        }
+
+        var info = new FrontMatterInfo();
+        bool hasTitle = false;
+        bool hasCreated = false;
+        bool hasUpdated = false;
+
+        for (int i = 1; i < endIndex; i++)
+        {
+            string line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            int colonIndex = line.IndexOf(':');
+            if (colonIndex <= 0)
+            {
+                warnings.Add($"Front matter line {i + 1} is invalid: {line}");
+                continue;
+            }
+
+            string key = line[..colonIndex].Trim().ToLowerInvariant();
+            string value = line[(colonIndex + 1)..].Trim();
+
+            switch (key)
+            {
+                case "title":
+                    info.Title = value;
+                    hasTitle = true;
+                    break;
+                case "created":
+                    info.CreatedUtc = ParseUtcDateTime(value, "created", i + 1);
+                    hasCreated = true;
+                    break;
+                case "updated":
+                    info.UpdatedUtc = ParseUtcDateTime(value, "updated", i + 1);
+                    hasUpdated = true;
+                    break;
+            }
+        }
+
+        if (!hasTitle)
+        {
+            throw new InvalidOperationException("APPERROR: Front matter 'title' is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(info.Title))
+        {
+            throw new InvalidOperationException("APPERROR: Front matter 'title' is empty.");
+        }
+
+        if (!hasCreated)
+        {
+            throw new InvalidOperationException("APPERROR: Front matter 'created' is missing.");
+        }
+
+        if (!hasUpdated)
+        {
+            throw new InvalidOperationException("APPERROR: Front matter 'updated' is missing.");
+        }
+
+        bodyMarkdown = string.Join("\n", lines.Skip(endIndex + 1));
+        return info;
+    }
+
+    /// <summary>
+    /// UTC 文字列を DateTimeOffset として解析する。
+    /// </summary>
+    /// <param name="value">UTC 文字列。</param>
+    /// <param name="fieldName">フィールド名。</param>
+    /// <param name="lineNumber">行番号。</param>
+    /// <returns>解析結果。</returns>
+    static DateTimeOffset ParseUtcDateTime(string value, string fieldName, int lineNumber)
+    {
+        if (!DateTimeOffset.TryParseExact(value, "yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset result))
+        {
+            throw new InvalidOperationException($"APPERROR: Front matter '{fieldName}' is invalid at line {lineNumber}: {value}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Markdown 用パイプラインを構築する。
+    /// </summary>
+    /// <returns>構築したパイプライン。</returns>
+    static MarkdownPipeline CreateMarkdownPipeline()
+    {
+        return new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .UseTaskLists()
+            .UseAutoLinks()
+            .Build();
+    }
+
+    /// <summary>
+    /// HTML ヘッダ部を書き出す。
+    /// </summary>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="frontMatter">Front Matter 情報。</param>
+    static void WriteHtmlHeader(HtmlWriter writer, FrontMatterInfo frontMatter)
+    {
+        writer.WriteLine("<!DOCTYPE html>");
+        writer.WriteLine("<html lang=\"en-US\">");
+        writer.WriteBlankLine();
+        writer.WriteLine("<head>");
+        writer.IncreaseIndent();
+        writer.WriteLine("<meta charset=\"utf-8\" />");
+        writer.WriteLine("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge,chrome=1\" />");
+        writer.WriteLine($"<title>{HtmlUtility.EscapeText(frontMatter.Title)}</title>");
+        writer.WriteLine($"<meta name=\"created-at\" content=\"{HtmlUtility.EscapeAttribute(FormatNotesnookDate(frontMatter.CreatedUtc))}\" />");
+        writer.WriteLine($"<meta name=\"updated-at\" content=\"{HtmlUtility.EscapeAttribute(FormatNotesnookDate(frontMatter.UpdatedUtc))}\" />");
+        writer.WriteLine("<link rel=\"stylesheet\" href=\"https://app.notesnook.com/assets/editor-styles.css?d=1690887574068\">");
+        writer.DecreaseIndent();
+        writer.WriteLine("</head>");
+        writer.WriteBlankLine();
+    }
+
+    /// <summary>
+    /// Notesnook 向けの日時表記に変換する。
+    /// </summary>
+    /// <param name="utcDateTime">UTC 日時。</param>
+    /// <returns>フォーマット済み文字列。</returns>
+    static string FormatNotesnookDate(DateTimeOffset utcDateTime)
+    {
+        return utcDateTime.ToLocalTime().ToString("MM-dd-yyyy hh:mm tt", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// ブロック要素を HTML に変換して出力する。
+    /// </summary>
+    /// <param name="blocks">ブロック列。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderBlocks(IEnumerable<Block> blocks, HtmlWriter writer, RenderContext context)
+    {
+        foreach (Block block in blocks)
+        {
+            switch (block)
+            {
+                case ParagraphBlock paragraph:
+                    RenderParagraphBlock(paragraph, writer, context);
+                    break;
+                case HeadingBlock heading:
+                    RenderHeadingBlock(heading, writer, context);
+                    break;
+                case ListBlock list:
+                    RenderListBlock(list, writer, context);
+                    break;
+                case FencedCodeBlock fencedCode:
+                    RenderCodeBlock(fencedCode, writer);
+                    break;
+                case CodeBlock codeBlock:
+                    RenderCodeBlock(codeBlock, writer);
+                    break;
+                case ThematicBreakBlock:
+                    writer.WriteLine("<hr>");
+                    break;
+                case QuoteBlock quote:
+                    RenderQuoteBlock(quote, writer, context);
+                    break;
+                case HtmlBlock htmlBlock:
+                    RenderHtmlBlock(htmlBlock, writer, context);
+                    break;
+                case LinkReferenceDefinitionGroup:
+                    // 参照リンク定義は本文出力の対象外とする。
+                    break;
+                case BlankLineBlock:
+                    break;
+                default:
+                    RenderUnsupportedBlock(block, writer, context);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 段落ブロックを HTML に変換して出力する。
+    /// </summary>
+    /// <param name="paragraph">段落ブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderParagraphBlock(ParagraphBlock paragraph, HtmlWriter writer, RenderContext context)
+    {
+        var inlineWriter = new SegmentedInlineWriter();
+
+        // ★ 複数行を data-spacing で分割するため、行区切りで段落を分割する
+        RenderInlineContent(paragraph.Inline, context, inlineWriter);
+        inlineWriter.Finish();
+
+        bool isFirstSegment = true;
+        foreach (InlineSegment segment in inlineWriter.Segments)
+        {
+            if (!segment.HasVisibleContent)
+            {
+                continue;
+            }
+
+            bool isImageOnly = segment.HasImage && !segment.HasNonImageContent;
+            string spacing = isImageOnly ? "single" : (isFirstSegment ? "double" : "single");
+
+            writer.WriteLine($"<p data-spacing=\"{spacing}\">{segment.Content}</p>");
+            isFirstSegment = false;
+        }
+    }
+
+    /// <summary>
+    /// 見出しブロックを HTML に変換して出力する。
+    /// </summary>
+    /// <param name="heading">見出しブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderHeadingBlock(HeadingBlock heading, HtmlWriter writer, RenderContext context)
+    {
+        string content = RenderInlineToString(heading.Inline, context);
+        writer.WriteLine($"<h{heading.Level}>{content}</h{heading.Level}>");
+    }
+
+    /// <summary>
+    /// リストブロックを HTML に変換して出力する。
+    /// </summary>
+    /// <param name="list">リストブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderListBlock(ListBlock list, HtmlWriter writer, RenderContext context)
+    {
+        bool isTaskList = IsTaskList(list);
+        string openTag = isTaskList ? "<ul class=\"simple-checklist\">" : (list.IsOrdered ? "<ol>" : "<ul>");
+        string closeTag = isTaskList ? "</ul>" : (list.IsOrdered ? "</ol>" : "</ul>");
+
+        writer.WriteLine(openTag);
+        writer.IncreaseIndent();
+
+        foreach (Block item in list)
+        {
+            if (item is ListItemBlock listItem)
+            {
+                RenderListItemBlock(listItem, writer, context, isTaskList);
+            }
+        }
+
+        writer.DecreaseIndent();
+        writer.WriteLine(closeTag);
+    }
+
+    /// <summary>
+    /// リスト項目を HTML に変換して出力する。
+    /// </summary>
+    /// <param name="listItem">リスト項目。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <param name="isTaskList">タスクリストかどうか。</param>
+    static void RenderListItemBlock(ListItemBlock listItem, HtmlWriter writer, RenderContext context, bool isTaskList)
+    {
+        string classAttribute = string.Empty;
+        if (isTaskList)
+        {
+            bool isChecked = TryGetTaskListChecked(listItem, out bool checkedValue) && checkedValue;
+            classAttribute = isChecked ? " class=\"checked simple-checklist--item\"" : " class=\"simple-checklist--item\"";
+        }
+
+        writer.WriteLine($"<li{classAttribute}>");
+        writer.IncreaseIndent();
+        RenderBlocks(listItem, writer, context);
+        writer.DecreaseIndent();
+        writer.WriteLine("</li>");
+    }
+
+    /// <summary>
+    /// タスクリストかどうかを判定する。
+    /// </summary>
+    /// <param name="list">対象リスト。</param>
+    /// <returns>タスクリストなら true。</returns>
+    static bool IsTaskList(ListBlock list)
+    {
+        foreach (Block item in list)
+        {
+            if (item is ListItemBlock listItem && TryGetTaskListChecked(listItem, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// リスト項目に含まれるタスク状態を抽出する。
+    /// </summary>
+    /// <param name="listItem">リスト項目。</param>
+    /// <param name="isChecked">チェック状態。</param>
+    /// <returns>タスクリスト項目なら true。</returns>
+    static bool TryGetTaskListChecked(ListItemBlock listItem, out bool isChecked)
+    {
+        foreach (Block block in listItem)
+        {
+            if (block is ParagraphBlock paragraph && TryGetTaskListInline(paragraph.Inline, out bool checkedValue))
+            {
+                isChecked = checkedValue;
+                return true;
+            }
+        }
+
+        isChecked = false;
+        return false;
+    }
+
+    /// <summary>
+    /// インラインからタスクリスト情報を探す。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <param name="isChecked">チェック状態。</param>
+    /// <returns>タスクリスト情報があれば true。</returns>
+    static bool TryGetTaskListInline(Inline? inline, out bool isChecked)
+    {
+        for (Inline? current = inline; current != null; current = current.NextSibling)
+        {
+            if (current is TaskList taskList)
+            {
+                isChecked = taskList.Checked;
+                return true;
+            }
+
+            if (current is ContainerInline container && TryGetTaskListInline(container.FirstChild, out isChecked))
+            {
+                return true;
+            }
+        }
+
+        isChecked = false;
+        return false;
+    }
+
+    /// <summary>
+    /// コードブロックを HTML に変換して出力する。
+    /// </summary>
+    /// <param name="codeBlock">コードブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    static void RenderCodeBlock(CodeBlock codeBlock, HtmlWriter writer)
+    {
+        string code = NormalizeNewlines(codeBlock.Lines.ToString() ?? string.Empty).TrimEnd('\n');
+        string escapedCode = HtmlUtility.EscapeCodeText(code);
+        writer.WriteLine($"<pre data-indent-type=\"space\" data-indent-length=\"2\"><code>{escapedCode}</code></pre>");
+    }
+
+    /// <summary>
+    /// 引用ブロックを HTML に変換して出力する。
+    /// </summary>
+    /// <param name="quote">引用ブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderQuoteBlock(QuoteBlock quote, HtmlWriter writer, RenderContext context)
+    {
+        writer.WriteLine("<blockquote>");
+        writer.IncreaseIndent();
+        RenderBlocks(quote, writer, context);
+        writer.DecreaseIndent();
+        writer.WriteLine("</blockquote>");
+    }
+
+    /// <summary>
+    /// HTML ブロックを処理する。
+    /// </summary>
+    /// <param name="htmlBlock">HTML ブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderHtmlBlock(HtmlBlock htmlBlock, HtmlWriter writer, RenderContext context)
+    {
+        string rawHtml = NormalizeNewlines(htmlBlock.Lines.ToString() ?? string.Empty).Trim();
+
+        if (IsLineBreakHtmlTag(rawHtml))
+        {
+            writer.WriteLine("<p data-spacing=\"single\">&nbsp;</p>");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(rawHtml))
+        {
+            return;
+        }
+
+        context.Warnings.Add($"HTML block is output as-is: {rawHtml}");
+        foreach (string line in rawHtml.Split('\n'))
+        {
+            writer.WriteLine(line);
+        }
+    }
+
+    /// <summary>
+    /// 未対応ブロックを警告しつつ出力する。
+    /// </summary>
+    /// <param name="block">対象ブロック。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderUnsupportedBlock(Block block, HtmlWriter writer, RenderContext context)
+    {
+        context.Warnings.Add($"Unsupported block '{block.GetType().Name}' is rendered as plain text.");
+
+        string rawText = block is LeafBlock leafBlock
+            ? NormalizeNewlines(leafBlock.Lines.ToString() ?? string.Empty)
+            : NormalizeNewlines(block.ToString() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            return;
+        }
+
+        writer.WriteLine($"<p data-spacing=\"double\">{HtmlUtility.EscapeText(rawText)}</p>");
+    }
+
+    /// <summary>
+    /// インライン要素を HTML に変換して書き出す。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <param name="writer">インライン出力ライター。</param>
+    static void RenderInlineContent(Inline? inline, RenderContext context, IInlineWriter writer)
+    {
+        for (Inline? current = inline; current != null; current = current.NextSibling)
+        {
+            switch (current)
+            {
+                case LiteralInline literal:
+                    writer.WriteText(literal.Content.ToString(), false);
+                    break;
+                case LineBreakInline lineBreak:
+                    if (lineBreak.IsHard)
+                    {
+                        writer.LineBreak();
+                    }
+                    else
+                    {
+                        writer.WriteText(" ", false);
+                    }
+                    break;
+                case CodeInline codeInline:
+                    writer.OpenTag("code", "spellcheck=\"false\"");
+                    writer.WriteText(codeInline.Content, true);
+                    writer.CloseTag("code");
+                    break;
+                case EmphasisInline emphasis:
+                    string tagName = GetEmphasisTagName(emphasis);
+                    writer.OpenTag(tagName);
+                    RenderInlineContent(emphasis.FirstChild, context, writer);
+                    writer.CloseTag(tagName);
+                    break;
+                case LinkInline linkInline:
+                    RenderLinkInline(linkInline, context, writer);
+                    break;
+                case HtmlInline htmlInline:
+                    RenderHtmlInline(htmlInline, context, writer);
+                    break;
+                case HtmlEntityInline htmlEntity:
+                    string entityText = htmlEntity.Transcoded.ToString();
+                    if (string.IsNullOrEmpty(entityText))
+                    {
+                        entityText = htmlEntity.Original.ToString();
+                    }
+
+                    if (!string.IsNullOrEmpty(entityText))
+                    {
+                        if (entityText.StartsWith("&", StringComparison.Ordinal) && entityText.EndsWith(";", StringComparison.Ordinal))
+                        {
+                            writer.WriteRawHtml(entityText, true);
+                        }
+                        else
+                        {
+                            writer.WriteText(entityText, true);
+                        }
+                    }
+                    break;
+                case TaskList:
+                    break;
+                case ContainerInline container:
+                    RenderInlineContent(container.FirstChild, context, writer);
+                    break;
+                default:
+                    context.Warnings.Add($"Unsupported inline '{current.GetType().Name}' is rendered as text.");
+                    writer.WriteText(current.ToString() ?? string.Empty, true);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 見出し等のためにインラインを単一文字列に変換する。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>HTML 文字列。</returns>
+    static string RenderInlineToString(Inline? inline, RenderContext context)
+    {
+        var writer = new InlineStringWriter();
+        RenderInlineContent(inline, context, writer);
+        return writer.ToString();
+    }
+
+    /// <summary>
+    /// Emphasis のタグ名を決定する。
+    /// </summary>
+    /// <param name="emphasis">Emphasis インライン。</param>
+    /// <returns>タグ名。</returns>
+    static string GetEmphasisTagName(EmphasisInline emphasis)
+    {
+        if (emphasis.DelimiterChar == '~')
+        {
+            return "s";
+        }
+
+        return emphasis.DelimiterCount >= 2 ? "strong" : "em";
+    }
+
+    /// <summary>
+    /// リンクや添付ファイルを処理する。
+    /// </summary>
+    /// <param name="linkInline">リンクインライン。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <param name="writer">インライン出力ライター。</param>
+    static void RenderLinkInline(LinkInline linkInline, RenderContext context, IInlineWriter writer)
+    {
+        string url = linkInline.Url ?? string.Empty;
+
+        if (linkInline.IsImage)
+        {
+            string imageHtml = BuildImageHtml(url, context);
+            writer.WriteImageHtml(imageHtml);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            context.Warnings.Add("Link URL is empty.");
+            return;
+        }
+
+        if (IsWebLink(url))
+        {
+            string label = GetInlinePlainText(linkInline.FirstChild);
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = url;
+            }
+
+            string linkAttributes = $"target=\"_blank\" rel=\"noopener noreferrer nofollow\" spellcheck=\"false\" href=\"{HtmlUtility.EscapeAttribute(url)}\" title=\"{HtmlUtility.EscapeAttribute(url)}\"";
+            writer.OpenTag("a", linkAttributes);
+            writer.WriteText(label, true);
+            writer.CloseTag("a");
+            return;
+        }
+
+        AttachmentInfo attachment = ResolveAttachmentInfo(url, context);
+        string displayText = GetInlinePlainText(linkInline.FirstChild);
+        if (string.IsNullOrWhiteSpace(displayText))
+        {
+            displayText = attachment.OutputFileName;
+        }
+
+        string href = $"./attachments/{attachment.OutputFileName}";
+        string attachmentAttributes = $"href=\"{HtmlUtility.EscapeAttribute(href)}\" title=\"{HtmlUtility.EscapeAttribute(displayText)}\"";
+        writer.OpenTag("a", attachmentAttributes);
+        writer.WriteText(displayText, true);
+        writer.CloseTag("a");
+    }
+
+    /// <summary>
+    /// HTML インラインを処理する。
+    /// </summary>
+    /// <param name="htmlInline">HTML インライン。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <param name="writer">インライン出力ライター。</param>
+    static void RenderHtmlInline(HtmlInline htmlInline, RenderContext context, IInlineWriter writer)
+    {
+        string tag = htmlInline.Tag ?? string.Empty;
+        if (IsLineBreakHtmlTag(tag))
+        {
+            writer.LineBreak();
+            return;
+        }
+
+        if (IsUnderlineStartTag(tag))
+        {
+            writer.OpenTag("u");
+            return;
+        }
+
+        if (IsUnderlineEndTag(tag))
+        {
+            writer.CloseTag("u");
+            return;
+        }
+
+        context.Warnings.Add($"HTML inline is output as-is: {tag}");
+        writer.WriteRawHtml(tag, true);
+    }
+
+    /// <summary>
+    /// 画像タグ用 HTML を生成する。
+    /// </summary>
+    /// <param name="url">画像の URL (相対パス)。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>HTML 文字列。</returns>
+    static string BuildImageHtml(string url, RenderContext context)
+    {
+        ImageInfo imageInfo = ResolveImageInfo(url, context);
+        string href = $"./attachments/{imageInfo.OutputFileName}";
+        string alt = imageInfo.OutputFileName;
+
+        string escapedHref = HtmlUtility.EscapeAttribute(href);
+        string escapedAlt = HtmlUtility.EscapeAttribute(alt);
+
+        return $"<span class=\"image-container\" alt=\"{escapedAlt}\"><img class=\"\" src=\"{escapedHref}\" alt=\"{escapedAlt}\" width=\"{imageInfo.Width}\" height=\"{imageInfo.Height}\"></span>";
+    }
+
+    /// <summary>
+    /// 添付ファイル情報を解決してコピーする。
+    /// </summary>
+    /// <param name="url">Markdown 内の URL。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>添付ファイル情報。</returns>
+    static AttachmentInfo ResolveAttachmentInfo(string url, RenderContext context)
+    {
+        string fullPath = ResolveResourcePath(url, context);
+
+        if (context.AttachmentNameBySourcePath.TryGetValue(fullPath, out string? outputName))
+        {
+            return new AttachmentInfo
+            {
+                SourceFullPath = fullPath,
+                OutputFileName = outputName,
+            };
+        }
+
+        string extension = Path.GetExtension(fullPath).ToLowerInvariant();
+        string fileName;
+        string dstPath;
+
+        do
+        {
+            string randomHex = GenerateRandomHex32();
+            fileName = string.IsNullOrEmpty(extension) ? $"attachment_{randomHex}" : $"attachment_{randomHex}{extension}";
+            dstPath = Path.Combine(context.AttachmentsDirectory, fileName);
+        }
+        while (File.Exists(dstPath));
+
+        File.Copy(fullPath, dstPath, overwrite: false);
+        context.AttachmentNameBySourcePath[fullPath] = fileName;
+
+        return new AttachmentInfo
+        {
+            SourceFullPath = fullPath,
+            OutputFileName = fileName,
+        };
+    }
+
+    /// <summary>
+    /// 画像情報を解決してコピーし、サイズを取得する。
+    /// </summary>
+    /// <param name="url">Markdown 内の URL。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>画像情報。</returns>
+    static ImageInfo ResolveImageInfo(string url, RenderContext context)
+    {
+        string fullPath = ResolveResourcePath(url, context);
+
+        if (context.ImageInfoBySourcePath.TryGetValue(fullPath, out ImageInfo? cached))
+        {
+            return cached;
+        }
+
+        string outputFileName = Path.GetFileName(fullPath).ToLowerInvariant();
+        string dstPath = Path.Combine(context.AttachmentsDirectory, outputFileName);
+
+        int width;
+        int height;
+
+        using (Image image = Image.Load(fullPath))
+        {
+            width = image.Width;
+            height = image.Height;
+        }
+
+        File.Copy(fullPath, dstPath, overwrite: true);
+
+        var info = new ImageInfo
+        {
+            SourceFullPath = fullPath,
+            OutputFileName = outputFileName,
+            Width = width,
+            Height = height,
+        };
+
+        context.ImageInfoBySourcePath[fullPath] = info;
+        return info;
+    }
+
+    /// <summary>
+    /// リソースパスを解決し、存在チェックと制約チェックを行う。
+    /// </summary>
+    /// <param name="url">Markdown 内の URL。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>リソースのフルパス。</returns>
+    static string ResolveResourcePath(string url, RenderContext context)
+    {
+        string decoded = Uri.UnescapeDataString(url);
+        string normalized = decoded.Replace('\\', '/');
+
+        if (!normalized.StartsWith("../_resources/", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"APPERROR: Attachment path must start with ../_resources/. Path: {url}");
+        }
+
+        string fullPath = Path.GetFullPath(Path.Combine(context.SourceDirectory, decoded));
+        string resourcesRoot = context.ResourcesDirectoryFullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        if (!fullPath.StartsWith(resourcesRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"APPERROR: Attachment path is outside ../_resources/. Path: {url}");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"APPERROR: Attachment file not found. Path: {fullPath}");
+        }
+
+        return fullPath;
+    }
+
+    /// <summary>
+    /// URL が Web リンクかどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>Web リンクなら true。</returns>
+    static bool IsWebLink(string url)
+    {
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// インラインから表示用の平文文字列を取得する。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <returns>平文文字列。</returns>
+    static string GetInlinePlainText(Inline? inline)
+    {
+        var builder = new StringBuilder();
+        AppendInlinePlainText(inline, builder);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// インラインを再帰的に平文化して追加する。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <param name="builder">出力先。</param>
+    static void AppendInlinePlainText(Inline? inline, StringBuilder builder)
+    {
+        for (Inline? current = inline; current != null; current = current.NextSibling)
+        {
+            switch (current)
+            {
+                case LiteralInline literal:
+                    builder.Append(literal.Content.ToString());
+                    break;
+                case LineBreakInline:
+                    builder.Append(' ');
+                    break;
+                case CodeInline codeInline:
+                    builder.Append(codeInline.Content);
+                    break;
+                case HtmlEntityInline entityInline:
+                    string entityText = entityInline.Transcoded.ToString();
+                    if (string.IsNullOrEmpty(entityText))
+                    {
+                        entityText = entityInline.Original.ToString();
+                    }
+
+                    if (string.IsNullOrEmpty(entityText))
+                    {
+                        break;
+                    }
+
+                    if (string.Equals(entityText, "&nbsp;", StringComparison.OrdinalIgnoreCase))
+                    {
+                        builder.Append('\u00A0');
+                    }
+                    else
+                    {
+                        builder.Append(entityText);
+                    }
+                    break;
+                case HtmlInline htmlInline:
+                    string tag = htmlInline.Tag ?? string.Empty;
+                    if (IsLineBreakHtmlTag(tag))
+                    {
+                        builder.Append(' ');
+                    }
+                    else
+                    {
+                        builder.Append(tag);
+                    }
+                    break;
+                case ContainerInline container:
+                    AppendInlinePlainText(container.FirstChild, builder);
+                    break;
+                default:
+                    builder.Append(current.ToString());
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// HTML の &lt;br&gt; タグかどうかを判定する。
+    /// </summary>
+    /// <param name="tag">タグ文字列。</param>
+    /// <returns>&lt;br&gt; なら true。</returns>
+    static bool IsLineBreakHtmlTag(string tag)
+    {
+        string trimmed = tag.Trim().ToLowerInvariant();
+        return trimmed == "<br>" || trimmed == "<br/>" || trimmed == "<br />";
+    }
+
+    /// <summary>
+    /// 下線開始タグかどうかを判定する。
+    /// </summary>
+    /// <param name="tag">タグ文字列。</param>
+    /// <returns>開始タグなら true。</returns>
+    static bool IsUnderlineStartTag(string tag)
+    {
+        string trimmed = tag.Trim().ToLowerInvariant();
+        return trimmed == "<ins>" || trimmed == "<u>";
+    }
+
+    /// <summary>
+    /// 下線終了タグかどうかを判定する。
+    /// </summary>
+    /// <param name="tag">タグ文字列。</param>
+    /// <returns>終了タグなら true。</returns>
+    static bool IsUnderlineEndTag(string tag)
+    {
+        string trimmed = tag.Trim().ToLowerInvariant();
+        return trimmed == "</ins>" || trimmed == "</u>";
+    }
+
+    /// <summary>
+    /// ランダムな 32 文字の 16 進文字列を生成する。
+    /// </summary>
+    /// <returns>16 進文字列。</returns>
+    static string GenerateRandomHex32()
+    {
+        byte[] bytes = new byte[16];
+        RandomNumberGenerator.Fill(bytes);
+        return System.Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// テキストを正規化して読み込む。
+    /// </summary>
+    /// <param name="path">読み込むファイルパス。</param>
+    /// <returns>正規化済み文字列。</returns>
+    static string ReadAllTextNormalized(string path)
+    {
+        using var reader = new StreamReader(path, new UTF8Encoding(false, true), true);
+        string text = reader.ReadToEnd();
+        return NormalizeNewlines(text);
+    }
+
+    /// <summary>
+    /// 改行コードを LF に正規化する。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>正規化文字列。</returns>
+    static string NormalizeNewlines(string text)
+    {
+        return text.Replace("\r\n", "\n").Replace("\r", "\n");
+    }
+
+    /// <summary>
+    /// 警告ログを追記する。
+    /// </summary>
+    /// <param name="warningsLogFilePath">警告ログファイル。</param>
+    /// <param name="srcFileName">元ファイル名。</param>
+    /// <param name="warnings">警告一覧。</param>
+    static void AppendWarningsLogIfNeeded(string warningsLogFilePath, string srcFileName, List<string> warnings)
+    {
+        if (warnings.Count == 0)
+        {
+            return;
+        }
+
+        string? dir = Path.GetDirectoryName(warningsLogFilePath);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        var builder = new StringBuilder();
+        builder.Append("★ ").AppendLine(srcFileName);
+
+        for (int i = 0; i < warnings.Count; i++)
+        {
+            string normalized = NormalizeNewlines(warnings[i]);
+            foreach (string line in normalized.Split('\n'))
+            {
+                builder.Append("    ").AppendLine(line);
+            }
+
+            if (i < warnings.Count - 1)
+            {
+                builder.AppendLine("    ");
+            }
+        }
+
+        builder.AppendLine();
+        File.AppendAllText(warningsLogFilePath, builder.ToString(), new UTF8Encoding(true));
     }
 }
 
+/// <summary>
+/// Front Matter の情報を保持するデータ構造。
+/// </summary>
+sealed class FrontMatterInfo
+{
+    /// <summary>
+    /// タイトル。
+    /// </summary>
+    public string Title = string.Empty;
 
+    /// <summary>
+    /// 作成日時 (UTC)。
+    /// </summary>
+    public DateTimeOffset CreatedUtc;
+
+    /// <summary>
+    /// 更新日時 (UTC)。
+    /// </summary>
+    public DateTimeOffset UpdatedUtc;
+}
+
+/// <summary>
+/// 変換時のコンテキスト情報。
+/// </summary>
+sealed class RenderContext
+{
+    /// <summary>
+    /// 元 Markdown ファイルのフルパス。
+    /// </summary>
+    public string SourceMarkdownPath = string.Empty;
+
+    /// <summary>
+    /// 元 Markdown ファイルのディレクトリ。
+    /// </summary>
+    public string SourceDirectory = string.Empty;
+
+    /// <summary>
+    /// HTML 出力ディレクトリ。
+    /// </summary>
+    public string OutputDirectory = string.Empty;
+
+    /// <summary>
+    /// 添付ファイル出力ディレクトリ。
+    /// </summary>
+    public string AttachmentsDirectory = string.Empty;
+
+    /// <summary>
+    /// _resources のフルパス。
+    /// </summary>
+    public string ResourcesDirectoryFullPath = string.Empty;
+
+    /// <summary>
+    /// 添付ファイルの変換済みファイル名マップ。
+    /// </summary>
+    public Dictionary<string, string> AttachmentNameBySourcePath = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 画像情報のキャッシュ。
+    /// </summary>
+    public Dictionary<string, ImageInfo> ImageInfoBySourcePath = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 警告一覧。
+    /// </summary>
+    public List<string> Warnings = new();
+}
+
+/// <summary>
+/// 添付ファイル情報。
+/// </summary>
+sealed class AttachmentInfo
+{
+    /// <summary>
+    /// 元ファイルのフルパス。
+    /// </summary>
+    public string SourceFullPath = string.Empty;
+
+    /// <summary>
+    /// 出力ファイル名。
+    /// </summary>
+    public string OutputFileName = string.Empty;
+}
+
+/// <summary>
+/// 画像情報。
+/// </summary>
+sealed class ImageInfo
+{
+    /// <summary>
+    /// 元ファイルのフルパス。
+    /// </summary>
+    public string SourceFullPath = string.Empty;
+
+    /// <summary>
+    /// 出力ファイル名。
+    /// </summary>
+    public string OutputFileName = string.Empty;
+
+    /// <summary>
+    /// 画像幅。
+    /// </summary>
+    public int Width;
+
+    /// <summary>
+    /// 画像高さ。
+    /// </summary>
+    public int Height;
+}
+
+/// <summary>
+/// HTML 出力用ライター。
+/// </summary>
+sealed class HtmlWriter
+{
+    readonly StringBuilder _builder = new();
+    int _indentLevel;
+    const int IndentSize = 4;
+
+    /// <summary>
+    /// インデントを 1 段増やす。
+    /// </summary>
+    public void IncreaseIndent()
+    {
+        _indentLevel++;
+    }
+
+    /// <summary>
+    /// インデントを 1 段減らす。
+    /// </summary>
+    public void DecreaseIndent()
+    {
+        if (_indentLevel > 0)
+        {
+            _indentLevel--;
+        }
+    }
+
+    /// <summary>
+    /// 1 行書き出す。
+    /// </summary>
+    /// <param name="line">出力内容。</param>
+    public void WriteLine(string line)
+    {
+        if (_indentLevel > 0)
+        {
+            _builder.Append(' ', _indentLevel * IndentSize);
+        }
+
+        _builder.Append(line).Append('\n');
+    }
+
+    /// <summary>
+    /// 空行を書き出す。
+    /// </summary>
+    public void WriteBlankLine()
+    {
+        _builder.Append('\n');
+    }
+
+    /// <summary>
+    /// 生成済み HTML を取得する。
+    /// </summary>
+    /// <returns>HTML 文字列。</returns>
+    public override string ToString()
+    {
+        return _builder.ToString();
+    }
+}
+
+/// <summary>
+/// インライン出力の共通インターフェイス。
+/// </summary>
+interface IInlineWriter
+{
+    /// <summary>
+    /// テキストを書き出す。
+    /// </summary>
+    /// <param name="text">テキスト。</param>
+    /// <param name="treatWhitespaceAsVisible">空白を可視とみなすか。</param>
+    void WriteText(string text, bool treatWhitespaceAsVisible);
+
+    /// <summary>
+    /// 生 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">HTML 文字列。</param>
+    /// <param name="isVisible">可視要素として扱うか。</param>
+    void WriteRawHtml(string html, bool isVisible);
+
+    /// <summary>
+    /// 画像 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">画像 HTML。</param>
+    void WriteImageHtml(string html);
+
+    /// <summary>
+    /// 開始タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    /// <param name="attributes">属性。</param>
+    void OpenTag(string tagName, string? attributes = null);
+
+    /// <summary>
+    /// 終了タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    void CloseTag(string tagName);
+
+    /// <summary>
+    /// 行区切りを出力する。
+    /// </summary>
+    void LineBreak();
+}
+
+/// <summary>
+/// 段落分割用のインライン出力結果。
+/// </summary>
+sealed class InlineSegment
+{
+    /// <summary>
+    /// 出力 HTML。
+    /// </summary>
+    public StringBuilder Builder = new();
+
+    /// <summary>
+    /// 画像のみを含むかの判定用フラグ。
+    /// </summary>
+    public bool HasImage;
+
+    /// <summary>
+    /// 画像以外の可視コンテンツを含むかの判定用フラグ。
+    /// </summary>
+    public bool HasNonImageContent;
+
+    /// <summary>
+    /// 可視コンテンツを含むかどうか。
+    /// </summary>
+    public bool HasVisibleContent => HasImage || HasNonImageContent;
+
+    /// <summary>
+    /// 出力 HTML 文字列。
+    /// </summary>
+    public string Content => Builder.ToString();
+}
+
+/// <summary>
+/// インラインを複数行に分割するためのライター。
+/// </summary>
+sealed class SegmentedInlineWriter : IInlineWriter
+{
+    readonly List<InlineSegment> _segments = new();
+    readonly List<TagInfo> _openTags = new();
+    InlineSegment _current;
+
+    /// <summary>
+    /// コンストラクタ。
+    /// </summary>
+    public SegmentedInlineWriter()
+    {
+        _current = new InlineSegment();
+        _segments.Add(_current);
+    }
+
+    /// <summary>
+    /// 分割済みセグメント一覧。
+    /// </summary>
+    public IReadOnlyList<InlineSegment> Segments => _segments;
+
+    /// <summary>
+    /// テキストを書き出す。
+    /// </summary>
+    /// <param name="text">テキスト。</param>
+    /// <param name="treatWhitespaceAsVisible">空白を可視として扱うか。</param>
+    public void WriteText(string text, bool treatWhitespaceAsVisible)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        _current.Builder.Append(HtmlUtility.EscapeTextPreserveSpaces(text));
+        if (treatWhitespaceAsVisible || !HtmlUtility.IsWhitespaceOnly(text))
+        {
+            _current.HasNonImageContent = true;
+        }
+    }
+
+    /// <summary>
+    /// 生 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">HTML 文字列。</param>
+    /// <param name="isVisible">可視要素として扱うか。</param>
+    public void WriteRawHtml(string html, bool isVisible)
+    {
+        if (string.IsNullOrEmpty(html))
+        {
+            return;
+        }
+
+        _current.Builder.Append(html);
+        if (isVisible)
+        {
+            _current.HasNonImageContent = true;
+        }
+    }
+
+    /// <summary>
+    /// 画像 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">画像 HTML。</param>
+    public void WriteImageHtml(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+        {
+            return;
+        }
+
+        _current.Builder.Append(html);
+        _current.HasImage = true;
+    }
+
+    /// <summary>
+    /// 開始タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    /// <param name="attributes">属性。</param>
+    public void OpenTag(string tagName, string? attributes = null)
+    {
+        _current.Builder.Append('<').Append(tagName);
+        if (!string.IsNullOrWhiteSpace(attributes))
+        {
+            _current.Builder.Append(' ').Append(attributes);
+        }
+
+        _current.Builder.Append('>');
+        _openTags.Add(new TagInfo(tagName, attributes));
+    }
+
+    /// <summary>
+    /// 終了タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    public void CloseTag(string tagName)
+    {
+        _current.Builder.Append("</").Append(tagName).Append('>');
+        if (_openTags.Count > 0)
+        {
+            _openTags.RemoveAt(_openTags.Count - 1);
+        }
+    }
+
+    /// <summary>
+    /// 行区切りを出力する。
+    /// </summary>
+    public void LineBreak()
+    {
+        WriteTemporaryClosingTags();
+        _current = new InlineSegment();
+        _segments.Add(_current);
+        ReopenTags();
+    }
+
+    /// <summary>
+    /// 出力完了処理。
+    /// </summary>
+    public void Finish()
+    {
+    }
+
+    void WriteTemporaryClosingTags()
+    {
+        for (int i = _openTags.Count - 1; i >= 0; i--)
+        {
+            _current.Builder.Append("</").Append(_openTags[i].TagName).Append('>');
+        }
+    }
+
+    void ReopenTags()
+    {
+        foreach (TagInfo tag in _openTags)
+        {
+            _current.Builder.Append('<').Append(tag.TagName);
+            if (!string.IsNullOrWhiteSpace(tag.Attributes))
+            {
+                _current.Builder.Append(' ').Append(tag.Attributes);
+            }
+
+            _current.Builder.Append('>');
+        }
+    }
+}
+
+/// <summary>
+/// インラインを 1 行文字列として出力するライター。
+/// </summary>
+sealed class InlineStringWriter : IInlineWriter
+{
+    readonly StringBuilder _builder = new();
+
+    /// <summary>
+    /// テキストを書き出す。
+    /// </summary>
+    /// <param name="text">テキスト。</param>
+    /// <param name="treatWhitespaceAsVisible">空白を可視として扱うか。</param>
+    public void WriteText(string text, bool treatWhitespaceAsVisible)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        _builder.Append(HtmlUtility.EscapeTextPreserveSpaces(text));
+    }
+
+    /// <summary>
+    /// 生 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">HTML 文字列。</param>
+    /// <param name="isVisible">可視要素として扱うか。</param>
+    public void WriteRawHtml(string html, bool isVisible)
+    {
+        if (string.IsNullOrEmpty(html))
+        {
+            return;
+        }
+
+        _builder.Append(html);
+    }
+
+    /// <summary>
+    /// 画像 HTML を書き出す。
+    /// </summary>
+    /// <param name="html">画像 HTML。</param>
+    public void WriteImageHtml(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+        {
+            return;
+        }
+
+        _builder.Append(html);
+    }
+
+    /// <summary>
+    /// 開始タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    /// <param name="attributes">属性。</param>
+    public void OpenTag(string tagName, string? attributes = null)
+    {
+        _builder.Append('<').Append(tagName);
+        if (!string.IsNullOrWhiteSpace(attributes))
+        {
+            _builder.Append(' ').Append(attributes);
+        }
+
+        _builder.Append('>');
+    }
+
+    /// <summary>
+    /// 終了タグを書き出す。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    public void CloseTag(string tagName)
+    {
+        _builder.Append("</").Append(tagName).Append('>');
+    }
+
+    /// <summary>
+    /// 行区切りを出力する。
+    /// </summary>
+    public void LineBreak()
+    {
+        _builder.Append(' ');
+    }
+
+    /// <summary>
+    /// 生成済み文字列を取得する。
+    /// </summary>
+    /// <returns>HTML 文字列。</returns>
+    public override string ToString()
+    {
+        return _builder.ToString();
+    }
+}
+
+/// <summary>
+/// タグの再オープン用情報。
+/// </summary>
+sealed class TagInfo
+{
+    /// <summary>
+    /// タグ名。
+    /// </summary>
+    public string TagName;
+
+    /// <summary>
+    /// 属性文字列。
+    /// </summary>
+    public string? Attributes;
+
+    /// <summary>
+    /// コンストラクタ。
+    /// </summary>
+    /// <param name="tagName">タグ名。</param>
+    /// <param name="attributes">属性。</param>
+    public TagInfo(string tagName, string? attributes)
+    {
+        TagName = tagName;
+        Attributes = attributes;
+    }
+}
+
+/// <summary>
+/// HTML エスケープ関連ユーティリティ。
+/// </summary>
+static class HtmlUtility
+{
+    /// <summary>
+    /// 通常テキストを HTML 用にエスケープする。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>エスケープ済み文字列。</returns>
+    public static string EscapeText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    }
+
+    /// <summary>
+    /// 連続空白を保持しつつ HTML エスケープする。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>エスケープ済み文字列。</returns>
+    public static string EscapeTextPreserveSpaces(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        string normalized = text.Replace("\t", "    ").Replace("\r", string.Empty).Replace("\n", " ");
+        var builder = new StringBuilder();
+        int spaceRun = 0;
+
+        foreach (char ch in normalized)
+        {
+            if (ch == ' ')
+            {
+                spaceRun++;
+                continue;
+            }
+
+            AppendSpaceRun(builder, spaceRun);
+            spaceRun = 0;
+
+            switch (ch)
+            {
+                case '&':
+                    builder.Append("&amp;");
+                    break;
+                case '<':
+                    builder.Append("&lt;");
+                    break;
+                case '>':
+                    builder.Append("&gt;");
+                    break;
+                case '\u00A0':
+                    builder.Append("&nbsp;");
+                    break;
+                default:
+                    builder.Append(ch);
+                    break;
+            }
+        }
+
+        AppendSpaceRun(builder, spaceRun);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// コードブロック用の HTML エスケープを行う。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>エスケープ済み文字列。</returns>
+    public static string EscapeCodeText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    }
+
+    /// <summary>
+    /// HTML 属性用にエスケープする。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>エスケープ済み文字列。</returns>
+    public static string EscapeAttribute(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return text.Replace("&", "&amp;").Replace("\"", "&quot;").Replace("<", "&lt;").Replace(">", "&gt;");
+    }
+
+    /// <summary>
+    /// 空白のみかどうかを判定する。
+    /// </summary>
+    /// <param name="text">入力文字列。</param>
+    /// <returns>空白のみなら true。</returns>
+    public static bool IsWhitespaceOnly(string text)
+    {
+        foreach (char ch in text)
+        {
+            if (!char.IsWhiteSpace(ch))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static void AppendSpaceRun(StringBuilder builder, int spaceRun)
+    {
+        if (spaceRun <= 0)
+        {
+            return;
+        }
+
+        if (spaceRun == 1)
+        {
+            builder.Append(' ');
+            return;
+        }
+
+        for (int i = 0; i < spaceRun - 1; i++)
+        {
+            builder.Append("&nbsp;");
+        }
+
+        builder.Append(' ');
+    }
+}

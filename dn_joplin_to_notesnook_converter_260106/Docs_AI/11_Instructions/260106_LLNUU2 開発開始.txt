@@ -2,3 +2,12 @@
 本プロジェクトの開発を開始する。
 既存の「converter_lib.cs」ファイル内の Convert 関数に、「260106_LLNP8N 全体仕様・目的」を実装せよ。
 
+260107_BCCF37:
+[1]「260107_BCN9DU/DELL-PowerEdge-R420-中古メモ.md」
+[2]「260107_BCN9DU/DELL PowerEdge R420 中古メモ.html」
+上記の [1] (このディレクトリからの相対パスに格納) を入力MDとしたところ、[2] が出力された。
+
+問題点: [2] の 81 行目に「    <p data-spacing="double">Markdig.Syntax.Inlines.HtmlEntityInline</p>」、[2] の 90行目に「    <p data-spacing="double">Markdig.Syntax.LinkReferenceDefinitionGroup</p>」、というおかしな文字が出力されてしまっている。これらが出力されてしまった原因を [1], [2] および現在のプログラムをもとに分析し、このような異常な出力がなされないように修正せよ。
+
+
+
