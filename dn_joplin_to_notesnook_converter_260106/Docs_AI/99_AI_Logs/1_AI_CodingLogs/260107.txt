@@ -22,3 +22,319 @@ AI 実行コンピュータ名: pc34
 修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
 
 
+===================================================================
+日時: 2026/01/07 03:31:43 (JST)
+開発者によって指示された指示の内容: 260107_DJVTK3 (Markdown/プレーン判定) の実装
+作業内容の概要: 本文の Markdown/プレーン判定とプレーン出力処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_DJVTK3, 260107_DJZ2L2, 260107_DGC8EV
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.Convert, JoplinMdToNotesnookHtmlExporter.RenderInlineContent, JoplinMdToNotesnookHtmlExporter.IsMarkdownDocument, JoplinMdToNotesnookHtmlExporter.ContainsMarkdownInline, JoplinMdToNotesnookHtmlExporter.RenderPlainTextBody
+実装において迷った点 (もしあれば): プレーン判定のヒューリスティック範囲
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_DGC8EV]は廃止され、[260107_DJZ2L2] に従い本文が Markdown か plaintext かを
+ヒューリスティックに判定する処理を追加した。Markdown 文書内に見出しやリスト等の
+ブロック、または Markdown 特有のインラインが存在する場合は Markdown とみなし、
+そうでない場合は plaintext として各行を <p data-spacing="single"> で出力する。
+plaintext では空白を保持して HTML エスケープを行い、空行は &nbsp; として出力する。
+
+あわせて、Markdown モードではソフト改行を空白として扱う標準動作に戻した。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 03:18:06 (JST)
+開発者によって指示された指示の内容: 260107_DGL3BP (単純改行を改行として扱う) の修正適用
+作業内容の概要: ソフト改行も line break として扱うよう変更
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_DGL3BP, 260107_DGC8EV
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderInlineContent
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_DGC8EV]に基づき、Markdown のソフト改行も改行として扱うため、
+LineBreakInline の分岐を変更し、ハード/ソフト問わず LineBreak を出力するようにした。
+これにより、Joplin 由来の単純な改行が <p> 分割として反映される。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 03:13:44 (JST)
+開発者によって指示された指示の内容: 260107_DEGUG9 (title 複数行対応) の実装
+作業内容の概要: YAML ブロックスカラーの title を解析して取り込む
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_DEGUG9, 260107_DEC7NP, 260107_DEE7CK
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.ParseFrontMatter, JoplinMdToNotesnookHtmlExporter.TryParseYamlBlockScalar, JoplinMdToNotesnookHtmlExporter.BuildBlockScalarValue, JoplinMdToNotesnookHtmlExporter.CountIndent
+実装において迷った点 (もしあれば): YAML の折りたたみ(>-)の改行・句読点の扱い
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_DEC7NP]に基づき、Front Matter の title が YAML のブロックスカラー
+（例: title: >-）で複数行になっているケースを解析できるようにした。
+インデントされた後続行を取り込み、folded/literal の形式に応じて文字列化し、
+タイトルへ反映する。取得結果は既存の title 空判定に連動させるため、空の場合は
+後続のフォールバック処理に委ねる。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 03:06:43 (JST)
+開発者によって指示された指示の内容: 260107_DAS7DY (自動URL終端検出の改良) の実装
+作業内容の概要: 自動リンクURLの終端をRFC/慣習に沿って分割する処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_DAS7DY, 260107_CWGAN6
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.TrySplitAutoLinkUrl, JoplinMdToNotesnookHtmlExporter.FindAutoLinkEndIndex, JoplinMdToNotesnookHtmlExporter.TrimAutoLinkTrailingPunctuation, JoplinMdToNotesnookHtmlExporter.IsUrlAllowedChar, JoplinMdToNotesnookHtmlExporter.IsHexDigit, JoplinMdToNotesnookHtmlExporter.IsTrailingPunctuationCandidate, JoplinMdToNotesnookHtmlExporter.HasUnmatchedClosing
+実装において迷った点 (もしあれば): URL 終端の句読点トリミング範囲
+参考文献 (複数あってよい): なし
+
+
+自動リンクURL終端の検出を空白だけでなく、RFC 3986 の許容文字と
+一般的な文末句読点を考慮して分割するように改善した。ASCII の
+許容文字以外を終端として扱い、末尾の句読点や未対応の括弧閉じを
+除外することで、「https://www.abc/aaa.htmを参照ください」のような
+ケースでもURL部分のみをリンク化する。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:56:13 (JST)
+開発者によって指示された指示の内容: 260107_CWAMF8 (自動URL終端の修正) の実装
+作業内容の概要: 自動リンクに含まれる余剰文字列を分離して出力
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CWAMF8, 260107_CWGAN6
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderLinkInline, JoplinMdToNotesnookHtmlExporter.TrySplitAutoLinkUrl
+実装において迷った点 (もしあれば): URL 終端判定の範囲 (空白で分割する方針)
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CWGAN6]の自動リンク処理で、URL 後の文字列までリンク化される不具合に対処した。
+LinkInline が自動リンクの場合に URL 文字列内の空白で分割し、前半のみをリンク化、
+後半の文字列は通常テキストとして出力するようにした。ラベルは自動リンク時に
+URL を優先するよう調整した。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+
+
+===================================================================
+日時: 2026/01/07 02:46:10 (JST)
+開発者によって指示された指示の内容: 260107_CSG7UH (title 空時の代替決定) の実装
+作業内容の概要: 本文先頭行からのタイトル自動補完を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CSG7UH, 260107_CSC3AM
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.ParseFrontMatter, JoplinMdToNotesnookHtmlExporter.Convert, JoplinMdToNotesnookHtmlExporter.DetermineFallbackTitle, JoplinMdToNotesnookHtmlExporter.RenderPlainTextFromMarkdownLine, JoplinMdToNotesnookHtmlExporter.ExtractPlainTextFromBlocks, JoplinMdToNotesnookHtmlExporter.ExtractPlainTextFromBlock, JoplinMdToNotesnookHtmlExporter.GetInlinePlainTextForTitle, JoplinMdToNotesnookHtmlExporter.AppendInlinePlainTextForTitle
+実装において迷った点 (もしあれば): 「普通の文字としてレンダリング」の解釈を検討した
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CSC3AM]に基づき、Front Matter の title が欠落または空の場合に、
+本文の先頭から非空行を探し、その行を通常テキストとしてレンダリングした結果を
+タイトルに採用する処理を追加した。行単位で Markdown を解析し、インラインを
+平文化して候補を求め、空の場合は次の行へ進む。候補が得られない場合は
+ファイル名(.md除外)をタイトルにする。
+
+Front Matter 解析では title の欠落/空を致命的エラーとせず、Convert 内で
+代替タイトルの決定を行うよう変更した。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+
+
+===================================================================
+日時: 2026/01/07 02:35:51 (JST)
+開発者によって指示された指示の内容: 260107_CPXQH5 (x- 形式リンクの無効化) の実装
+作業内容の概要: x- で始まるリンク先を文字列として扱う処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CPXQH5, 260107_CPVVY2
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderLinkInline, JoplinMdToNotesnookHtmlExporter.IsXSchemeLinkDestination
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CPVVY2]に基づき、リンク先が "x-" で始まる場合はリンク扱いしないように変更した。
+該当時はラベル文字列のみを出力し、添付ファイル処理に入らないよう分岐を追加した。
+
+実装後のビルドでローカル変数名の重複によるコンパイルエラーが発生したため、変数名を変更して解消した。
+最終的に dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:31:43 (JST)
+開発者によって指示された指示の内容: 260107_CNPJK7 (max のリンク無効化) の実装
+作業内容の概要: URL が "max" のリンクを文字列として出力する処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CNPJK7, 260107_CNKS7W
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderLinkInline, JoplinMdToNotesnookHtmlExporter.IsMaxLinkDestination
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CNKS7W]に基づき、リンク先が "max" の場合はリンクとみなさず、
+「[nvarchar](max)」のような表記をそのまま文字列として出力するよう処理を追加した。
+数字のみリンクの判定に加え、"max" の判定を行う関数を新設し、該当時は
+ラベルと URL を組み合わせた文字列をテキスト出力するようにした。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:28:36 (JST)
+開発者によって指示された指示の内容: 260107_CLA8VV (数値のみリンクの無効化) の実装
+作業内容の概要: URL が数字のみのリンクを文字列として出力する処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CLA8VV, 260107_CLSVN3
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderLinkInline, JoplinMdToNotesnookHtmlExporter.IsNumericOnlyLinkDestination
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CLSVN3]に基づき、リンク先が整数の数字のみの場合はリンク扱いせず、
+「[nvarchar](64)」のような表記をそのまま文字列として出力する処理を追加した。
+具体的には URL が数字のみか判定する関数を追加し、該当時はラベルと URL を
+組み合わせた文字列をテキスト出力するようにした。
+
+実装後のビルドでローカル変数名の重複によりコンパイルエラーが発生したため、
+該当変数名を変更して解消した。最終的に dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:21:59 (JST)
+開発者によって指示された指示の内容: 260107_CJV5C6 (tel 特殊表記対応) の実装
+作業内容の概要: (# "tel:...") 形式のリンクを tel: として解釈する処理を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CJV5C6, 260107_CJM6EQ
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.RenderLinkInline
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CJM6EQ]に基づき、リンク先が (# "tel:09000000000") のように title 側へ記載される
+ケースを処理するため、リンク URL が "#" かつ title が tel: で始まる場合に URL を title へ差し替えた。
+これにより、tel: リンクとして通常のハイパーリンク出力が行われる。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:17:28 (JST)
+開発者によって指示された指示の内容: 260107_CGHB4R (画像サイズ取得失敗時の扱い) の実装
+作業内容の概要: 画像サイズ取得失敗を警告化し、width/height を省略して出力
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CGHB4R, 260107_CGA7YW
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.ResolveImageInfo, JoplinMdToNotesnookHtmlExporter.BuildImageHtml, ImageInfo
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CGA7YW]に基づき、ImageSharp で画像サイズ取得に失敗した場合は致命的エラーにせず、
+警告として記録するように変更した。サイズ不明時は width/height を出力しないよう BuildImageHtml を分岐し、
+ImageInfo にサイズ取得可否フラグを追加した。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:08:57 (JST)
+開発者によって指示された指示の内容: 260107_CDFDQ6 (file:// 対応) の実装
+作業内容の概要: file:// をハイパーリンクとして扱う判定を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CDFDQ6, 260107_CDA3NS
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.IsWebLink
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CDA3NS]に基づき、file:// を Web リンクとして扱う必要があるため、リンク判定関数に file:// を追加した。
+これにより、Markdown 内の file:// リンクが添付ファイル扱いされず、通常のハイパーリンクとして出力される。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 02:05:58 (JST)
+開発者によって指示された指示の内容: 260107_CBVKG3 (画像の絶対URL対応) の実装
+作業内容の概要: 画像の http/https 絶対 URL を許容し、width/height を付与しない出力に対応
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_CBVKG3, 260107_CBNUX8
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.BuildImageHtml, JoplinMdToNotesnookHtmlExporter.IsHttpImageUrl
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_CBNUX8]に基づき、画像のリンク先が http/https の絶対 URL の場合を例外として許容するため、
+画像 HTML 生成処理に URL 判定を追加した。該当ケースでは Web へのアクセスやサイズ取得を行わず、
+alt と src に URL を設定し、width/height は出力しない。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 01:59:01 (JST)
+開発者によって指示された指示の内容: 260107_BZJY5A (tel 対応) の実装
+作業内容の概要: tel: をハイパーリンクとして扱う判定を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_BZJY5A, 260107_BZCRZ4
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.IsWebLink
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様の(7-3)に基づき、tel: を Web リンクとして扱う必要があるため、リンク判定関数に tel: を追加した。
+これにより、Markdown 内の tel: リンクが添付ファイル扱いされず、通常のハイパーリンクとして出力される。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 01:54:58 (JST)
+開発者によって指示された指示の内容: 260107_BXT3LQ (mailto 対応) の実装
+作業内容の概要: mailto: をハイパーリンクとして扱う判定を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_BXT3LQ, 260107_BXR55Z
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.IsWebLink
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様の(7-2)に基づき、mailto: を Web リンクとして扱う必要があるため、リンク判定関数に mailto: を追加した。
+これにより、Markdown 内の mailto: リンクが添付ファイル扱いされず、通常のハイパーリンクとして出力される。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。

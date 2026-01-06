@@ -79,14 +79,28 @@ public static class JoplinMdToNotesnookHtmlExporter
             };
 
             var pipeline = CreateMarkdownPipeline();
+            if (string.IsNullOrWhiteSpace(frontMatter.Title))
+            {
+                string fallbackFileName = Path.GetFileNameWithoutExtension(srcMdFileNameFullPath);
+                frontMatter.Title = DetermineFallbackTitle(bodyMarkdown, pipeline, fallbackFileName);
+            }
+
             MarkdownDocument document = Markdown.Parse(bodyMarkdown, pipeline);
+            bool isMarkdown = IsMarkdownDocument(document);
 
             var writer = new HtmlWriter();
             WriteHtmlHeader(writer, frontMatter);
 
             writer.WriteLine("<body>");
             writer.IncreaseIndent();
-            RenderBlocks(document, writer, context);
+            if (isMarkdown)
+            {
+                RenderBlocks(document, writer, context);
+            }
+            else
+            {
+                RenderPlainTextBody(bodyMarkdown, writer);
+            }
             writer.DecreaseIndent();
             writer.WriteLine("</body>");
             writer.WriteBlankLine();
@@ -146,7 +160,6 @@ public static class JoplinMdToNotesnookHtmlExporter
         }
 
         var info = new FrontMatterInfo();
-        bool hasTitle = false;
         bool hasCreated = false;
         bool hasUpdated = false;
 
@@ -171,8 +184,14 @@ public static class JoplinMdToNotesnookHtmlExporter
             switch (key)
             {
                 case "title":
-                    info.Title = value;
-                    hasTitle = true;
+                    if (TryParseYamlBlockScalar(value, lines, ref i, endIndex, out string titleValue))
+                    {
+                        info.Title = titleValue;
+                    }
+                    else
+                    {
+                        info.Title = value;
+                    }
                     break;
                 case "created":
                     info.CreatedUtc = ParseUtcDateTime(value, "created", i + 1);
@@ -183,16 +202,6 @@ public static class JoplinMdToNotesnookHtmlExporter
                     hasUpdated = true;
                     break;
             }
-        }
-
-        if (!hasTitle)
-        {
-            throw new InvalidOperationException("APPERROR: Front matter 'title' is missing.");
-        }
-
-        if (string.IsNullOrWhiteSpace(info.Title))
-        {
-            throw new InvalidOperationException("APPERROR: Front matter 'title' is empty.");
         }
 
         if (!hasCreated)
@@ -207,6 +216,273 @@ public static class JoplinMdToNotesnookHtmlExporter
 
         bodyMarkdown = string.Join("\n", lines.Skip(endIndex + 1));
         return info;
+    }
+
+    /// <summary>
+    /// YAML のブロックスカラーを解析する。
+    /// </summary>
+    /// <param name="value">キー行の値文字列。</param>
+    /// <param name="lines">Front Matter 行配列。</param>
+    /// <param name="lineIndex">現在行インデックス (消費した行で更新)。</param>
+    /// <param name="endIndex">Front Matter の終了行インデックス。</param>
+    /// <param name="parsedValue">解析結果。</param>
+    /// <returns>ブロックスカラーとして解析した場合は true。</returns>
+    static bool TryParseYamlBlockScalar(string value, string[] lines, ref int lineIndex, int endIndex, out string parsedValue)
+    {
+        parsedValue = string.Empty;
+        string trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        char style = trimmed[0];
+        if (style != '>' && style != '|')
+        {
+            return false;
+        }
+
+        char? chomp = null;
+        int explicitIndent = 0;
+
+        for (int i = 1; i < trimmed.Length; i++)
+        {
+            char ch = trimmed[i];
+            if (ch == '+' || ch == '-')
+            {
+                chomp = ch;
+            }
+            else if (ch >= '0' && ch <= '9')
+            {
+                explicitIndent = explicitIndent * 10 + (ch - '0');
+            }
+        }
+
+        int indent = explicitIndent;
+        int startLine = lineIndex + 1;
+
+        if (indent <= 0)
+        {
+            for (int i = startLine; i < endIndex; i++)
+            {
+                string line = lines[i];
+                if (line.Length == 0)
+                {
+                    continue;
+                }
+
+                indent = CountIndent(line);
+                break;
+            }
+        }
+
+        if (indent <= 0)
+        {
+            lineIndex = Math.Min(lineIndex, endIndex - 1);
+            return true;
+        }
+
+        var contentLines = new List<string>();
+        int current = startLine;
+
+        for (; current < endIndex; current++)
+        {
+            string line = lines[current];
+            if (line.Length == 0)
+            {
+                contentLines.Add(string.Empty);
+                continue;
+            }
+
+            int lineIndent = CountIndent(line);
+            if (lineIndent < indent)
+            {
+                break;
+            }
+
+            contentLines.Add(line.Substring(indent));
+        }
+
+        lineIndex = current - 1;
+        parsedValue = BuildBlockScalarValue(contentLines, style, chomp).Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// ブロックスカラーの値文字列を構築する。
+    /// </summary>
+    /// <param name="lines">値行の一覧。</param>
+    /// <param name="style">スカラ形式。</param>
+    /// <param name="chomp">チョンプ指定。</param>
+    /// <returns>構築済み文字列。</returns>
+    static string BuildBlockScalarValue(List<string> lines, char style, char? chomp)
+    {
+        var builder = new StringBuilder();
+
+        if (style == '|')
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append('\n');
+                }
+
+                builder.Append(lines[i]);
+            }
+        }
+        else
+        {
+            bool previousWasEmpty = false;
+            foreach (string line in lines)
+            {
+                if (line.Length == 0)
+                {
+                    builder.Append('\n');
+                    previousWasEmpty = true;
+                    continue;
+                }
+
+                if (builder.Length > 0 && !previousWasEmpty)
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append(line);
+                previousWasEmpty = false;
+            }
+        }
+
+        string result = builder.ToString();
+        if (chomp != '+')
+        {
+            result = result.TrimEnd('\n', '\r');
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 行の先頭インデント量を取得する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <returns>インデント量。</returns>
+    static int CountIndent(string line)
+    {
+        int count = 0;
+        foreach (char ch in line)
+        {
+            if (ch == ' ')
+            {
+                count++;
+                continue;
+            }
+
+            if (ch == '\t')
+            {
+                count++;
+                continue;
+            }
+
+            break;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// タイトルが空の場合の代替タイトルを決定する。
+    /// </summary>
+    /// <param name="bodyMarkdown">本文 Markdown。</param>
+    /// <param name="pipeline">Markdown パイプライン。</param>
+    /// <param name="fallbackFileName">最終フォールバックのファイル名。</param>
+    /// <returns>代替タイトル文字列。</returns>
+    static string DetermineFallbackTitle(string bodyMarkdown, MarkdownPipeline pipeline, string fallbackFileName)
+    {
+        if (!string.IsNullOrEmpty(bodyMarkdown))
+        {
+            string[] lines = NormalizeNewlines(bodyMarkdown).Split('\n');
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                string candidate = RenderPlainTextFromMarkdownLine(line, pipeline).Trim();
+                if (!string.IsNullOrWhiteSpace(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return fallbackFileName;
+    }
+
+    /// <summary>
+    /// 1 行の Markdown を通常テキストとしてレンダリングする。
+    /// </summary>
+    /// <param name="line">Markdown の 1 行。</param>
+    /// <param name="pipeline">Markdown パイプライン。</param>
+    /// <returns>通常テキストとしての文字列。</returns>
+    static string RenderPlainTextFromMarkdownLine(string line, MarkdownPipeline pipeline)
+    {
+        MarkdownDocument document = Markdown.Parse(line, pipeline);
+        return ExtractPlainTextFromBlocks(document);
+    }
+
+    /// <summary>
+    /// ブロック列から通常テキストを抽出する。
+    /// </summary>
+    /// <param name="blocks">ブロック列。</param>
+    /// <returns>抽出した通常テキスト。</returns>
+    static string ExtractPlainTextFromBlocks(IEnumerable<Block> blocks)
+    {
+        foreach (Block block in blocks)
+        {
+            string candidate = ExtractPlainTextFromBlock(block);
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// ブロックから通常テキストを抽出する。
+    /// </summary>
+    /// <param name="block">対象ブロック。</param>
+    /// <returns>抽出した通常テキスト。</returns>
+    static string ExtractPlainTextFromBlock(Block block)
+    {
+        switch (block)
+        {
+            case ParagraphBlock paragraph:
+                return GetInlinePlainTextForTitle(paragraph.Inline);
+            case HeadingBlock heading:
+                return GetInlinePlainTextForTitle(heading.Inline);
+            case QuoteBlock quote:
+                return ExtractPlainTextFromBlocks(quote);
+            case ListBlock list:
+                foreach (Block item in list)
+                {
+                    if (item is ListItemBlock listItem)
+                    {
+                        string candidate = ExtractPlainTextFromBlocks(listItem);
+                        if (!string.IsNullOrWhiteSpace(candidate))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+
+                return string.Empty;
+            default:
+                return string.Empty;
+        }
     }
 
     /// <summary>
@@ -317,6 +593,96 @@ public static class JoplinMdToNotesnookHtmlExporter
                     RenderUnsupportedBlock(block, writer, context);
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Markdown として処理すべき本文かどうかを判定する。
+    /// </summary>
+    /// <param name="document">Markdown 文書。</param>
+    /// <returns>Markdown なら true。</returns>
+    static bool IsMarkdownDocument(MarkdownDocument document)
+    {
+        foreach (Block block in document)
+        {
+            switch (block)
+            {
+                case BlankLineBlock:
+                    continue;
+                case ParagraphBlock paragraph:
+                    if (ContainsMarkdownInline(paragraph.Inline))
+                    {
+                        return true;
+                    }
+
+                    continue;
+                default:
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// インラインに Markdown 特有の表現が含まれるかを判定する。
+    /// </summary>
+    /// <param name="inline">インライン列。</param>
+    /// <returns>Markdown 特有の表現があれば true。</returns>
+    static bool ContainsMarkdownInline(Inline? inline)
+    {
+        for (Inline? current = inline; current != null; current = current.NextSibling)
+        {
+            switch (current)
+            {
+                case LiteralInline:
+                case LineBreakInline:
+                    break;
+                case LinkInline linkInline:
+                    if (linkInline.IsImage || !linkInline.IsAutoLink)
+                    {
+                        return true;
+                    }
+
+                    break;
+                case EmphasisInline:
+                case CodeInline:
+                case HtmlInline:
+                case HtmlEntityInline:
+                case TaskList:
+                    return true;
+                case ContainerInline container:
+                    if (ContainsMarkdownInline(container.FirstChild))
+                    {
+                        return true;
+                    }
+
+                    break;
+                default:
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// plaintext として本文を出力する。
+    /// </summary>
+    /// <param name="bodyMarkdown">本文。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    static void RenderPlainTextBody(string bodyMarkdown, HtmlWriter writer)
+    {
+        string[] lines = NormalizeNewlines(bodyMarkdown).Split('\n');
+        foreach (string line in lines)
+        {
+            string escaped = HtmlUtility.EscapeTextPreserveSpaces(line);
+            if (string.IsNullOrEmpty(escaped))
+            {
+                escaped = "&nbsp;";
+            }
+
+            writer.WriteLine($"<p data-spacing=\"single\">{escaped}</p>");
         }
     }
 
@@ -664,6 +1030,27 @@ public static class JoplinMdToNotesnookHtmlExporter
     static void RenderLinkInline(LinkInline linkInline, RenderContext context, IInlineWriter writer)
     {
         string url = linkInline.Url ?? string.Empty;
+        string title = linkInline.Title ?? string.Empty;
+
+        // ★ Joplin 由来で (# "tel:...") の形式があり得るため、title をリンク先として扱う
+        if (string.Equals(url, "#", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(title))
+        {
+            string normalizedTitle = title.Trim();
+            if (normalizedTitle.Length >= 2)
+            {
+                char first = normalizedTitle[0];
+                char last = normalizedTitle[^1];
+                if ((first == '"' && last == '"') || (first == '\'' && last == '\''))
+                {
+                    normalizedTitle = normalizedTitle[1..^1];
+                }
+            }
+
+            if (normalizedTitle.StartsWith("tel:", StringComparison.OrdinalIgnoreCase))
+            {
+                url = normalizedTitle;
+            }
+        }
 
         if (linkInline.IsImage)
         {
@@ -678,10 +1065,33 @@ public static class JoplinMdToNotesnookHtmlExporter
             return;
         }
 
+        if (IsXSchemeLinkDestination(url))
+        {
+            string label = GetInlinePlainText(linkInline.FirstChild);
+            string xSchemeDisplayText = string.IsNullOrWhiteSpace(label) ? url : label;
+            writer.WriteText(xSchemeDisplayText, true);
+            return;
+        }
+
+        if (IsNumericOnlyLinkDestination(url) || IsMaxLinkDestination(url))
+        {
+            string label = GetInlinePlainText(linkInline.FirstChild);
+            string numericDisplayText = $"[{label}]({url})";
+            writer.WriteText(numericDisplayText, true);
+            return;
+        }
+
+        string? autoLinkTrailingText = null;
+        if (linkInline.IsAutoLink && TrySplitAutoLinkUrl(url, out string trimmedUrl, out string trailingText))
+        {
+            url = trimmedUrl;
+            autoLinkTrailingText = trailingText;
+        }
+
         if (IsWebLink(url))
         {
             string label = GetInlinePlainText(linkInline.FirstChild);
-            if (string.IsNullOrWhiteSpace(label))
+            if (string.IsNullOrWhiteSpace(label) || linkInline.IsAutoLink)
             {
                 label = url;
             }
@@ -690,6 +1100,10 @@ public static class JoplinMdToNotesnookHtmlExporter
             writer.OpenTag("a", linkAttributes);
             writer.WriteText(label, true);
             writer.CloseTag("a");
+            if (!string.IsNullOrEmpty(autoLinkTrailingText))
+            {
+                writer.WriteText(autoLinkTrailingText, true);
+            }
             return;
         }
 
@@ -746,6 +1160,12 @@ public static class JoplinMdToNotesnookHtmlExporter
     /// <returns>HTML 文字列。</returns>
     static string BuildImageHtml(string url, RenderContext context)
     {
+        if (IsHttpImageUrl(url))
+        {
+            string escapedUrl = HtmlUtility.EscapeAttribute(url);
+            return $"<span class=\"image-container\" alt=\"{escapedUrl}\"><img class=\"\" src=\"{escapedUrl}\" alt=\"{escapedUrl}\"></span>";
+        }
+
         ImageInfo imageInfo = ResolveImageInfo(url, context);
         string href = $"./attachments/{imageInfo.OutputFileName}";
         string alt = imageInfo.OutputFileName;
@@ -753,7 +1173,12 @@ public static class JoplinMdToNotesnookHtmlExporter
         string escapedHref = HtmlUtility.EscapeAttribute(href);
         string escapedAlt = HtmlUtility.EscapeAttribute(alt);
 
-        return $"<span class=\"image-container\" alt=\"{escapedAlt}\"><img class=\"\" src=\"{escapedHref}\" alt=\"{escapedAlt}\" width=\"{imageInfo.Width}\" height=\"{imageInfo.Height}\"></span>";
+        if (imageInfo.HasSize)
+        {
+            return $"<span class=\"image-container\" alt=\"{escapedAlt}\"><img class=\"\" src=\"{escapedHref}\" alt=\"{escapedAlt}\" width=\"{imageInfo.Width}\" height=\"{imageInfo.Height}\"></span>";
+        }
+
+        return $"<span class=\"image-container\" alt=\"{escapedAlt}\"><img class=\"\" src=\"{escapedHref}\" alt=\"{escapedAlt}\"></span>";
     }
 
     /// <summary>
@@ -815,13 +1240,22 @@ public static class JoplinMdToNotesnookHtmlExporter
         string outputFileName = Path.GetFileName(fullPath).ToLowerInvariant();
         string dstPath = Path.Combine(context.AttachmentsDirectory, outputFileName);
 
-        int width;
-        int height;
+        int width = 0;
+        int height = 0;
+        bool hasSize = false;
 
-        using (Image image = Image.Load(fullPath))
+        try
         {
-            width = image.Width;
-            height = image.Height;
+            using (Image image = Image.Load(fullPath))
+            {
+                width = image.Width;
+                height = image.Height;
+                hasSize = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            context.Warnings.Add($"ImageSharp failed to read image size. Path: {fullPath}. Detail: {ex}");
         }
 
         File.Copy(fullPath, dstPath, overwrite: true);
@@ -832,6 +1266,7 @@ public static class JoplinMdToNotesnookHtmlExporter
             OutputFileName = outputFileName,
             Width = width,
             Height = height,
+            HasSize = hasSize,
         };
 
         context.ImageInfoBySourcePath[fullPath] = info;
@@ -871,7 +1306,7 @@ public static class JoplinMdToNotesnookHtmlExporter
     }
 
     /// <summary>
-    /// URL が Web リンクかどうかを判定する。
+    /// URL が Web リンク (mailto/tel/file を含む) かどうかを判定する。
     /// </summary>
     /// <param name="url">URL 文字列。</param>
     /// <returns>Web リンクなら true。</returns>
@@ -879,7 +1314,259 @@ public static class JoplinMdToNotesnookHtmlExporter
     {
         return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || url.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase);
+            || url.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("tel:", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("file://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 自動リンクとして認識された URL を分割する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <param name="trimmedUrl">URL として扱う部分。</param>
+    /// <param name="trailingText">URL 以降の文字列。</param>
+    /// <returns>分割に成功した場合は true。</returns>
+    static bool TrySplitAutoLinkUrl(string url, out string trimmedUrl, out string trailingText)
+    {
+        trimmedUrl = url;
+        trailingText = string.Empty;
+
+        if (string.IsNullOrEmpty(url))
+        {
+            return false;
+        }
+
+        int endIndex = FindAutoLinkEndIndex(url);
+        if (endIndex <= 0)
+        {
+            return false;
+        }
+
+        int trimmedEnd = TrimAutoLinkTrailingPunctuation(url, endIndex);
+        if (trimmedEnd <= 0)
+        {
+            return false;
+        }
+
+        if (trimmedEnd >= url.Length)
+        {
+            return false;
+        }
+
+        trimmedUrl = url[..trimmedEnd];
+        trailingText = url[trimmedEnd..];
+        return true;
+    }
+
+    /// <summary>
+    /// 自動リンクの終端位置を検出する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>終端インデックス。</returns>
+    static int FindAutoLinkEndIndex(string url)
+    {
+        for (int i = 0; i < url.Length; i++)
+        {
+            char ch = url[i];
+            if (!IsUrlAllowedChar(ch))
+            {
+                return i;
+            }
+
+            if (ch == '%')
+            {
+                if (i + 2 >= url.Length || !IsHexDigit(url[i + 1]) || !IsHexDigit(url[i + 2]))
+                {
+                    return i;
+                }
+
+                i += 2;
+            }
+        }
+
+        return url.Length;
+    }
+
+    /// <summary>
+    /// URL 終端の句読点等を除外する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <param name="endIndex">終端候補。</param>
+    /// <returns>トリム後の終端インデックス。</returns>
+    static int TrimAutoLinkTrailingPunctuation(string url, int endIndex)
+    {
+        int trimmedEnd = endIndex;
+        while (trimmedEnd > 0)
+        {
+            char ch = url[trimmedEnd - 1];
+            if (!IsTrailingPunctuationCandidate(ch))
+            {
+                break;
+            }
+
+            if (ch == ')' && !HasUnmatchedClosing(url, trimmedEnd, '(', ')'))
+            {
+                break;
+            }
+
+            if (ch == ']' && !HasUnmatchedClosing(url, trimmedEnd, '[', ']'))
+            {
+                break;
+            }
+
+            if (ch == '}' && !HasUnmatchedClosing(url, trimmedEnd, '{', '}'))
+            {
+                break;
+            }
+
+            trimmedEnd--;
+        }
+
+        return trimmedEnd;
+    }
+
+    /// <summary>
+    /// URL に含めることが許容される文字かどうかを判定する。
+    /// </summary>
+    /// <param name="ch">判定対象文字。</param>
+    /// <returns>許容される場合は true。</returns>
+    static bool IsUrlAllowedChar(char ch)
+    {
+        if (ch > 0x7f)
+        {
+            return false;
+        }
+
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'))
+        {
+            return true;
+        }
+
+        return ch switch
+        {
+            '-' or '.' or '_' or '~' or ':' or '/' or '?' or '#' or '[' or ']' or '@' or '!' or '$' or '&' or '\'' or '(' or ')' or '*' or '+' or ',' or ';' or '=' or '%' => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// 16 進数文字かどうかを判定する。
+    /// </summary>
+    /// <param name="ch">判定対象文字。</param>
+    /// <returns>16 進数なら true。</returns>
+    static bool IsHexDigit(char ch)
+    {
+        return (ch >= '0' && ch <= '9')
+            || (ch >= 'a' && ch <= 'f')
+            || (ch >= 'A' && ch <= 'F');
+    }
+
+    /// <summary>
+    /// URL 終端として除外すべき文字候補かどうかを判定する。
+    /// </summary>
+    /// <param name="ch">判定対象文字。</param>
+    /// <returns>除外候補なら true。</returns>
+    static bool IsTrailingPunctuationCandidate(char ch)
+    {
+        return ch switch
+        {
+            '.' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '。' or '、' or '，' or '．' or '！' or '？' or '」' or '』' or '）' or '】' or '｝' or '〉' or '》' or '＞' or '…' => true,
+            ')' or ']' or '}' => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// 閉じ括弧が未対応かどうかを判定する。
+    /// </summary>
+    /// <param name="text">対象文字列。</param>
+    /// <param name="endIndex">検索対象の終端。</param>
+    /// <param name="openChar">開始括弧。</param>
+    /// <param name="closeChar">終了括弧。</param>
+    /// <returns>未対応の閉じ括弧がある場合は true。</returns>
+    static bool HasUnmatchedClosing(string text, int endIndex, char openChar, char closeChar)
+    {
+        int openCount = 0;
+        int closeCount = 0;
+        for (int i = 0; i < endIndex; i++)
+        {
+            char ch = text[i];
+            if (ch == openChar)
+            {
+                openCount++;
+            }
+            else if (ch == closeChar)
+            {
+                closeCount++;
+            }
+        }
+
+        return closeCount > openCount;
+    }
+
+    /// <summary>
+    /// リンク先が数字のみかどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>数字のみなら true。</returns>
+    static bool IsNumericOnlyLinkDestination(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+        {
+            return false;
+        }
+
+        foreach (char ch in url)
+        {
+            if (ch < '0' || ch > '9')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// リンク先が "max" かどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>"max" なら true。</returns>
+    static bool IsMaxLinkDestination(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        return string.Equals(url.Trim(), "max", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// リンク先が "x-" で始まるかどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>"x-" で始まるなら true。</returns>
+    static bool IsXSchemeLinkDestination(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        return url.TrimStart().StartsWith("x-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 画像 URL が http/https の絶対 URL かどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>http/https の絶対 URL なら true。</returns>
+    static bool IsHttpImageUrl(string url)
+    {
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -891,6 +1578,18 @@ public static class JoplinMdToNotesnookHtmlExporter
     {
         var builder = new StringBuilder();
         AppendInlinePlainText(inline, builder);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// タイトル抽出用にインラインを平文化する。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <returns>平文文字列。</returns>
+    static string GetInlinePlainTextForTitle(Inline? inline)
+    {
+        var builder = new StringBuilder();
+        AppendInlinePlainTextForTitle(inline, builder);
         return builder.ToString();
     }
 
@@ -948,6 +1647,75 @@ public static class JoplinMdToNotesnookHtmlExporter
                     break;
                 case ContainerInline container:
                     AppendInlinePlainText(container.FirstChild, builder);
+                    break;
+                default:
+                    builder.Append(current.ToString());
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// タイトル抽出用にインラインを平文化して追加する。
+    /// </summary>
+    /// <param name="inline">インライン列の先頭。</param>
+    /// <param name="builder">出力先。</param>
+    static void AppendInlinePlainTextForTitle(Inline? inline, StringBuilder builder)
+    {
+        for (Inline? current = inline; current != null; current = current.NextSibling)
+        {
+            switch (current)
+            {
+                case LiteralInline literal:
+                    builder.Append(literal.Content.ToString());
+                    break;
+                case LineBreakInline:
+                    builder.Append(' ');
+                    break;
+                case CodeInline codeInline:
+                    builder.Append(codeInline.Content);
+                    break;
+                case HtmlEntityInline entityInline:
+                    string entityText = entityInline.Transcoded.ToString();
+                    if (string.IsNullOrEmpty(entityText))
+                    {
+                        entityText = entityInline.Original.ToString();
+                    }
+
+                    if (string.IsNullOrEmpty(entityText))
+                    {
+                        break;
+                    }
+
+                    if (string.Equals(entityText, "&nbsp;", StringComparison.OrdinalIgnoreCase))
+                    {
+                        builder.Append('\u00A0');
+                    }
+                    else
+                    {
+                        builder.Append(entityText);
+                    }
+                    break;
+                case HtmlInline htmlInline:
+                    string tag = htmlInline.Tag ?? string.Empty;
+                    if (IsLineBreakHtmlTag(tag))
+                    {
+                        builder.Append(' ');
+                    }
+                    break;
+                case LinkInline linkInline:
+                    if (!linkInline.IsImage)
+                    {
+                        int beforeLength = builder.Length;
+                        AppendInlinePlainTextForTitle(linkInline.FirstChild, builder);
+                        if (builder.Length == beforeLength && !string.IsNullOrEmpty(linkInline.Url))
+                        {
+                            builder.Append(linkInline.Url);
+                        }
+                    }
+                    break;
+                case ContainerInline container:
+                    AppendInlinePlainTextForTitle(container.FirstChild, builder);
                     break;
                 default:
                     builder.Append(current.ToString());
@@ -1170,6 +1938,11 @@ sealed class ImageInfo
     /// 画像高さ。
     /// </summary>
     public int Height;
+
+    /// <summary>
+    /// 画像サイズを取得できたかどうか。
+    /// </summary>
+    public bool HasSize;
 }
 
 /// <summary>

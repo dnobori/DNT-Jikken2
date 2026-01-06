@@ -62,7 +62,16 @@ public class Program
         
         Console.WriteLine("Test Program");
 
-        JoplinMdToNotesnookHtmlExporter.Convert(@"H:\TMP\260104_XZVB5X_JoplinTest\07_MD_Export\DN\DELL PowerEdge R420 中古メモ.md", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Test1", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Log.log");
+        var srcFileList = Directory.GetFiles(@"C:\tmp\260104_joplin_export_all\DN").Where(x => x.EndsWith(".md")).OrderBy(x => x);
+
+        foreach (string srcFilePath in srcFileList)
+        {
+            Console.WriteLine($"★ {Path.GetFileName(srcFilePath)}");
+
+            JoplinMdToNotesnookHtmlExporter.Convert(srcFilePath, @"C:\tmp\260104_notesnook_import_all\260104_notesnook_import_all_html", @"C:\tmp\260104_notesnook_import_all\Log.log");
+        }
+
+        //JoplinMdToNotesnookHtmlExporter.Convert(@"H:\TMP\260104_XZVB5X_JoplinTest\07_MD_Export\DN\DELL PowerEdge R420 中古メモ.md", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Test1", @"H:\TMP\260104_XZVB5X_JoplinTest\10_Test_Dst\Log.log");
     }
 }
 

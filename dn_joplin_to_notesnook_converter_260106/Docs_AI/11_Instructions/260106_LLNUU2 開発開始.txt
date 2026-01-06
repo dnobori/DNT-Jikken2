@@ -9,5 +9,48 @@
 
 問題点: [2] の 81 行目に「    <p data-spacing="double">Markdig.Syntax.Inlines.HtmlEntityInline</p>」、[2] の 90行目に「    <p data-spacing="double">Markdig.Syntax.LinkReferenceDefinitionGroup</p>」、というおかしな文字が出力されてしまっている。これらが出力されてしまった原因を [1], [2] および現在のプログラムをもとに分析し、このような異常な出力がなされないように修正せよ。
 
+260107_BXT3LQ:
+機能 [260107_BXR55Z] を実装せよ。
 
+260107_BZJY5A:
+機能 [260107_BZCRZ4] を実装せよ。
+
+260107_CBVKG3:
+機能 [260107_CBNUX8] を実装せよ。
+
+260107_CDFDQ6:
+機能 [260107_CDA3NS] を実装せよ。
+
+260107_CGHB4R:
+機能 [260107_CGA7YW] を実装せよ。
+
+260107_CJV5C6:
+機能 [260107_CJM6EQ] を実装せよ。
+
+260107_CLA8VV:
+機能 [260107_CLSVN3] を実装せよ。
+
+260107_CNPJK7:
+機能 [260107_CNKS7W] を実装せよ。
+
+260107_CPXQH5:
+機能 [260107_CPVVY2] を実装せよ。
+
+260107_CSG7UH:
+機能 [260107_CSC3AM] を実装せよ。
+
+260107_CWAMF8:
+機能 [260107_CWGAN6] の部分にバグがある。たとえば、「http://developer.apple.com/ios/manage/devices/index.action から登録！」という文字列が本文中にあるとき、「<p data-spacing="double"><a target="_blank" rel="noopener noreferrer nofollow" spellcheck="false" href="http://developer.apple.com/ios/manage/devices/index.action から登録！" title="http://developer.apple.com/ios/manage/devices/index.action から登録！">http://developer.apple.com/ios/manage/devices/index.action&nbsp;から登録！</a></p>」という結果になってしまう。URL が終わった後の部分も改行までURLが続いていると認識されているようである。適切なURLの終わりを検出し、リンクはそこまでにせよ。
+
+260107_DAS7DY:
+「自動リンクのURL終端を空白で分割し、リンク部分のみを出力するよう修正しました。」とあるが、URL終端は空白のみで開始されるのではない。たとえば、「https://www.abc/aaa.htmを参照ください」のような文字列の場合、「を参照ください」のところから先はURLではない。空白のみでなく、このような、URLでない部分の区切りをWebの慣習あるいはRFCに基づき適切に検出するようにせよ。
+
+260107_DEGUG9:
+機能 [260107_DEC7NP] を実装せよ。
+
+260107_DGL3BP:
+仕様 [260107_DGC8EV] の修正を適用せよ。
+
+260107_DJVTK3:
+仕様 [260107_DGC8EV] は廃止せよ。代わりに仕様 [260107_DJZ2L2] を実装せよ。
 
