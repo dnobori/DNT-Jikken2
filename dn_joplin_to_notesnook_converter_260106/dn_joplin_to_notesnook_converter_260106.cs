@@ -60,7 +60,9 @@ public class Program
     {
         await Task.CompletedTask; // await が 1 個もない警告を仮に非表示に
         
-        Console.WriteLine("Hello World");
+        Console.WriteLine("Test Program");
+
+        JoplinMdToNotesnookHtmlExporter.Convert(@"c:\tmp\a\1.md", @"c:\tmp\b", @"c:\tmp\c.log");
     }
 }
 

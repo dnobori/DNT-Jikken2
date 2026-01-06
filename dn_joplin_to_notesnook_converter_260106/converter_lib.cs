@@ -12,3 +12,12 @@ using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using SixLabors.ImageSharp;
+
+public static class JoplinMdToNotesnookHtmlExporter
+{
+    public static void Convert(string srcMdFileNameFullPath, string dstHtmlDirFullPath, string warningsLogFilePath)
+    {
+    }
+}
+
+
