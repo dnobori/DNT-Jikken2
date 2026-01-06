@@ -205,7 +205,13 @@ public static class JoplinMdToNotesnookHtmlExporter
             throw new InvalidOperationException("APPERROR: Front matter 'updated' is missing.");
         }
 
-        bodyMarkdown = string.Join("\n", lines.Skip(endIndex + 1));
+        int bodyStartIndex = endIndex + 1;
+        if (bodyStartIndex < lines.Length && lines[bodyStartIndex].Length == 0)
+        {
+            bodyStartIndex++;
+        }
+
+        bodyMarkdown = string.Join("\n", lines.Skip(bodyStartIndex));
         return info;
     }
 
@@ -617,13 +623,16 @@ public static class JoplinMdToNotesnookHtmlExporter
                 continue;
             }
 
-            string html = RenderPlainTextLineWithAutoLinks(line);
-            if (string.IsNullOrEmpty(html))
+            foreach (string segment in SplitPlainTextLineByHtmlBreaks(line))
             {
-                html = "&nbsp;";
-            }
+                string html = RenderPlainTextLineWithAutoLinks(segment);
+                if (string.IsNullOrEmpty(html))
+                {
+                    html = "&nbsp;";
+                }
 
-            writer.WriteLine($"<p data-spacing=\"single\">{html}</p>");
+                writer.WriteLine($"<p data-spacing=\"single\">{html}</p>");
+            }
         }
     }
 
@@ -831,6 +840,115 @@ public static class JoplinMdToNotesnookHtmlExporter
             index = linkStart + trimmedEnd;
         }
 
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// プレーンテキスト行を <br> タグで分割する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <returns>分割後の行列。</returns>
+    static IEnumerable<string> SplitPlainTextLineByHtmlBreaks(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            yield return string.Empty;
+            yield break;
+        }
+
+        string normalized = ReplaceHtmlNbsp(line);
+        int index = 0;
+
+        while (TryFindHtmlBreakTag(normalized, index, out int tagIndex, out int tagLength))
+        {
+            yield return normalized.Substring(index, tagIndex - index);
+            index = tagIndex + tagLength;
+        }
+
+        yield return normalized[index..];
+    }
+
+    /// <summary>
+    /// HTML の <br> タグを検索する。
+    /// </summary>
+    /// <param name="text">対象文字列。</param>
+    /// <param name="startIndex">検索開始位置。</param>
+    /// <param name="tagIndex">タグ開始位置。</param>
+    /// <param name="tagLength">タグ長。</param>
+    /// <returns>見つかった場合は true。</returns>
+    static bool TryFindHtmlBreakTag(string text, int startIndex, out int tagIndex, out int tagLength)
+    {
+        tagIndex = -1;
+        tagLength = 0;
+
+        int index = startIndex;
+        while (index < text.Length)
+        {
+            int found = text.IndexOf("<br", index, StringComparison.OrdinalIgnoreCase);
+            if (found < 0)
+            {
+                return false;
+            }
+
+            int pos = found + 3;
+            while (pos < text.Length && char.IsWhiteSpace(text[pos]))
+            {
+                pos++;
+            }
+
+            if (pos < text.Length && text[pos] == '/')
+            {
+                pos++;
+                while (pos < text.Length && char.IsWhiteSpace(text[pos]))
+                {
+                    pos++;
+                }
+            }
+
+            if (pos < text.Length && text[pos] == '>')
+            {
+                tagIndex = found;
+                tagLength = pos - found + 1;
+                return true;
+            }
+
+            index = found + 3;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// &nbsp; を通常の空白に置換する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <returns>置換後の行。</returns>
+    static string ReplaceHtmlNbsp(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            return string.Empty;
+        }
+
+        const string Entity = "&nbsp;";
+        int index = line.IndexOf(Entity, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return line;
+        }
+
+        var builder = new StringBuilder(line.Length);
+        int start = 0;
+
+        while (index >= 0)
+        {
+            builder.Append(line, start, index - start);
+            builder.Append(' ');
+            start = index + Entity.Length;
+            index = line.IndexOf(Entity, start, StringComparison.OrdinalIgnoreCase);
+        }
+
+        builder.Append(line, start, line.Length - start);
         return builder.ToString();
     }
 
