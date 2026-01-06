@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Markdig;
@@ -598,6 +599,17 @@ public static class JoplinMdToNotesnookHtmlExporter
         string[] lines = NormalizeNewlines(bodyMarkdown).Split('\n');
         foreach (string line in lines)
         {
+            string trimmedLine = line.TrimStart();
+            if (TryRenderHtmlAnchorLine(trimmedLine, writer, context))
+            {
+                continue;
+            }
+
+            if (TryRenderHtmlImageLine(trimmedLine, writer, context))
+            {
+                continue;
+            }
+
             MarkdownDocument lineDocument = Markdown.Parse(line, pipeline);
             if (IsMarkdownDocument(lineDocument))
             {
@@ -820,6 +832,258 @@ public static class JoplinMdToNotesnookHtmlExporter
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// HTML の <a> タグ行をレンダリングする。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>処理した場合は true。</returns>
+    static bool TryRenderHtmlAnchorLine(string line, HtmlWriter writer, RenderContext context)
+    {
+        if (!IsHtmlTagLineStart(line, "a"))
+        {
+            return false;
+        }
+
+        if (!TryGetHtmlAttributeValue(line, "href", out string rawHref))
+        {
+            return false;
+        }
+
+        string href = DecodeHtmlValue(rawHref);
+        if (string.IsNullOrWhiteSpace(href))
+        {
+            return false;
+        }
+
+        TryExtractHtmlInnerText(line, "a", out string innerText, out string trailingText);
+
+        string label = DecodeHtmlValue(innerText);
+        string trailing = DecodeHtmlValue(trailingText);
+
+        string linkHtml;
+        if (IsWebLink(href))
+        {
+            string displayText = string.IsNullOrWhiteSpace(label) ? href : label;
+            string escapedText = HtmlUtility.EscapeTextPreserveSpaces(displayText);
+            string escapedHref = HtmlUtility.EscapeAttribute(href);
+            linkHtml = $"<a target=\"_blank\" rel=\"noopener noreferrer nofollow\" spellcheck=\"false\" href=\"{escapedHref}\" title=\"{escapedHref}\">{escapedText}</a>";
+        }
+        else
+        {
+            AttachmentInfo attachment = ResolveAttachmentInfo(href, context);
+            string displayText = string.IsNullOrWhiteSpace(label) ? attachment.OutputFileName : label;
+            string escapedText = HtmlUtility.EscapeTextPreserveSpaces(displayText);
+            string hrefValue = $"./attachments/{attachment.OutputFileName}";
+            linkHtml = $"<a href=\"{HtmlUtility.EscapeAttribute(hrefValue)}\" title=\"{HtmlUtility.EscapeAttribute(displayText)}\">{escapedText}</a>";
+        }
+
+        string trailingHtml = string.IsNullOrEmpty(trailing) ? string.Empty : HtmlUtility.EscapeTextPreserveSpaces(trailing);
+        writer.WriteLine($"<p data-spacing=\"double\">{linkHtml}{trailingHtml}</p>");
+        return true;
+    }
+
+    /// <summary>
+    /// HTML の <img> タグ行をレンダリングする。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    /// <returns>処理した場合は true。</returns>
+    static bool TryRenderHtmlImageLine(string line, HtmlWriter writer, RenderContext context)
+    {
+        if (!IsHtmlTagLineStart(line, "img"))
+        {
+            return false;
+        }
+
+        if (!TryGetHtmlAttributeValue(line, "src", out string rawSrc))
+        {
+            return false;
+        }
+
+        string src = DecodeHtmlValue(rawSrc);
+        if (string.IsNullOrWhiteSpace(src))
+        {
+            return false;
+        }
+
+        string imageHtml = BuildImageHtml(src, context);
+        string trailingText = ExtractTrailingTextAfterTag(line);
+        string trailing = DecodeHtmlValue(trailingText);
+        string trailingHtml = string.IsNullOrEmpty(trailing) ? string.Empty : HtmlUtility.EscapeTextPreserveSpaces(trailing);
+
+        writer.WriteLine($"<p data-spacing=\"single\">{imageHtml}{trailingHtml}</p>");
+        return true;
+    }
+
+    /// <summary>
+    /// HTML タグ行かどうかを判定する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <param name="tagName">タグ名。</param>
+    /// <returns>タグ行なら true。</returns>
+    static bool IsHtmlTagLineStart(string line, string tagName)
+    {
+        string prefix = "<" + tagName;
+        if (!line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int index = prefix.Length;
+        if (line.Length <= index)
+        {
+            return true;
+        }
+
+        char next = line[index];
+        return char.IsWhiteSpace(next) || next == '>' || next == '/';
+    }
+
+    /// <summary>
+    /// HTML タグの属性値を取得する。
+    /// </summary>
+    /// <param name="tagLine">タグ行。</param>
+    /// <param name="attributeName">属性名。</param>
+    /// <param name="value">取得した属性値。</param>
+    /// <returns>取得できた場合は true。</returns>
+    static bool TryGetHtmlAttributeValue(string tagLine, string attributeName, out string value)
+    {
+        value = string.Empty;
+        int index = 0;
+
+        while (index < tagLine.Length)
+        {
+            int found = tagLine.IndexOf(attributeName, index, StringComparison.OrdinalIgnoreCase);
+            if (found < 0)
+            {
+                return false;
+            }
+
+            int afterName = found + attributeName.Length;
+            if (afterName < tagLine.Length && (char.IsLetterOrDigit(tagLine[afterName]) || tagLine[afterName] == '-' || tagLine[afterName] == '_'))
+            {
+                index = afterName;
+                continue;
+            }
+
+            int pos = afterName;
+            while (pos < tagLine.Length && char.IsWhiteSpace(tagLine[pos]))
+            {
+                pos++;
+            }
+
+            if (pos >= tagLine.Length || tagLine[pos] != '=')
+            {
+                index = afterName;
+                continue;
+            }
+
+            pos++;
+            while (pos < tagLine.Length && char.IsWhiteSpace(tagLine[pos]))
+            {
+                pos++;
+            }
+
+            if (pos >= tagLine.Length)
+            {
+                return false;
+            }
+
+            char quote = tagLine[pos];
+            if (quote == '"' || quote == '\'')
+            {
+                pos++;
+                int endQuote = tagLine.IndexOf(quote, pos);
+                if (endQuote < 0)
+                {
+                    return false;
+                }
+
+                value = tagLine.Substring(pos, endQuote - pos);
+                return true;
+            }
+
+            int end = pos;
+            while (end < tagLine.Length && !char.IsWhiteSpace(tagLine[end]) && tagLine[end] != '>')
+            {
+                end++;
+            }
+
+            value = tagLine.Substring(pos, end - pos);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// HTML タグの内側テキストと末尾テキストを抽出する。
+    /// </summary>
+    /// <param name="tagLine">タグ行。</param>
+    /// <param name="tagName">タグ名。</param>
+    /// <param name="innerText">内側テキスト。</param>
+    /// <param name="trailingText">末尾テキスト。</param>
+    static void TryExtractHtmlInnerText(string tagLine, string tagName, out string innerText, out string trailingText)
+    {
+        innerText = string.Empty;
+        trailingText = string.Empty;
+
+        int openEnd = tagLine.IndexOf('>');
+        if (openEnd < 0)
+        {
+            return;
+        }
+
+        string closeTag = "</" + tagName;
+        int closeStart = tagLine.IndexOf(closeTag, openEnd + 1, StringComparison.OrdinalIgnoreCase);
+        if (closeStart < 0)
+        {
+            innerText = tagLine[(openEnd + 1)..];
+            return;
+        }
+
+        innerText = tagLine.Substring(openEnd + 1, closeStart - openEnd - 1);
+        int closeEnd = tagLine.IndexOf('>', closeStart);
+        if (closeEnd >= 0 && closeEnd + 1 < tagLine.Length)
+        {
+            trailingText = tagLine[(closeEnd + 1)..];
+        }
+    }
+
+    /// <summary>
+    /// HTML タグ行の末尾テキストを抽出する。
+    /// </summary>
+    /// <param name="tagLine">タグ行。</param>
+    /// <returns>末尾テキスト。</returns>
+    static string ExtractTrailingTextAfterTag(string tagLine)
+    {
+        int endIndex = tagLine.IndexOf('>');
+        if (endIndex < 0 || endIndex + 1 >= tagLine.Length)
+        {
+            return string.Empty;
+        }
+
+        return tagLine[(endIndex + 1)..];
+    }
+
+    /// <summary>
+    /// HTML エンティティをデコードする。
+    /// </summary>
+    /// <param name="value">入力文字列。</param>
+    /// <returns>デコード後の文字列。</returns>
+    static string DecodeHtmlValue(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return WebUtility.HtmlDecode(value);
     }
 
     /// <summary>
