@@ -23,6 +23,51 @@ AI 実行コンピュータ名: pc34
 
 
 ===================================================================
+日時: 2026/01/07 04:10:29 (JST)
+開発者によって指示された指示の内容: 260107_ECJ2UG (行単位のMarkdown/Plain判定) の実装
+作業内容の概要: 行ごとの判定とplaintext行の自動リンク出力を追加
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_ECJ2UG, 260107_ECC2GZ, 260107_DJZ2L2, 260107_DWR79T
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.Convert, JoplinMdToNotesnookHtmlExporter.RenderBodyByLine, JoplinMdToNotesnookHtmlExporter.RenderPlainTextLineWithAutoLinks, JoplinMdToNotesnookHtmlExporter.TryFindAutoLinkStart, JoplinMdToNotesnookHtmlExporter.BuildAutoLinkHtml
+実装において迷った点 (もしあれば): 行単位のMarkdown判定で自動リンクを対象外とする判断
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_ECC2GZ]に基づき、本文を行単位で判定する方式へ変更した。
+各行を Markdown として解析し、明示的なハイパーリンク/添付ファイル/画像が
+含まれる行のみ Markdown として RenderBlocks を適用する。それ以外の行は
+plaintext として <p data-spacing="single"> で出力し、空白の保持と
+自動リンク化を行うようにした。これにより、従来の全文判定ではなく、
+行ごとの混在に対応できる。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
+日時: 2026/01/07 03:56:44 (JST)
+開発者によって指示された指示の内容: 260107_DXC9MN (Markdown/プレーン判定条件の修正) の実装
+作業内容の概要: 明示的リンク/添付/画像のみを Markdown 判定の条件に変更
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_DXC9MN, 260107_DWQA6A, 260107_DWR79T
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.IsMarkdownDocument, JoplinMdToNotesnookHtmlExporter.ContainsMarkdownIndicatorBlock, JoplinMdToNotesnookHtmlExporter.ContainsMarkdownIndicatorBlocks, JoplinMdToNotesnookHtmlExporter.ContainsMarkdownInline
+実装において迷った点 (もしあれば): 自動リンクの扱いを判定対象外にするかの判断
+参考文献 (複数あってよい): なし
+
+
+仕様[260107_DWQA6A]に基づき、本文が Markdown と判定される条件を、
+明示的なハイパーリンク/添付ファイル/埋め込み画像の存在に限定した。
+自動ハイパーリンク対象の URL 文字列は判定対象外とし、数値のみ・max・
+x- スキーム等の疑似リンクも除外する。これにより、リンクが無い本文は
+plaintext として <p data-spacing="single"> で出力される。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+===================================================================
 日時: 2026/01/07 03:38:55 (JST)
 開発者によって指示された指示の内容: 260107_DQKE4J (プレーン判定の誤判定修正) の実装
 作業内容の概要: ThematicBreak を Markdown 判定の強い根拠から除外

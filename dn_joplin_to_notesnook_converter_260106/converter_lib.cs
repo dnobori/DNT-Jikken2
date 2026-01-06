@@ -85,22 +85,12 @@ public static class JoplinMdToNotesnookHtmlExporter
                 frontMatter.Title = DetermineFallbackTitle(bodyMarkdown, pipeline, fallbackFileName);
             }
 
-            MarkdownDocument document = Markdown.Parse(bodyMarkdown, pipeline);
-            bool isMarkdown = IsMarkdownDocument(document);
-
             var writer = new HtmlWriter();
             WriteHtmlHeader(writer, frontMatter);
 
             writer.WriteLine("<body>");
             writer.IncreaseIndent();
-            if (isMarkdown)
-            {
-                RenderBlocks(document, writer, context);
-            }
-            else
-            {
-                RenderPlainTextBody(bodyMarkdown, writer);
-            }
+            RenderBodyByLine(bodyMarkdown, pipeline, writer, context);
             writer.DecreaseIndent();
             writer.WriteLine("</body>");
             writer.WriteBlankLine();
@@ -597,6 +587,35 @@ public static class JoplinMdToNotesnookHtmlExporter
     }
 
     /// <summary>
+    /// 本文を行ごとに処理して HTML 出力する。
+    /// </summary>
+    /// <param name="bodyMarkdown">本文 Markdown。</param>
+    /// <param name="pipeline">Markdown パイプライン。</param>
+    /// <param name="writer">HTML 出力ライター。</param>
+    /// <param name="context">変換コンテキスト。</param>
+    static void RenderBodyByLine(string bodyMarkdown, MarkdownPipeline pipeline, HtmlWriter writer, RenderContext context)
+    {
+        string[] lines = NormalizeNewlines(bodyMarkdown).Split('\n');
+        foreach (string line in lines)
+        {
+            MarkdownDocument lineDocument = Markdown.Parse(line, pipeline);
+            if (IsMarkdownDocument(lineDocument))
+            {
+                RenderBlocks(lineDocument, writer, context);
+                continue;
+            }
+
+            string html = RenderPlainTextLineWithAutoLinks(line);
+            if (string.IsNullOrEmpty(html))
+            {
+                html = "&nbsp;";
+            }
+
+            writer.WriteLine($"<p data-spacing=\"single\">{html}</p>");
+        }
+    }
+
+    /// <summary>
     /// Markdown として処理すべき本文かどうかを判定する。
     /// </summary>
     /// <param name="document">Markdown 文書。</param>
@@ -605,21 +624,9 @@ public static class JoplinMdToNotesnookHtmlExporter
     {
         foreach (Block block in document)
         {
-            switch (block)
+            if (ContainsMarkdownIndicatorBlock(block))
             {
-                case BlankLineBlock:
-                    continue;
-                case ParagraphBlock paragraph:
-                    if (ContainsMarkdownInline(paragraph.Inline))
-                    {
-                        return true;
-                    }
-
-                    continue;
-                case ThematicBreakBlock:
-                    continue;
-                default:
-                    return true;
+                return true;
             }
         }
 
@@ -627,31 +634,101 @@ public static class JoplinMdToNotesnookHtmlExporter
     }
 
     /// <summary>
-    /// インラインに Markdown 特有の表現が含まれるかを判定する。
+    /// ブロック内に Markdown の判定要素が含まれるかを判定する。
+    /// </summary>
+    /// <param name="block">対象ブロック。</param>
+    /// <returns>判定要素があれば true。</returns>
+    static bool ContainsMarkdownIndicatorBlock(Block block)
+    {
+        switch (block)
+        {
+            case ParagraphBlock paragraph:
+                return ContainsMarkdownInline(paragraph.Inline);
+            case HeadingBlock heading:
+                return ContainsMarkdownInline(heading.Inline);
+            case QuoteBlock quote:
+                return ContainsMarkdownIndicatorBlocks(quote);
+            case ListBlock list:
+                return ContainsMarkdownIndicatorBlocks(list);
+            case ListItemBlock listItem:
+                return ContainsMarkdownIndicatorBlocks(listItem);
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// ブロック列内に Markdown の判定要素が含まれるかを判定する。
+    /// </summary>
+    /// <param name="blocks">対象ブロック列。</param>
+    /// <returns>判定要素があれば true。</returns>
+    static bool ContainsMarkdownIndicatorBlocks(IEnumerable<Block> blocks)
+    {
+        foreach (Block block in blocks)
+        {
+            if (ContainsMarkdownIndicatorBlock(block))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// インラインに Markdown の判定要素が含まれるかを判定する。
     /// </summary>
     /// <param name="inline">インライン列。</param>
-    /// <returns>Markdown 特有の表現があれば true。</returns>
+    /// <returns>判定要素があれば true。</returns>
     static bool ContainsMarkdownInline(Inline? inline)
     {
         for (Inline? current = inline; current != null; current = current.NextSibling)
         {
             switch (current)
             {
-                case LiteralInline:
-                case LineBreakInline:
-                    break;
                 case LinkInline linkInline:
-                    if (linkInline.IsImage || !linkInline.IsAutoLink)
+                    if (linkInline.IsImage)
                     {
                         return true;
                     }
 
-                    break;
-                case EmphasisInline:
-                case CodeInline:
-                case HtmlInline:
-                case HtmlEntityInline:
-                case TaskList:
+                    if (linkInline.IsAutoLink)
+                    {
+                        break;
+                    }
+
+                    string url = linkInline.Url ?? string.Empty;
+                    string title = linkInline.Title ?? string.Empty;
+
+                    if (string.Equals(url, "#", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(title))
+                    {
+                        string normalizedTitle = title.Trim();
+                        if (normalizedTitle.Length >= 2)
+                        {
+                            char first = normalizedTitle[0];
+                            char last = normalizedTitle[^1];
+                            if ((first == '"' && last == '"') || (first == '\'' && last == '\''))
+                            {
+                                normalizedTitle = normalizedTitle[1..^1];
+                            }
+                        }
+
+                        if (normalizedTitle.StartsWith("tel:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            url = normalizedTitle;
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        break;
+                    }
+
+                    if (IsXSchemeLinkDestination(url) || IsNumericOnlyLinkDestination(url) || IsMaxLinkDestination(url))
+                    {
+                        break;
+                    }
+
                     return true;
                 case ContainerInline container:
                     if (ContainsMarkdownInline(container.FirstChild))
@@ -661,31 +738,11 @@ public static class JoplinMdToNotesnookHtmlExporter
 
                     break;
                 default:
-                    return true;
+                    break;
             }
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// plaintext として本文を出力する。
-    /// </summary>
-    /// <param name="bodyMarkdown">本文。</param>
-    /// <param name="writer">HTML 出力ライター。</param>
-    static void RenderPlainTextBody(string bodyMarkdown, HtmlWriter writer)
-    {
-        string[] lines = NormalizeNewlines(bodyMarkdown).Split('\n');
-        foreach (string line in lines)
-        {
-            string escaped = HtmlUtility.EscapeTextPreserveSpaces(line);
-            if (string.IsNullOrEmpty(escaped))
-            {
-                escaped = "&nbsp;";
-            }
-
-            writer.WriteLine($"<p data-spacing=\"single\">{escaped}</p>");
-        }
     }
 
     /// <summary>
@@ -716,6 +773,107 @@ public static class JoplinMdToNotesnookHtmlExporter
             writer.WriteLine($"<p data-spacing=\"{spacing}\">{segment.Content}</p>");
             isFirstSegment = false;
         }
+    }
+
+    /// <summary>
+    /// プレーンテキスト行を自動リンク付きで HTML 化する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <returns>HTML 文字列。</returns>
+    static string RenderPlainTextLineWithAutoLinks(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        int index = 0;
+
+        while (index < line.Length)
+        {
+            if (!TryFindAutoLinkStart(line, index, out int linkStart, out int schemeLength))
+            {
+                builder.Append(HtmlUtility.EscapeTextPreserveSpaces(line[index..]));
+                break;
+            }
+
+            if (linkStart > index)
+            {
+                builder.Append(HtmlUtility.EscapeTextPreserveSpaces(line.Substring(index, linkStart - index)));
+            }
+
+            string remainder = line[linkStart..];
+            int endIndex = FindAutoLinkEndIndex(remainder);
+            int trimmedEnd = TrimAutoLinkTrailingPunctuation(remainder, endIndex);
+            if (trimmedEnd <= schemeLength)
+            {
+                builder.Append(HtmlUtility.EscapeTextPreserveSpaces(remainder.Substring(0, schemeLength)));
+                index = linkStart + schemeLength;
+                continue;
+            }
+
+            string url = remainder.Substring(0, trimmedEnd);
+            builder.Append(BuildAutoLinkHtml(url));
+
+            index = linkStart + trimmedEnd;
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// 自動リンクの開始位置を検索する。
+    /// </summary>
+    /// <param name="line">対象行。</param>
+    /// <param name="startIndex">検索開始位置。</param>
+    /// <param name="linkStart">リンク開始位置。</param>
+    /// <param name="schemeLength">スキーム長。</param>
+    /// <returns>見つかった場合は true。</returns>
+    static bool TryFindAutoLinkStart(string line, int startIndex, out int linkStart, out int schemeLength)
+    {
+        linkStart = -1;
+        schemeLength = 0;
+
+        string[] schemes = new[] { "http://", "https://", "ftp://", "mailto:", "tel:", "file://" };
+        int bestIndex = -1;
+        int bestLength = 0;
+
+        foreach (string scheme in schemes)
+        {
+            int found = line.IndexOf(scheme, startIndex, StringComparison.OrdinalIgnoreCase);
+            if (found < 0)
+            {
+                continue;
+            }
+
+            if (bestIndex < 0 || found < bestIndex)
+            {
+                bestIndex = found;
+                bestLength = scheme.Length;
+            }
+        }
+
+        if (bestIndex < 0)
+        {
+            return false;
+        }
+
+        linkStart = bestIndex;
+        schemeLength = bestLength;
+        return true;
+    }
+
+    /// <summary>
+    /// 自動リンク HTML を構築する。
+    /// </summary>
+    /// <param name="url">リンク先 URL。</param>
+    /// <returns>HTML 文字列。</returns>
+    static string BuildAutoLinkHtml(string url)
+    {
+        string escapedUrl = HtmlUtility.EscapeAttribute(url);
+        string escapedText = HtmlUtility.EscapeText(url);
+        return $"<a target=\"_blank\" rel=\"noopener noreferrer nofollow\" spellcheck=\"false\" href=\"{escapedUrl}\" title=\"{escapedUrl}\">{escapedText}</a>";
     }
 
     /// <summary>

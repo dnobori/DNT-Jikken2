@@ -93,3 +93,12 @@ SoftEther Corporation, Amakubo 2-9-2, Tsukuba, Ibaraki, Japan.
 .
 QUIT
 --- [260107_DQGG3Y] ここまで ---
+
+260107_DXC9MN:
+仕様 [260107_DWQA6A] を実装せよ。
+
+260107_ECJ2UG:
+仕様 [260107_DJZ2L2] は廃止する。代わりに、仕様 [260107_ECC2GZ] を実装せよ。
+
+
+
