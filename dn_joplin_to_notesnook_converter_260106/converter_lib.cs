@@ -859,6 +859,11 @@ public static class JoplinMdToNotesnookHtmlExporter
             return false;
         }
 
+        if (!IsWebLink(href) && !IsResourcesRelativePath(href))
+        {
+            return false;
+        }
+
         TryExtractHtmlInnerText(line, "a", out string innerText, out string trailingText);
 
         string label = DecodeHtmlValue(innerText);
@@ -1727,6 +1732,23 @@ public static class JoplinMdToNotesnookHtmlExporter
         }
 
         return fullPath;
+    }
+
+    /// <summary>
+    /// URL が ../_resources/ 配下への相対パスかどうかを判定する。
+    /// </summary>
+    /// <param name="url">URL 文字列。</param>
+    /// <returns>対象の相対パスなら true。</returns>
+    static bool IsResourcesRelativePath(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        string decoded = Uri.UnescapeDataString(url);
+        string normalized = decoded.Replace('\\', '/');
+        return normalized.StartsWith("../_resources/", StringComparison.Ordinal);
     }
 
     /// <summary>

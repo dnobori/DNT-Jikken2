@@ -23,6 +23,31 @@ AI 実行コンピュータ名: pc34
 
 
 ===================================================================
+日時: 2026/01/07 04:39:36 (JST)
+開発者によって指示された指示の内容: 260107_EQZ9QH (<a> 行の href 判定調整) の実装
+作業内容の概要: ../_resources/ 以外の <a> 行をタイプ2扱いへ変更
+AI エンジン: GPT-5 (Codex CLI) 推論レベル: 標準
+AI 実行コンピュータ名: pc34
+関連タグ: 260107_EQZ9QH, 260107_EQW5AU, 260107_EPAGU4
+編集したファイルの一覧: converter_lib.cs
+実装または変更したクラスやメソッド名の一覧 (複数あってよい): JoplinMdToNotesnookHtmlExporter.TryRenderHtmlAnchorLine, JoplinMdToNotesnookHtmlExporter.IsResourcesRelativePath
+実装において迷った点 (もしあれば): なし
+参考文献 (複数あってよい): なし
+
+
+仕様 [260107_EQW5AU] に従い、<a> 行の href が ../_resources/ 以外の場合は
+添付ファイルとして扱わず、タイプ2の plaintext 行として扱う必要があるため、
+TryRenderHtmlAnchorLine 内で Web リンク以外かつ ../_resources/ 以外の URL は
+専用レンダリングを行わず、通常の行処理にフォールバックするようにした。
+判定用の IsResourcesRelativePath を追加し、href が ../_resources/ 配下かどうかを
+確認した上でのみ添付ファイルとして処理する。
+
+修正後、指示に従って dotnet build を実行し、ビルド成功を確認した。
+
+
+
+
+===================================================================
 日時: 2026/01/07 04:28:06 (JST)
 開発者によって指示された指示の内容: 260107_EGD9LE (<a>/<img> 行の特別処理) の実装
 作業内容の概要: 行頭 HTML タグの検出とリンク/画像レンダリングを追加
