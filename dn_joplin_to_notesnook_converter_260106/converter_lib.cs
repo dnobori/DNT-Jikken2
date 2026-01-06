@@ -616,6 +616,8 @@ public static class JoplinMdToNotesnookHtmlExporter
                     }
 
                     continue;
+                case ThematicBreakBlock:
+                    continue;
                 default:
                     return true;
             }

@@ -54,3 +54,42 @@
 260107_DJVTK3:
 仕様 [260107_DGC8EV] は廃止せよ。代わりに仕様 [260107_DJZ2L2] を実装せよ。
 
+260107_DQKE4J:
+仕様 [260107_DJZ2L2] について、以下の [260107_DQGG3Y] の内容のソース MD ファイルの本文は、明らかに Markdown ではなく Plaintext であるが、これが「可能性 2」([260107_DJZ2L2] )であると判定されてしまった。原因を究明し、判定ルーチンを是正せよ。
+
+
+--- [260107_DQGG3Y] ここから ---
+---
+title: 送信元 SMTP メールサーバ IP アドレスの評価を調べる (SPAM 誤判定防止)
+updated: 2015-09-28 06:19:22Z
+created: 2015-09-28 06:19:22Z
+---
+
+ 送信元 SMTP メールサーバ IP アドレスの評価を調べる (SPAM 誤判定防止)
+
+telnet 1.2.3.4 25
+HELO mail
+MAIL FROM:test2@softether.co.jp
+RCPT TO:test3@hotmail.com
+DATA
+Received: from mail (unknown [130.158.83.218])
+     by 103x41x61x97.ap103.ftth.uxcom.jp (Postfix) with SMTP id 82149E2A60
+     for <test3@hotmail.com>; Mon, 28 Sep 2015 14:21:40 +0900 (JST)
+MIME-Version: 1.0
+Message-ID: <test4@softether.co.jp>
+Subject: test
+From: Daiyuu Nobori <test2@softether.co.jp>
+To: test3@hotmail.com
+X-Mailer: JsvMail 13.0 (Shuriken 2014)
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+test
+
+-----------------------
+Daiyuu Nobori
+test2@softether.co.jp / http://www.softether.co.jp/
+SoftEther Corporation, Amakubo 2-9-2, Tsukuba, Ibaraki, Japan.
+.
+QUIT
+--- [260107_DQGG3Y] ここまで ---
