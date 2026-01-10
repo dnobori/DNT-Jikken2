@@ -82,3 +82,56 @@ W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
 
 --- ここまで ---
 
+
+260110_VQKAJ7:
+プログラムをテストした。 W/S/A/D/Q/E の何かキーを押すと、ロボットは、一瞬少し動いたが、その後、プログラムのコンソールから [260110_VQGR38] のようにデバッグメッセージが表示され続けるようになった。プログラムを再起動しても、同様の症状である。以下の _write と _read の内容とコンソールの出力の内容・具合が鍵であると思われる。これらをよく分析し、原因究明し、問題解決せよ。
+
+--- [260110_VQGR38] ここから ---
+(.venv) C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110>python test.py
+myCobot 280 M5 キーボード制御を開始します。
+接続先 COM ポート: COM7
+ロボットに接続しました。
+19:34:44.841 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:44.854 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+現在座標: [30.6, -125.6, -113.8, 137.79, -47.3, -177.91]
+操作方法: W/S/A/D/Q/E で 1cm 移動
+W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
+終了: X または Esc
+19:34:45.808 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:45.829 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+移動指示: Δx=0.0mm, Δy=-10.0mm, Δz=0.0mm
+目標座標: [30.6, -135.6, -113.8, 137.79, -47.3, -177.91]
+19:34:45.829 DEBU [pymycobot.generate] _write: fe fe 06 34 02 ff 9c 32 fa
+19:34:45.835 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:34:45.835 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.052 DEBU [pymycobot.generate] _read :
+19:34:46.052 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.066 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.167 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.180 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.281 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.294 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.394 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.408 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.508 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.522 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.624 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.637 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.737 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.751 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.852 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.865 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:46.966 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:46.979 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:47.080 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:47.093 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:47.195 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:47.208 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:47.310 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:47.323 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:47.424 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:34:47.437 DEBU [pymycobot.generate] _read : fe fe e 23 1 32 fb 18 fb 8e 35 d3 ed 86 ba 81 fa
+19:34:47.538 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+--- ここまで ---
+
+

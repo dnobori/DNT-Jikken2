@@ -19,6 +19,10 @@ MOVE_SPEED = 50
 MOVE_MODE = 0
 # 移動完了待ちタイムアウト (秒)
 MOVE_TIMEOUT_SEC = 15
+# 到達確認のポーリング間隔 (秒)
+POLL_INTERVAL_SEC = 0.5
+# 増分移動の到達確認タイムアウト (秒)
+INCREMENT_TIMEOUT_SEC = 2.0
 # 座標一致判定の許容誤差 (mm)
 POSITION_TOLERANCE_MM = 2.0
 
@@ -238,7 +242,25 @@ def waitUntilReached(controller, targetCoords, timeoutSec):
                 return False
             if isCoordsClose(currentCoords, targetCoords, POSITION_TOLERANCE_MM):
                 return True
-        time.sleep(0.1)
+        time.sleep(POLL_INTERVAL_SEC)
+    return False
+
+
+def waitAfterIncrement(controller, targetCoords, timeoutSec):
+    """増分移動の完了を簡易確認する。
+    引数: controller (MyCobot280), targetCoords (list), timeoutSec (float)
+    戻り値: bool 到達した場合 True
+    """
+    startTime = time.monotonic()
+    while True:
+        currentCoords = getCurrentCoords(controller)
+        if currentCoords is None:
+            return False
+        if isCoordsClose(currentCoords, targetCoords, POSITION_TOLERANCE_MM):
+            return True
+        if time.monotonic() - startTime >= timeoutSec:
+            break
+        time.sleep(POLL_INTERVAL_SEC)
     return False
 
 
@@ -279,13 +301,13 @@ def handleMoveKey(controller, keyChar):
         if sendResult is None:
             print("エラー: 増分移動指示の送信に失敗しました。")
             return
+        reached = waitAfterIncrement(controller, targetCoords, INCREMENT_TIMEOUT_SEC)
     else:
         sendResult = sendCoordsCommand(controller, targetCoords)
         if sendResult is None:
             print("エラー: 移動指示の送信に失敗しました。")
             return
-
-    reached = waitUntilReached(controller, targetCoords, MOVE_TIMEOUT_SEC)
+        reached = waitUntilReached(controller, targetCoords, MOVE_TIMEOUT_SEC)
     if not reached:
         print("エラー: これ以上アームが届かない可能性があります。")
 
