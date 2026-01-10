@@ -7,7 +7,7 @@ namespace Mycobot.csharp
     {
         static void Main_(string[] args)
         {
-            MyCobot mc = new MyCobot("COM14");//树莓派机械臂串口名称：/dev/ttyAMA0
+            MyCobot mc = new MyCobot("COM7");//树莓派机械臂串口名称：/dev/ttyAMA0
             mc.Open();
             Thread.Sleep(5000);//windows打开串口后，需要等待5s，Windows打开串口底部basic会重启
             // int[] angles = new[] {100, 100, 100, 100, 100, 100};

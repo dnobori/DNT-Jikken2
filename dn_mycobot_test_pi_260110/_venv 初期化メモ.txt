@@ -1,0 +1,19 @@
+﻿Python 3.11.9 for Windows を入れる。
+c:\Downloads\python-3.11.9-amd64.exe
+
+
+md C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\
+
+cd /d C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\
+
+%LOCALAPPDATA%\Programs\Python\Python311\python.exe -m venv .venv
+
+
+
+cd /d C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\
+
+.venv\Scripts\activate
+
+pip install pymycobot numpy pyserial
+
+
