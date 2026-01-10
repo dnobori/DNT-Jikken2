@@ -13,6 +13,8 @@ COM_PORT = "COM7"
 BAUD_RATE = 115200
 # 1 回の移動量 (mm) = 1cm
 MOVE_STEP_MM = 10.0
+# 1 回の回転量 (度)
+ROTATE_STEP_DEG = 15.0
 # 移動速度 (1-100)
 MOVE_SPEED = 50
 # 移動モード (0: 角度補間, 1: 直線補間)
@@ -26,15 +28,20 @@ INCREMENT_TIMEOUT_SEC = 2.0
 # 座標一致判定の許容誤差 (mm)
 POSITION_TOLERANCE_MM = 2.0
 
-# キー入力と XYZ 方向の移動量(mm)の対応表
-# X: 前後, Y: 左右, Z: 上下 を前提にする
+# キー入力と移動・回転量の対応表
+# X: 前後, Y: 左右, Z: 上下, Rx/Ry/Rz: 姿勢角度
+# ロボット本体から見た方向に合わせる
 KEY_TO_DELTA = {
-    "w": (MOVE_STEP_MM, 0.0, 0.0),
-    "s": (-MOVE_STEP_MM, 0.0, 0.0),
-    "a": (0.0, MOVE_STEP_MM, 0.0),
-    "d": (0.0, -MOVE_STEP_MM, 0.0),
-    "q": (0.0, 0.0, MOVE_STEP_MM),
-    "e": (0.0, 0.0, -MOVE_STEP_MM),
+    "w": (0.0, MOVE_STEP_MM, 0.0, 0.0, 0.0, 0.0),
+    "s": (0.0, -MOVE_STEP_MM, 0.0, 0.0, 0.0, 0.0),
+    "a": (-MOVE_STEP_MM, 0.0, 0.0, 0.0, 0.0, 0.0),
+    "d": (MOVE_STEP_MM, 0.0, 0.0, 0.0, 0.0, 0.0),
+    "q": (0.0, 0.0, MOVE_STEP_MM, 0.0, 0.0, 0.0),
+    "e": (0.0, 0.0, -MOVE_STEP_MM, 0.0, 0.0, 0.0),
+    "4": (0.0, 0.0, 0.0, 0.0, 0.0, -ROTATE_STEP_DEG),
+    "6": (0.0, 0.0, 0.0, 0.0, 0.0, ROTATE_STEP_DEG),
+    "8": (0.0, 0.0, 0.0, 0.0, ROTATE_STEP_DEG, 0.0),
+    "2": (0.0, 0.0, 0.0, 0.0, -ROTATE_STEP_DEG, 0.0),
 }
 
 # 終了キー
@@ -55,20 +62,22 @@ def createRobotController():
 
 
 def getAxisIdAndIncrement(delta):
-    """増分移動用の軸 ID と増分量を取得する。
-    引数: delta (tuple) X/Y/Z の増分タプル
+    """増分移動・回転用の軸 ID と増分量を取得する。
+    引数: delta (tuple) X/Y/Z/Rx/Ry/Rz の増分タプル
     戻り値: (axis_id, increment) のタプル。判定不可時は (None, None)。
     """
-    if not delta or len(delta) < 3:
+    if not delta or len(delta) < 6:
         return None, None
-    # 増分移動は単一軸のみを想定する
-    if delta[0] != 0.0:
-        return 1, delta[0]
-    if delta[1] != 0.0:
-        return 2, delta[1]
-    if delta[2] != 0.0:
-        return 3, delta[2]
-    return None, None
+    # 増分操作は単一軸のみを想定する
+    nonZeroIndex = None
+    for index, value in enumerate(delta[:6]):
+        if value != 0.0:
+            if nonZeroIndex is not None:
+                return None, None
+            nonZeroIndex = index
+    if nonZeroIndex is None:
+        return None, None
+    return nonZeroIndex + 1, delta[nonZeroIndex]
 
 
 def readSingleKey():
@@ -104,9 +113,10 @@ def getCurrentCoords(controller):
     return coords
 
 
-def buildTargetCoords(currentCoords, deltaX, deltaY, deltaZ):
+def buildTargetCoords(currentCoords, deltaX, deltaY, deltaZ, deltaRx, deltaRy, deltaRz):
     """現在座標と増分から目標座標を作成する。
-    引数: currentCoords (list), deltaX (float), deltaY (float), deltaZ (float)
+    引数: currentCoords (list), deltaX (float), deltaY (float), deltaZ (float),
+          deltaRx (float), deltaRy (float), deltaRz (float)
     戻り値: list [x, y, z, rx, ry, rz] の目標座標リスト
     """
     # [x, y, z, rx, ry, rz] の順で座標を保持する
@@ -114,9 +124,9 @@ def buildTargetCoords(currentCoords, deltaX, deltaY, deltaZ):
         currentCoords[0] + deltaX,
         currentCoords[1] + deltaY,
         currentCoords[2] + deltaZ,
-        currentCoords[3],
-        currentCoords[4],
-        currentCoords[5],
+        currentCoords[3] + deltaRx,
+        currentCoords[4] + deltaRy,
+        currentCoords[5] + deltaRz,
     ]
     return targetCoords
 
@@ -281,22 +291,36 @@ def handleMoveKey(controller, keyChar):
         print("移動方向の判定に失敗しました。")
         return
 
-    # 現在座標を取得し、1cm 移動した目標座標を算出する
+    # 現在座標を取得し、目標座標を算出する
     currentCoords = getCurrentCoords(controller)
     if not currentCoords:
         print("現在座標の取得に失敗しました。")
         return
 
-    targetCoords = buildTargetCoords(currentCoords, delta[0], delta[1], delta[2])
+    targetCoords = buildTargetCoords(
+        currentCoords,
+        delta[0],
+        delta[1],
+        delta[2],
+        delta[3],
+        delta[4],
+        delta[5],
+    )
 
     if not canReachTarget(controller, targetCoords):
         print("エラー: これ以上アームが届かない可能性があります。")
         return
 
-    print(
-        "移動指示: "
-        f"Δx={delta[0]:.1f}mm, Δy={delta[1]:.1f}mm, Δz={delta[2]:.1f}mm"
-    )
+    if axisId <= 3:
+        print(
+            "移動指示: "
+            f"Δx={delta[0]:.1f}mm, Δy={delta[1]:.1f}mm, Δz={delta[2]:.1f}mm"
+        )
+    else:
+        print(
+            "回転指示: "
+            f"Δrx={delta[3]:.1f}deg, Δry={delta[4]:.1f}deg, Δrz={delta[5]:.1f}deg"
+        )
     print(f"目標座標: {targetCoords}")
 
     # 座標全体の送信は座標範囲チェックで失敗する場合があるため、増分移動を優先する
@@ -322,7 +346,11 @@ def printUsage():
     戻り値: なし
     """
     print("操作方法: W/S/A/D/Q/E で 1cm 移動")
-    print("W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下")
+    print("W: 左, S: 右, A: 後, D: 前, Q: 上, E: 下")
+    print("テンキー4: 水平向きを時計回りに 15 度")
+    print("テンキー6: 水平向きを反時計回りに 15 度")
+    print("テンキー8: 垂直向きを上に 15 度")
+    print("テンキー2: 垂直向きを下に 15 度")
     print("終了: X または Esc")
 
 
