@@ -135,3 +135,588 @@ W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
 --- ここまで ---
 
 
+260110_VTQ4CP:
+以下の 3 つの問題を解決せよ。
+(1) 仕様 [260110_VTRGZ4] を実装せよ。
+(2) しばらく色々動かして遊んでいたら、[260110_VTQM2A] のように、例外が発生して終了してしまった。特に不正な動作はしていないので、原因は不明である。この問題を解決せよ。
+
+--- [260110_VTQM2A] ここから ---
+(.venv) C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110>python test.py
+myCobot 280 M5 キーボード制御を開始します。
+接続先 COM ポート: COM7
+ロボットに接続しました。
+19:40:09.894 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:09.907 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 56 fb c8 35 90 ed a4 ba 6f fa
+現在座標: [32.2, -119.4, -108.0, 137.12, -47.0, -178.09]
+操作方法: W/S/A/D/Q/E で 1cm 移動
+W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
+終了: X または Esc
+19:40:11.065 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:11.079 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 56 fb c8 35 90 ed a4 ba 6f fa
+移動指示: Δx=10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [42.2, -119.4, -108.0, 137.12, -47.0, -178.09]
+19:40:11.080 DEBU [pymycobot.generate] _write: fe fe 06 34 01 00 64 32 fa
+19:40:11.085 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:11.085 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:11.098 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 56 fb c8 35 90 ed a4 ba 6f fa
+19:40:11.600 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:11.613 DEBU [pymycobot.generate] _read : fe fe e 23 1 6c fb 76 fb c0 34 8e ed 94 bb 3a fa
+19:40:12.115 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:12.128 DEBU [pymycobot.generate] _read : fe fe e 23 1 75 fb 84 fb bd 34 34 ed 9e bb a0 fa
+19:40:12.629 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:12.642 DEBU [pymycobot.generate] _read : fe fe e 23 1 75 fb 8b fb bc 33 e7 ed a3 bb d8 fa
+19:40:13.143 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:13.156 DEBU [pymycobot.generate] _read : fe fe e 23 1 75 fb 8c fb bc 33 db ed a4 bb e2 fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:15.774 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:15.787 DEBU [pymycobot.generate] _read : fe fe e 23 1 75 fb 8a fb bc 33 e7 ed a3 bb d8 fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [27.299999999999997, -114.2, -109.2, 132.87, -47.01, -174.48]
+19:40:15.788 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:40:15.793 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:15.793 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:16.009 DEBU [pymycobot.generate] _read :
+19:40:16.009 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:16.019 DEBU [pymycobot.generate] _read : fe fe e 23 1 75 fb 83 fb bd 34 28 ed 9f bb a9 fa
+19:40:16.531 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:16.545 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 54 fb c7 35 9d ed a3 ba 66 fa
+19:40:17.046 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:17.059 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 54 fb c7 35 9d ed a3 ba 66 fa
+19:40:17.560 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:17.573 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 5a fb c6 35 83 ed a4 ba 78 fa
+19:40:18.075 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:18.088 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 5a fb c6 35 83 ed a4 ba 78 fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:18.722 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:18.734 DEBU [pymycobot.generate] _read : fe fe e 23 1 42 fb 5a fb c6 35 83 ed a4 ba 78 fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [22.200000000000003, -119.0, -108.2, 136.99, -47.0, -178.0]
+19:40:18.735 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:40:18.740 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:18.741 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:18.952 DEBU [pymycobot.generate] _read :
+19:40:18.952 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:18.968 DEBU [pymycobot.generate] _read : fe fe e 23 1 30 fb 50 fb ca 35 a1 ed a4 ba 80 fa
+19:40:19.470 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:19.484 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 20 fb db 36 6a ed 82 ba 8 fa
+19:40:19.985 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:19.998 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 20 fb db 36 6a ed 82 ba 8 fa
+19:40:20.499 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:20.512 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 20 fb db 36 6a ed 82 ba 8 fa
+19:40:21.013 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:21.022 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 20 fb db 36 6a ed 82 ba 8 fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:21.709 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:21.723 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 20 fb db 36 6a ed 82 ba 8 fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [22.1, -124.8, -96.1, 139.3, -47.34, -179.12]
+19:40:21.724 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:40:21.729 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:21.729 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:21.943 DEBU [pymycobot.generate] _read :
+19:40:21.943 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:21.958 DEBU [pymycobot.generate] _read : fe fe e 23 0 dd fb 21 fb eb 36 6a ed 82 ba 8 fa
+19:40:22.460 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:22.474 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+19:40:22.976 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:22.988 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+19:40:23.490 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:23.503 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+19:40:24.003 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:24.016 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:25.176 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:25.190 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+移動指示: Δx=10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [31.7, -121.4, -97.7, 137.88, -47.22, -178.43]
+19:40:25.191 DEBU [pymycobot.generate] _write: fe fe 06 34 01 00 64 32 fa
+19:40:25.196 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:25.196 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:25.413 DEBU [pymycobot.generate] _read :
+19:40:25.413 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:25.474 DEBU [pymycobot.generate] _read : fe fe e 23 0 d9 fb 42 fc 2f 35 dc ed 8e ba 4d fa
+19:40:25.976 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:25.990 DEBU [pymycobot.generate] _read : fe fe e 23 1 11 fb 69 fc 27 34 ad ed a7 bb 1c fa
+19:40:26.491 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:26.504 DEBU [pymycobot.generate] _read : fe fe e 23 1 11 fb 6e fc 26 34 6e ed ae bb 4b fa
+19:40:27.006 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:27.019 DEBU [pymycobot.generate] _read : fe fe e 23 1 11 fb 6e fc 26 34 6e ed ae bb 4b fa
+19:40:27.520 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:27.532 DEBU [pymycobot.generate] _read : fe fe e 23 1 11 fb 6e fc 26 34 6e ed ae bb 4b fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:28.483 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:28.497 DEBU [pymycobot.generate] _read : fe fe e 23 1 11 fb 6e fc 26 34 6e ed ae bb 4b fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [17.3, -117.0, -98.6, 134.22, -46.9, -175.89]
+19:40:28.498 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:40:28.503 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:28.503 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:28.721 DEBU [pymycobot.generate] _read :
+19:40:28.721 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:28.937 DEBU [pymycobot.generate] _read :
+19:40:28.937 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:28.952 DEBU [pymycobot.generate] _read : fe fe e 23 0 e5 fb 3a fc 36 35 ee ed 93 ba 58 fa
+19:40:29.453 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:29.466 DEBU [pymycobot.generate] _read : fe fe e 23 0 d8 fb 32 fc 38 36 10 ed 8a ba 27 fa
+19:40:29.966 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:29.977 DEBU [pymycobot.generate] _read : fe fe e 23 0 d8 fb 32 fc 38 36 10 ed 8a ba 27 fa
+19:40:30.479 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:30.491 DEBU [pymycobot.generate] _read : fe fe e 23 0 d8 fb 32 fc 38 36 10 ed 8a ba 27 fa
+19:40:30.992 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:31.005 DEBU [pymycobot.generate] _read : fe fe e 23 0 d8 fb 32 fc 38 36 10 ed 8a ba 27 fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:31.732 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:31.744 DEBU [pymycobot.generate] _read : fe fe e 23 0 d8 fb 32 fc 38 36 10 ed 8a ba 27 fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [11.600000000000001, -123.0, -96.8, 138.4, -47.26, -178.81]
+19:40:31.745 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:40:31.750 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:31.750 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:31.969 DEBU [pymycobot.generate] _read :
+19:40:31.969 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:31.985 DEBU [pymycobot.generate] _read : fe fe e 23 0 c5 fb 27 fc 3d 36 2c ed 91 ba 3c fa
+19:40:32.486 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:32.498 DEBU [pymycobot.generate] _read : fe fe e 23 0 6f fa f5 fc 54 36 ee ed 72 b9 b1 fa
+19:40:33.000 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:33.011 DEBU [pymycobot.generate] _read : fe fe e 23 0 6f fa f5 fc 54 36 ee ed 72 b9 b1 fa
+19:40:33.513 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:33.525 DEBU [pymycobot.generate] _read : fe fe e 23 0 6f fa f5 fc 54 36 ee ed 72 b9 b1 fa
+19:40:34.026 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:34.038 DEBU [pymycobot.generate] _read : fe fe e 23 0 6f fa f5 fc 54 36 ee ed 72 b9 b1 fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:34.711 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:34.723 DEBU [pymycobot.generate] _read : fe fe e 23 0 6f fa f5 fc 54 36 ee ed 72 b9 b1 fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [1.0999999999999996, -129.1, -94.0, 140.62, -47.5, -179.99]
+19:40:34.724 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:40:34.730 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:34.731 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:34.942 DEBU [pymycobot.generate] _read :
+19:40:34.942 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:35.159 DEBU [pymycobot.generate] _read :
+19:40:35.159 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:35.214 DEBU [pymycobot.generate] _read : fe fe e 23 0 1a fa f1 fc 54 36 ee ed 72 44 d6 fa
+19:40:35.720 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:35.730 DEBU [pymycobot.generate] _read : fe fe e 23 ff e2 fa b1 fc 7a 37 c0 ed 4f 45 95 fa
+19:40:36.234 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:36.245 DEBU [pymycobot.generate] _read : fe fe e 23 ff e2 fa b1 fc 7a 37 b8 ed 54 45 9f fa
+19:40:36.747 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:36.759 DEBU [pymycobot.generate] _read : fe fe e 23 ff e2 fa b1 fc 7a 37 b8 ed 54 45 9f fa
+エラー: これ以上アームが届かない可能性があります。
+19:40:37.829 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:37.841 DEBU [pymycobot.generate] _read : fe fe e 23 ff e2 fa b1 fc 7a 37 b8 ed 54 45 9f fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [-3.0, -125.9, -90.2, 142.64, -47.8, 178.23]
+19:40:37.842 DEBU [pymycobot.generate] _write: fe fe 06 34 02 00 64 32 fa
+19:40:37.849 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:40:37.850 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:38.060 DEBU [pymycobot.generate] _read :
+19:40:38.060 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:38.120 DEBU [pymycobot.generate] _read : fe fe e 23 ff de fa b1 fc 7e 38 1e ed 45 45 42 fa
+19:40:38.621 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:38.634 DEBU [pymycobot.generate] _read : fe fe e 23 ff c5 fa b1 fc 95 39 83 ed 1 44 27 fa
+19:40:39.135 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:39.147 DEBU [pymycobot.generate] _read : fe fe e 23 ff c5 fa b1 fc 95 39 7b ed 6 44 33 fa
+19:40:39.648 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:39.652 DEBU [pymycobot.generate] _read : fe fe e 23 ff c5 fa b1 fc 95 39 7b ed 6 44 33 fa
+19:40:40.161 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:40:40.167 DEBU [pymycobot.generate] _read : fe fe e 23 ff c5 fa b1 fc 95 39 7b ed 6 44 33 fa
+エラー: これ以上アームが届かない可能性があります。
+^C
+(.venv) C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110>python test.py
+myCobot 280 M5 キーボード制御を開始します。
+接続先 COM ポート: COM7
+ロボットに接続しました。
+19:41:22.425 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:22.437 DEBU [pymycobot.generate] _read : fe fe e 23 0 76 f5 4b 3 44 41 c4 f2 49 c0 f6 fa
+現在座標: [11.8, -274.1, 83.6, 168.36, -35.11, -161.38]
+操作方法: W/S/A/D/Q/E で 1cm 移動
+W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
+終了: X または Esc
+19:41:23.846 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:23.860 DEBU [pymycobot.generate] _read : fe fe e 23 0 76 f5 4b 3 44 41 c4 f2 49 c0 f6 fa
+19:41:23.860 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:23.873 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 1f 58 d e7 f4 be 37 fe f7 cc fa
+19:41:23.874 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 76 f5 af 03 44 41 c4 f2 49 c0 f6 21 2a 1f 57 0d e7 f4 be 37 fe f7 cc fa
+19:41:23.888 DEBU [pymycobot.generate] _read : fe fe e 8d 21 15 1c c2 13 ea f1 40 38 0 f7 b1 fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [11.8, -264.1, 83.6, 168.36, -35.11, -161.38]
+19:41:23.889 DEBU [pymycobot.generate] _write: fe fe 06 34 02 00 64 32 fa
+19:41:23.894 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:23.895 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:23.907 DEBU [pymycobot.generate] _read : fe fe e 23 0 76 f5 4b 3 44 41 c4 f2 49 c0 f6 fa
+19:41:24.409 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:24.469 DEBU [pymycobot.generate] _read : fe fe e 23 0 85 f5 ed 2 86 3d bd f3 fa c3 28 fa
+19:41:24.970 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:24.983 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 ae 3f f1 f2 fd c1 f5 fa
+19:41:25.485 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:25.497 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 ae 3f ec f3 0 c1 ff fa
+19:41:25.999 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:26.012 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 ae 3f ec f3 0 c1 ff fa
+エラー: これ以上アームが届かない可能性があります。
+19:41:32.922 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:32.935 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 ae 3f f1 f2 fd c1 f5 fa
+19:41:32.936 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:32.949 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 1d d5 13 fb f1 db 37 fe f7 d5 fa
+19:41:32.950 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 83 f5 76 02 ae 3f f1 f2 fd c1 f5 21 2a 1d d5 13 fb f1 db 37 fe f7 d5 fa
+19:41:32.963 DEBU [pymycobot.generate] _read : fe fe e 8d 21 3c 20 50 e 1d f5 4d 37 ff f7 eb fa
+移動指示: Δx=0.0mm, Δy=-10.0mm, Δz=0.0mm
+目標座標: [13.1, -269.8, 68.6, 163.69, -33.31, -158.83]
+19:41:32.963 DEBU [pymycobot.generate] _write: fe fe 06 34 02 ff 9c 32 fa
+19:41:32.963 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:32.963 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:33.031 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 ae 3f f1 f2 fd c1 f5 fa
+19:41:33.532 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:33.545 DEBU [pymycobot.generate] _read : fe fe e 23 0 7a f5 73 2 d4 40 76 f2 c7 c1 ab fa
+19:41:34.047 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:34.060 DEBU [pymycobot.generate] _read : fe fe e 23 0 79 f5 6b 2 e1 40 6d f2 cb c1 b1 fa
+19:41:34.561 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:34.574 DEBU [pymycobot.generate] _read : fe fe e 23 0 79 f5 6b 2 e1 40 67 f2 cd c1 bb fa
+19:41:35.075 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:35.088 DEBU [pymycobot.generate] _read : fe fe e 23 0 79 f5 6b 2 e1 40 67 f2 cd c1 bb fa
+エラー: これ以上アームが届かない可能性があります。
+19:41:35.950 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:35.964 DEBU [pymycobot.generate] _read : fe fe e 23 0 79 f5 6b 2 e1 40 67 f2 cd c1 bb fa
+19:41:35.964 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:35.977 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 1f d3 e 51 f5 16 37 fe f7 cc fa
+19:41:35.978 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 79 f5 07 02 e1 40 67 f2 cd c1 bb 21 2a 1f d3 0e 51 f5 16 37 fe f7 cc fa
+19:41:35.991 DEBU [pymycobot.generate] _read : fe fe e 8d 21 3b 24 f7 2 d8 fb 77 37 fe f7 e1 fa
+移動指示: Δx=0.0mm, Δy=-10.0mm, Δz=0.0mm
+目標座標: [12.1, -280.9, 73.7, 164.87, -33.79, -159.41]
+19:41:35.992 DEBU [pymycobot.generate] _write: fe fe 06 34 02 ff 9c 32 fa
+19:41:35.998 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:35.998 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:36.018 DEBU [pymycobot.generate] _read : fe fe e 23 0 79 f5 6b 2 e1 40 67 f2 cd c1 bb fa
+19:41:36.519 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:36.534 DEBU [pymycobot.generate] _read : fe fe e 23 0 74 f5 31 2 7d 3f 33 f3 4e c2 56 fa
+19:41:37.035 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:37.043 DEBU [pymycobot.generate] _read : fe fe e 23 0 70 f5 9 2 dc 40 54 f2 d5 c1 c6 fa
+19:41:40.282 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:40.296 DEBU [pymycobot.generate] _read : fe fe e 23 0 70 f5 9 2 dc 40 54 f2 d5 c1 c6 fa
+19:41:40.296 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:40.309 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 24 e8 3 e fb 55 37 fe f7 cc fa
+19:41:40.309 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 70 f5 6d 02 dc 40 54 f2 d5 c1 c6 21 2a 24 e8 03 0e fb 55 37 fe f7 cc fa
+19:41:40.322 DEBU [pymycobot.generate] _read : fe fe e 8d 21 15 1f d3 e 71 f4 f7 37 ff f7 b1 fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [11.2, -270.7, 73.2, 164.68, -33.71, -159.3]
+19:41:40.324 DEBU [pymycobot.generate] _write: fe fe 06 34 02 00 64 32 fa
+19:41:40.330 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:40.330 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:40.386 DEBU [pymycobot.generate] _read : fe fe e 23 0 70 f5 9 2 dc 40 54 f2 d5 c1 c6 fa
+19:41:40.896 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:40.910 DEBU [pymycobot.generate] _read : fe fe e 23 0 77 f5 50 3 1 41 33 f2 7f c1 3a fa
+19:41:41.411 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:41.425 DEBU [pymycobot.generate] _read : fe fe e 23 0 7a f5 78 2 b4 40 15 f2 ee c1 cc fa
+19:41:41.926 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:41.939 DEBU [pymycobot.generate] _read : fe fe e 23 0 7a f5 78 2 b4 40 a f2 f3 c1 e0 fa
+19:41:42.440 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:42.453 DEBU [pymycobot.generate] _read : fe fe e 23 0 7a f5 78 2 b4 40 4 f2 f5 c1 eb fa
+エラー: これ以上アームが届かない可能性があります。
+19:41:43.755 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:43.768 DEBU [pymycobot.generate] _read : fe fe e 23 0 7a f5 78 2 b4 40 4 f2 f5 c1 eb fa
+19:41:43.768 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:43.782 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 20 22 e 74 f5 4 37 fe f7 d5 fa
+19:41:43.782 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 7a f5 dc 02 b4 40 04 f2 f5 c1 eb 21 2a 20 22 0e 74 f5 04 37 fe f7 d5 fa
+19:41:43.795 DEBU [pymycobot.generate] _read : fe fe e 8d 21 14 1d b7 14 3a f1 99 37 fe f7 b9 fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [12.2, -259.6, 69.2, 163.88, -33.39, -158.93]
+19:41:43.795 DEBU [pymycobot.generate] _write: fe fe 06 34 02 00 64 32 fa
+19:41:43.802 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:43.803 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:44.021 DEBU [pymycobot.generate] _read :
+19:41:44.021 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:44.035 DEBU [pymycobot.generate] _read : fe fe e 23 0 7b f5 85 2 bc 40 25 f2 e8 c1 e0 fa
+19:41:44.536 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:44.549 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 dd 2 b6 3f ff f2 f8 c1 f5 fa
+19:41:47.065 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:47.078 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 dd 2 b6 3f ff f2 f8 c1 f5 fa
+19:41:47.079 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:47.089 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 1d a9 14 38 f1 b8 37 fe f7 cc fa
+19:41:47.089 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 83 f6 41 02 b6 3f ff f2 f8 c1 f5 21 2a 1d a9 14 38 f1 b8 37 fe f7 cc fa
+19:41:47.099 DEBU [pymycobot.generate] _read : fe fe e 8d 21 13 1b db 18 c4 ee ea 37 ff f7 af fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [13.1, -249.5, 69.4, 163.83, -33.36, -158.83]
+19:41:47.099 DEBU [pymycobot.generate] _write: fe fe 06 34 02 00 64 32 fa
+19:41:47.111 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:47.112 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:47.333 DEBU [pymycobot.generate] _read :
+19:41:47.333 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:47.392 DEBU [pymycobot.generate] _read : fe fe e 23 0 83 f5 da 2 c2 40 1b f2 ec c1 e5 fa
+19:41:47.893 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:47.906 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 3b 2 c9 40 41 f2 dd c1 d0 fa
+19:41:50.967 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:50.980 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 3c 2 c7 40 38 f2 e1 c1 d5 fa
+19:41:50.980 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:50.994 DEBU [pymycobot.generate] _read : fe fe e 20 21 2a 1b b4 18 b8 ee f9 37 fe f7 cc fa
+19:41:50.994 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 f0 f6 3c 02 c7 40 38 f2 e1 c1 d5 21 2a 1b b4 18 b8 ee f9 37 fe f7 cc fa
+19:41:51.007 DEBU [pymycobot.generate] _read : fe fe e 8d 22 f 1b ad 18 19 f0 49 38 5 f8 e9 fa
+移動指示: Δx=10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [24.0, -250.0, 71.1, 164.4, -33.59, -159.15]
+19:41:51.007 DEBU [pymycobot.generate] _write: fe fe 06 34 01 00 64 32 fa
+19:41:51.012 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:51.013 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:51.053 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 3c 2 c7 40 38 f2 e1 c1 d5 fa
+19:41:51.556 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:51.570 DEBU [pymycobot.generate] _read : fe fe e 23 0 c2 f6 50 2 a8 3f 89 f3 23 c2 31 fa
+19:41:52.071 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:52.085 DEBU [pymycobot.generate] _read : fe fe e 23 0 bb f6 4c 2 af 3f 9b f3 1b c2 16 fa
+19:41:52.586 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:52.599 DEBU [pymycobot.generate] _read : fe fe e 23 0 bb f6 4c 2 af 3f 9b f3 1b c2 16 fa
+19:41:53.100 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:53.113 DEBU [pymycobot.generate] _read : fe fe e 23 0 bb f6 4c 2 af 3f 9b f3 1b c2 16 fa
+エラー: これ以上アームが届かない可能性があります。
+19:41:54.842 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:54.855 DEBU [pymycobot.generate] _read : fe fe e 23 0 bb f6 4c 2 af 3f 9b f3 1b c2 16 fa
+19:41:54.855 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:54.870 DEBU [pymycobot.generate] _read : fe fe e 20 21 93 1b ab 18 9d f0 a 37 fe f8 6a fa
+19:41:54.870 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 57 f6 4c 02 af 3f 9b f3 1b c2 16 21 93 1b ab 18 9d f0 0a 37 fe f8 6a fa
+19:41:54.883 DEBU [pymycobot.generate] _read : fe fe e 8d 20 ac 1b bc 19 2f ee bc 37 f6 f7 4a fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [8.7, -248.4, 68.7, 162.83, -33.01, -158.5]
+19:41:54.884 DEBU [pymycobot.generate] _write: fe fe 06 34 01 ff 9c 32 fa
+19:41:54.889 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:54.890 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:55.113 DEBU [pymycobot.generate] _read :
+19:41:55.113 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:55.174 DEBU [pymycobot.generate] _read : fe fe e 23 0 bb f6 4c 2 af 3f 9b f3 1b c2 16 fa
+19:41:55.675 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:55.685 DEBU [pymycobot.generate] _read : fe fe e 23 0 9b f6 37 2 d2 40 69 f2 cd c1 cf fa
+19:41:56.190 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:56.199 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 2 d2 40 69 f2 cd c1 b5 fa
+19:41:56.705 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:56.718 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 2 d2 40 69 f2 cd c1 b5 fa
+19:41:57.220 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:57.232 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 2 d2 40 69 f2 cd c1 b5 fa
+エラー: これ以上アームが届かない可能性があります。
+19:41:58.412 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:58.426 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 2 d2 40 69 f2 cd c1 b5 fa
+19:41:58.426 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:41:58.434 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 1b ab 18 9d ee f9 37 fe f7 dd fa
+19:41:58.434 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8f f6 37 03 36 40 69 f2 cd c1 b5 21 33 1b ab 18 9d ee f9 37 fe f7 dd fa
+19:41:58.453 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 1a 20 19 41 ef e1 37 ff f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.3, -250.5, 82.2, 164.89, -33.79, -159.47]
+19:41:58.453 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:41:58.458 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:41:58.459 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:58.511 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 2 d2 40 69 f2 cd c1 b5 fa
+19:41:59.014 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:41:59.027 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 33 3 31 40 86 f2 c1 c1 a5 fa
+19:42:02.789 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:02.802 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 34 3 2f 40 7c f2 c5 c1 aa fa
+19:42:02.802 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:02.815 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 1a 4c 19 18 ef cc 37 fe f7 dd fa
+19:42:02.815 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8f f6 34 03 93 40 7c f2 c6 c1 aa 21 33 1a 4b 19 17 ef cc 37 fe f7 dd fa
+19:42:02.829 DEBU [pymycobot.generate] _read : fe fe e 8d 21 32 18 d8 19 82 f0 d6 38 0 f7 dc fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.3, -250.8, 91.5, 165.08, -33.87, -159.58]
+19:42:02.830 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:02.835 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:02.835 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:02.848 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 34 3 2f 40 7c f2 c5 c1 aa fa
+19:42:03.349 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:03.363 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 30 3 91 40 7c f2 c5 c1 aa fa
+19:42:05.558 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:05.571 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2e 3 98 40 8f f2 be c1 9f fa
+19:42:05.571 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:05.585 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 18 e4 19 4d f0 ee 37 fe f7 dd fa
+19:42:05.585 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8e f6 2e 03 fc 40 8f f2 be c1 9f 21 33 18 e4 19 4d f0 ee 37 fe f7 dd fa
+19:42:05.599 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 17 8c 19 75 f2 1e 37 ff f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.2, -251.4, 102.0, 165.27, -33.94, -159.69]
+19:42:05.600 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:05.605 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:05.605 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:05.621 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2e 3 98 40 8f f2 be c1 9f fa
+19:42:06.126 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:06.139 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2b 3 fb 40 8f f2 be c1 9f fa
+19:42:07.628 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:07.641 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2b 3 fa 40 86 f2 c1 c1 a5 fa
+19:42:07.642 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:07.654 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 17 9e 19 4d f2 3c 37 fe f7 dd fa
+19:42:07.655 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8e f6 2b 04 5e 40 86 f2 c2 c1 a5 21 33 17 9e 19 4d f2 3c 37 fe f7 dd fa
+19:42:07.668 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 16 62 19 38 f3 8c 38 0 f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.2, -251.7, 111.8, 165.18, -33.91, -159.63]
+19:42:07.669 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:07.675 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:07.675 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:07.696 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2b 3 fa 40 86 f2 c1 c1 a5 fa
+19:42:08.203 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:08.214 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 31 4 47 40 39 f2 e0 c1 cf fa
+19:42:08.718 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:08.730 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 33 4 44 40 26 f2 e7 c1 da fa
+19:42:09.232 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:09.245 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 33 4 44 40 26 f2 e7 c1 da fa
+19:42:09.746 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:09.759 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 33 4 44 40 26 f2 e7 c1 da fa
+エラー: これ以上アームが届かない可能性があります。
+19:42:10.445 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:10.459 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 33 4 44 40 26 f2 e7 c1 da fa
+19:42:10.459 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:10.473 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 16 85 19 4d f3 ad 37 fe f7 dd fa
+19:42:10.473 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8f f6 33 04 a8 40 26 f2 e7 c1 da 21 33 16 85 19 4d f3 ad 37 fe f7 dd fa
+19:42:10.486 DEBU [pymycobot.generate] _read : fe fe e 8d 21 32 15 5e 19 c f5 15 37 fe f7 dc fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.3, -250.9, 119.2, 164.22, -33.53, -159.1]
+19:42:10.487 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:10.492 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:10.492 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:10.701 DEBU [pymycobot.generate] _read :
+19:42:10.701 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:10.716 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 37 4 4b 3f ee f2 ff c1 f9 fa
+19:42:11.217 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:11.230 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 36 4 9a 3f ee f2 ff c1 f9 fa
+19:42:13.587 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:13.600 DEBU [pymycobot.generate] _read : fe fe e 23 0 8f f6 36 4 99 3f e4 f3 2 c1 fe fa
+19:42:13.600 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:13.614 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 15 75 19 7 f5 42 37 fe f7 dd fa
+19:42:13.614 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8f f6 36 04 fd 3f e4 f3 02 c1 fe 21 33 15 75 19 06 f5 42 37 fe f7 dd fa
+19:42:13.627 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 14 6f 18 85 f6 c9 37 fe f7 dc fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.3, -250.6, 127.7, 163.56, -33.26, -158.74]
+19:42:13.628 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:13.635 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:13.635 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:13.849 DEBU [pymycobot.generate] _read :
+19:42:13.849 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:14.066 DEBU [pymycobot.generate] _read :
+19:42:14.066 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:14.082 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2b 5 a 40 56 f2 d4 c1 bf fa
+19:42:14.701 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:14.715 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 30 5 5 40 0 f2 f7 c1 ee fa
+19:42:14.715 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:14.728 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 14 7f 18 45 f6 df 37 fe f7 dd fa
+19:42:14.728 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8e f6 30 05 69 40 00 f2 f8 c1 ee 21 33 14 7f 18 45 f6 df 37 fe f7 dd fa
+19:42:14.741 DEBU [pymycobot.generate] _read : fe fe e 8d 21 30 13 97 17 89 f8 83 38 0 f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.2, -251.2, 138.5, 163.84, -33.37, -158.9]
+19:42:14.742 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:14.748 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:14.748 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:14.974 DEBU [pymycobot.generate] _read :
+19:42:14.974 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:14.980 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 30 5 9 3f c8 f3 e c2 d fa
+19:42:15.490 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:15.504 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2b 5 69 40 0 f2 f7 c1 ee fa
+19:42:16.371 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:16.389 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 2c 5 67 3f f7 f2 fb c1 f4 fa
+19:42:16.389 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:16.402 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 13 b4 17 4f f8 a8 37 fe f7 dd fa
+19:42:16.402 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8e f6 2c 05 cb 3f f7 f2 fb c1 f4 21 33 13 b4 17 4f f8 a8 37 fe f7 dd fa
+19:42:16.415 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 12 f7 16 4e fa 66 37 ff f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.2, -251.6, 148.3, 163.75, -33.33, -158.84]
+19:42:16.416 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:16.417 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:16.417 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:16.630 DEBU [pymycobot.generate] _read :
+19:42:16.630 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:16.646 DEBU [pymycobot.generate] _read : fe fe e 23 0 8e f6 29 5 72 3f e4 f3 2 c1 fe fa
+19:42:17.148 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:17.161 DEBU [pymycobot.generate] _read : fe fe e 23 0 8d f6 24 5 ca 40 0 f2 f7 c1 ee fa
+19:42:17.163 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:17.176 DEBU [pymycobot.generate] _read : fe fe e 23 0 8d f6 24 5 ca 40 0 f2 f7 c1 ee fa
+19:42:17.176 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:17.189 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 13 28 15 f9 fa 82 37 fe f7 dd fa
+19:42:17.190 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8d f6 24 06 2e 40 00 f2 f8 c1 ee 21 33 13 28 15 f9 fa 82 37 fe f7 dd fa
+19:42:17.202 DEBU [pymycobot.generate] _read : fe fe e 8d 21 30 12 99 14 a6 fc 64 38 0 f7 db fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.1, -252.4, 158.2, 163.84, -33.37, -158.9]
+19:42:17.203 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:17.209 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:17.209 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:17.229 DEBU [pymycobot.generate] _read : fe fe e 23 0 8d f6 24 5 ca 40 0 f2 f7 c1 ee fa
+19:42:17.730 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:17.742 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 17 6 3f 40 7c f2 c5 c1 aa fa
+19:42:17.743 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:17.756 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 18 6 3c 40 69 f2 cd c1 b5 fa
+19:42:17.757 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:17.770 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 12 be 14 53 fc 3a 37 fe f7 dd fa
+19:42:17.771 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8c f6 18 06 a0 40 69 f2 cd c1 b5 21 33 12 be 14 53 fc 3a 37 fe f7 dd fa
+19:42:17.785 DEBU [pymycobot.generate] _read : fe fe e 8d 21 30 12 64 12 a7 fe 36 37 ff f7 da fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.0, -253.6, 169.6, 164.89, -33.79, -159.47]
+19:42:17.787 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:17.793 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:17.793 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.004 DEBU [pymycobot.generate] _read :
+19:42:18.004 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.064 DEBU [pymycobot.generate] _read : fe fe e 23 0 8d f6 1e 6 3b 3f e4 f3 2 c1 fe fa
+19:42:18.565 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.578 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 18 6 99 40 e f2 f1 c1 ee fa
+19:42:18.579 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.591 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 18 6 99 40 e f2 f1 c1 ee fa
+19:42:18.591 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:18.603 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 12 8a 12 4c fe bb 37 fe f7 d5 fa
+19:42:18.603 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8c f6 18 06 fd 40 0e f2 f1 c1 ee 21 33 12 8a 12 4c fe bb 37 fe f7 d5 fa
+19:42:18.616 DEBU [pymycobot.generate] _read : fe fe e 8d 21 31 12 73 10 21 0 fa 37 fe f7 d2 fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.0, -253.6, 178.9, 163.98, -33.43, -158.9]
+19:42:18.617 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:18.620 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:18.620 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.828 DEBU [pymycobot.generate] _read :
+19:42:18.828 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:18.844 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 18 6 a6 3f fb f2 f9 c1 f9 fa
+19:42:19.345 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:19.359 DEBU [pymycobot.generate] _read : fe fe e 23 0 90 f6 15 7 9 40 30 f2 e4 c1 dd fa
+19:42:19.359 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:19.372 DEBU [pymycobot.generate] _read : fe fe e 23 0 90 f6 15 7 9 40 30 f2 e4 c1 dd fa
+19:42:19.372 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:19.385 DEBU [pymycobot.generate] _read : fe fe e 20 21 3b 12 8a f c2 1 2a 37 fe f7 dd fa
+19:42:19.385 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 90 f6 15 07 6d 40 30 f2 e4 c1 dd 21 3b 12 8a 0f c2 01 2a 37 fe f7 dd fa
+19:42:19.399 DEBU [pymycobot.generate] _read : fe fe e 8d 21 3a 12 d5 c e1 3 c0 37 ff f7 dc fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.4, -253.9, 190.1, 164.32, -33.56, -159.07]
+19:42:19.399 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:19.405 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:19.405 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:19.465 DEBU [pymycobot.generate] _read : fe fe e 23 0 90 f6 15 7 9 40 30 f2 e4 c1 dd fa
+19:42:19.966 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:20.177 DEBU [pymycobot.generate] _read :
+19:42:20.177 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:20.189 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 19 7 a2 40 b0 f2 b1 c1 94 fa
+19:42:20.696 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:20.708 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 19 7 a2 40 b0 f2 b1 c1 94 fa
+19:42:21.210 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:21.222 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 19 7 a2 40 b0 f2 b1 c1 94 fa
+19:42:21.724 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:21.736 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 19 7 a2 40 b0 f2 b1 c1 94 fa
+エラー: これ以上アームが届かない可能性があります。
+19:42:21.737 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:21.749 DEBU [pymycobot.generate] _read : fe fe e 23 0 8c f6 19 7 a2 40 b0 f2 b1 c1 94 fa
+19:42:21.749 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:42:21.761 DEBU [pymycobot.generate] _read : fe fe e 20 21 33 12 a4 c 5c 3 fb 37 fe f7 d5 fa
+19:42:21.761 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 8c f6 19 08 06 40 b0 f2 b1 c1 94 21 33 12 a4 0c 5c 03 fb 37 fe f7 d5 fa
+19:42:21.771 DEBU [pymycobot.generate] _read : fe fe e 8d 21 30 13 d2 7 b4 7 74 37 ff f7 d2 fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [14.0, -253.5, 205.4, 165.6, -34.07, -159.8]
+19:42:21.771 DEBU [pymycobot.generate] _write: fe fe 06 34 03 00 64 32 fa
+19:42:21.778 DEBU [pymycobot.generate] _read : fe fe 3 34 1 fa
+19:42:21.778 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:21.987 DEBU [pymycobot.generate] _read :
+19:42:21.987 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:22.209 DEBU [pymycobot.generate] _read :
+19:42:22.209 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:42:22.427 DEBU [pymycobot.generate] _read :
+Traceback (most recent call last):
+  File "C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\test.py", line 366, in <module>
+    main()
+  File "C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\test.py", line 360, in main
+    handleMoveKey(controller, normalizedKey)
+  File "C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\test.py", line 304, in handleMoveKey
+    reached = waitAfterIncrement(controller, targetCoords, INCREMENT_TIMEOUT_SEC)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\test.py", line 256, in waitAfterIncrement
+    currentCoords = getCurrentCoords(controller)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110\test.py", line 98, in getCurrentCoords
+    if not coords or len(coords) < 6:
+                     ^^^^^^^^^^^
+TypeError: object of type 'int' has no len()
+
+(.venv) C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110>q
+--- ここまで ---
+
+

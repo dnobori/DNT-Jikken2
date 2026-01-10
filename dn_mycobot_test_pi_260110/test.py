@@ -95,7 +95,11 @@ def getCurrentCoords(controller):
     except Exception as exc:
         print(f"座標取得に失敗しました: {exc}")
         return None
+    if not isinstance(coords, (list, tuple)):
+        print(f"座標取得に失敗しました: 不正な応答を受信しました。({coords})")
+        return None
     if not coords or len(coords) < 6:
+        print("座標取得に失敗しました: 応答が短すぎます。")
         return None
     return coords
 
@@ -301,15 +305,15 @@ def handleMoveKey(controller, keyChar):
         if sendResult is None:
             print("エラー: 増分移動指示の送信に失敗しました。")
             return
-        reached = waitAfterIncrement(controller, targetCoords, INCREMENT_TIMEOUT_SEC)
+        #reached = waitAfterIncrement(controller, targetCoords, INCREMENT_TIMEOUT_SEC)
     else:
         sendResult = sendCoordsCommand(controller, targetCoords)
         if sendResult is None:
             print("エラー: 移動指示の送信に失敗しました。")
             return
-        reached = waitUntilReached(controller, targetCoords, MOVE_TIMEOUT_SEC)
-    if not reached:
-        print("エラー: これ以上アームが届かない可能性があります。")
+        #reached = waitUntilReached(controller, targetCoords, MOVE_TIMEOUT_SEC)
+    #if not reached:
+    #    print("エラー: これ以上アームが届かない可能性があります。")
 
 
 def printUsage():
@@ -357,6 +361,7 @@ def main():
                 print("終了します。")
                 break
             if normalizedKey in KEY_TO_DELTA:
+                print(f"☆ 入力キー: {normalizedKey.upper()}")
                 handleMoveKey(controller, normalizedKey)
     except KeyboardInterrupt:
         print("\n中断しました。")
