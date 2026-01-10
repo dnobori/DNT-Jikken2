@@ -2,3 +2,83 @@
 本プロジェクトの開発を開始する。
 「260110_SAJB6V 全体仕様・目的」を実装せよ。
 
+260110_VJCTR4:
+生成されたコードを実行しテストした。W/S/A/D/Q/E を色々動かそうとしたが、出力結果が、[260110_VJBL36] のようになってしまい、ロボットが全く動かない。(COM ポートを開く際に、「controller = MyCobot280(COM_PORT, BAUD_RATE, debug=True)」のようにして debug を有効にしているので、本プログラムと COM ポート経由の本機とがやりとりする通信内容がデバッグ出力されている。)
+原因を究明し、問題を解決せよ。
+
+
+--- [260110_VJBL36] ここから ---
+
+(.venv) C:\git\DNT-Jikken2\dn_mycobot_test_pi_260110>python test.py
+myCobot 280 M5 キーボード制御を開始します。
+接続先 COM ポート: COM7
+ロボットに接続しました。
+19:23:21.087 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:21.099 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+現在座標: [30.5, -127.0, -113.3, 138.57, -47.34, -178.48]
+操作方法: W/S/A/D/Q/E で 1cm 移動
+W: 前, S: 後, A: 左, D: 右, Q: 上, E: 下
+終了: X または Esc
+19:23:23.573 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:23.590 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:23.590 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:23.604 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:23.604 DEBU [pymycobot.generate] _write: fe fe 1a 8d 01 95 fb 0a fb 93 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:23.615 DEBU [pymycobot.generate] _read : fe fe e 8d 23 96 35 e2 7 56 fa 5f 39 1d d d1 fa
+移動指示: Δx=10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [40.5, -127.0, -113.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -113.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+19:23:25.992 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:26.006 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:26.006 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:26.019 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:26.019 DEBU [pymycobot.generate] _write: fe fe 1a 8d 01 31 fb 6e fb 93 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:26.033 DEBU [pymycobot.generate] _read : fe fe e 8d 22 14 34 73 d e4 f4 96 37 ef c ab fa
+移動指示: Δx=0.0mm, Δy=10.0mm, Δz=0.0mm
+目標座標: [30.5, -117.0, -113.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -113.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+19:23:26.707 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:26.721 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:26.722 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:26.734 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:26.735 DEBU [pymycobot.generate] _write: fe fe 1a 8d 00 cd fb 0a fb 93 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:26.748 DEBU [pymycobot.generate] _read : fe fe e 8d 20 af 35 74 a d8 f5 eb 36 de b 85 fa
+移動指示: Δx=-10.0mm, Δy=0.0mm, Δz=0.0mm
+目標座標: [20.5, -127.0, -113.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -113.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+19:23:27.177 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:27.195 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:27.195 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:27.208 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:27.208 DEBU [pymycobot.generate] _write: fe fe 1a 8d 01 31 fa a6 fb 93 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:27.214 DEBU [pymycobot.generate] _read : fe fe e 8d 20 31 20 31 20 31 20 31 20 31 20 31 fa
+移動指示: Δx=0.0mm, Δy=-10.0mm, Δz=0.0mm
+目標座標: [30.5, -137.0, -113.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -113.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+19:23:27.607 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:27.621 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:27.621 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:27.634 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:27.634 DEBU [pymycobot.generate] _write: fe fe 1a 8d 01 31 fb 0a fb f7 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:27.647 DEBU [pymycobot.generate] _read : fe fe e 8d 22 26 31 d6 10 10 f5 f 37 fd c b9 fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=10.0mm
+目標座標: [30.5, -127.0, -103.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -103.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+19:23:28.024 DEBU [pymycobot.generate] _write: fe fe 02 23 fa
+19:23:28.037 DEBU [pymycobot.generate] _read : fe fe e 23 1 31 fb a fb 93 36 21 ed 82 ba 48 fa
+19:23:28.038 DEBU [pymycobot.generate] _write: fe fe 02 20 fa
+19:23:28.052 DEBU [pymycobot.generate] _read : fe fe e 20 22 29 35 7d 9 79 f8 1 37 fe c bc fa
+19:23:28.053 DEBU [pymycobot.generate] _write: fe fe 1a 8d 01 31 fb 0a fb 2f 36 21 ed 82 ba 48 22 29 35 7d 09 79 f8 01 37 fe 0c bc fa
+19:23:28.066 DEBU [pymycobot.generate] _read : fe fe e 8d 20 31 20 31 20 31 20 31 20 31 20 31 fa
+移動指示: Δx=0.0mm, Δy=0.0mm, Δz=-10.0mm
+目標座標: [30.5, -127.0, -123.3, 138.57, -47.34, -178.48]
+移動指示に失敗しました: Has invalid coord value, error on index 2, received -123.3, but coord should be -70 ~ 412.67.
+エラー: 移動指示の送信に失敗しました。
+
+--- ここまで ---
+

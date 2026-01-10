@@ -4,6 +4,7 @@ import time
 import msvcrt
 
 from pymycobot import MyCobot280
+from pymycobot.robot_info import RobotLimit
 
 
 # 接続先 COM ポート (定数)
@@ -42,11 +43,28 @@ def createRobotController():
     戻り値: MyCobot280 のインスタンス。失敗時は None。
     """
     try:
-        controller = MyCobot280(COM_PORT, BAUD_RATE)
+        controller = MyCobot280(COM_PORT, BAUD_RATE, debug=True)
     except Exception as exc:
         print(f"接続に失敗しました: {exc}")
         return None
     return controller
+
+
+def getAxisIdAndIncrement(delta):
+    """増分移動用の軸 ID と増分量を取得する。
+    引数: delta (tuple) X/Y/Z の増分タプル
+    戻り値: (axis_id, increment) のタプル。判定不可時は (None, None)。
+    """
+    if not delta or len(delta) < 3:
+        return None, None
+    # 増分移動は単一軸のみを想定する
+    if delta[0] != 0.0:
+        return 1, delta[0]
+    if delta[1] != 0.0:
+        return 2, delta[1]
+    if delta[2] != 0.0:
+        return 3, delta[2]
+    return None, None
 
 
 def readSingleKey():
@@ -110,11 +128,34 @@ def isCoordsClose(currentCoords, targetCoords, toleranceMm):
     return True
 
 
+def isCoordsWithinRobotLimit(targetCoords):
+    """MyCobot280 の座標範囲内かを判定する。
+    引数: targetCoords (list)
+    戻り値: bool 範囲内の場合 True
+    """
+    if not targetCoords or len(targetCoords) < 6:
+        return False
+    limitInfo = RobotLimit.robot_limit.get("MyCobot280")
+    if not limitInfo:
+        return True
+    minCoords = limitInfo.get("coords_min")
+    maxCoords = limitInfo.get("coords_max")
+    if not minCoords or not maxCoords:
+        return True
+    for index in range(6):
+        if targetCoords[index] < minCoords[index] or targetCoords[index] > maxCoords[index]:
+            return False
+    return True
+
+
 def canReachTarget(controller, targetCoords):
     """逆運動学で到達可能性を簡易判定する。
     引数: controller (MyCobot280), targetCoords (list)
     戻り値: bool 到達可能と判断した場合 True
     """
+    # 座標範囲外の場合は判定不能として移動を試みる
+    if not isCoordsWithinRobotLimit(targetCoords):
+        return True
     if not hasattr(controller, "solve_inv_kinematics"):
         return True
     if not hasattr(controller, "get_angles"):
@@ -159,25 +200,42 @@ def sendCoordsCommand(controller, targetCoords):
         return None
 
 
+def sendIncrementCoordCommand(controller, axisId, increment):
+    """座標増分による移動指示を送る。
+    引数: controller (MyCobot280), axisId (int), increment (float)
+    戻り値: 送信結果 (成功時は 1 など)。失敗時は None。
+    """
+    try:
+        return controller.jog_increment_coord(axisId, increment, MOVE_SPEED)
+    except Exception as exc:
+        print(f"増分移動指示に失敗しました: {exc}")
+        return None
+
+
 def waitUntilReached(controller, targetCoords, timeoutSec):
     """目標座標到達を待機する。
     引数: controller (MyCobot280), targetCoords (list), timeoutSec (float)
     戻り値: bool 到達した場合 True
     """
     startTime = time.monotonic()
+    # 座標範囲外の場合は is_in_position が例外になるため回避する
+    useIsInPosition = hasattr(controller, "is_in_position") and isCoordsWithinRobotLimit(targetCoords)
     while time.monotonic() - startTime <= timeoutSec:
-        if hasattr(controller, "is_in_position"):
+        if useIsInPosition:
             try:
                 result = controller.is_in_position(targetCoords, 1)
             except Exception as exc:
                 print(f"到達確認に失敗しました: {exc}")
-                return False
+                useIsInPosition = False
+                result = 0
             if result == 1:
                 return True
             if result == -1:
-                break
-        else:
+                useIsInPosition = False
+        if not useIsInPosition:
             currentCoords = getCurrentCoords(controller)
+            if currentCoords is None:
+                return False
             if isCoordsClose(currentCoords, targetCoords, POSITION_TOLERANCE_MM):
                 return True
         time.sleep(0.1)
@@ -191,6 +249,10 @@ def handleMoveKey(controller, keyChar):
     """
     delta = KEY_TO_DELTA.get(keyChar)
     if not delta:
+        return
+    axisId, increment = getAxisIdAndIncrement(delta)
+    if axisId is None:
+        print("移動方向の判定に失敗しました。")
         return
 
     # 現在座標を取得し、1cm 移動した目標座標を算出する
@@ -211,10 +273,17 @@ def handleMoveKey(controller, keyChar):
     )
     print(f"目標座標: {targetCoords}")
 
-    sendResult = sendCoordsCommand(controller, targetCoords)
-    if sendResult is None:
-        print("エラー: 移動指示の送信に失敗しました。")
-        return
+    # 座標全体の送信は座標範囲チェックで失敗する場合があるため、増分移動を優先する
+    if hasattr(controller, "jog_increment_coord"):
+        sendResult = sendIncrementCoordCommand(controller, axisId, increment)
+        if sendResult is None:
+            print("エラー: 増分移動指示の送信に失敗しました。")
+            return
+    else:
+        sendResult = sendCoordsCommand(controller, targetCoords)
+        if sendResult is None:
+            print("エラー: 移動指示の送信に失敗しました。")
+            return
 
     reached = waitUntilReached(controller, targetCoords, MOVE_TIMEOUT_SEC)
     if not reached:
@@ -273,4 +342,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
