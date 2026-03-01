@@ -95,7 +95,7 @@ internal class Program
             }
             else if (mode == Mode.BeginEndSectionWithTag)
             {
-                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(6);
+                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8);
 
                 str = $"\r\n--- BEGIN of [TAG{tag1}] ---\r\n\r\n--- END of [/TAG{tag1}] ---\r\n";
             }
