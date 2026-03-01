@@ -86,7 +86,9 @@ internal class Program
             }
             else if (mode == Mode.YymmddAndRandTag5AndBracket)
             {
-                str = "[" + Lib.GenerateRandTagWithYyymmdd(DateTimeOffset.Now, 6) + "]";
+                string tag1 = "TAG_" + DateTime.Now.ToString("yyMMdd") + "_" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(5);
+
+                str = "[" + tag1 + "]";
                 //strAppendTail = " ";
             }
             else if (mode == Mode.RandTag8Only)
@@ -95,9 +97,9 @@ internal class Program
             }
             else if (mode == Mode.BeginEndSectionWithTag)
             {
-                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8) + "_" + DateTime.Now.ToString("yyMMdd");
+                string tag1 = "TAG_" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8) + "_" + DateTime.Now.ToString("yyMMdd");
 
-                str = $"\r\n--- [TAG_{tag1}] ここから ---\r\n\r\n--- [/TAG_{tag1}] ここまで ---\r\n";
+                str = $"\r\n--- [{tag1}] ここから ---\r\n\r\n--- [{tag1}] ここまで ---\r\n";
             }
             else if (mode == Mode.BeginEndSectionWithNum)
             {
