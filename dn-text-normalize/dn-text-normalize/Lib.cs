@@ -889,6 +889,226 @@ public static class Lib
         return ret;
     }
 
+
+    // base24 に使う 24 文字（I と O を除いた読み間違いしにくい文字セット）
+    // 仕様にある文字列をそのまま使用する（決定的な結果のため固定）
+    private const string StrHashToTag_Base24Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // 24 chars
+
+    /// <summary>
+    /// 文字列を UTF-8 として SHA-256 ハッシュ化し、その 32 バイトを base24（指定アルファベット）に変換した先頭 numLetters 文字を返す。
+    /// </summary>
+    /// <param name="hashStr">入力文字列（UTF-8 としてバイト化して SHA-256 を計算する）。null は不可。</param>
+    /// <param name="numLetters">返却するタグ文字数。1 以上、かつハッシュ全体を base24 化した長さ以下である必要がある。</param>
+    /// <returns>base24 変換結果の先頭 numLetters 文字。</returns>
+    /// <exception cref="ArgumentNullException">hashStr が null の場合。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">numLetters が 1 未満、または大きすぎる場合。</exception>
+    public static string StrHashToTag(string hashStr, int numLetters)
+    {
+        if (hashStr == null)
+        {
+            throw new ArgumentNullException("hashStr");
+        }
+
+        if (numLetters <= 0)
+        {
+            throw new ArgumentOutOfRangeException("numLetters", "numLetters は 1 以上である必要があります。");
+        }
+
+        // 仕様: 入力文字列を UTF-8 として SHA256 ハッシュを計算（決定的）
+        byte[] hashBytes;
+        using (SHA256 sha256 = SHA256.Create())
+        {
+            byte[] inputBytes = Encoding.UTF8.GetBytes(hashStr);
+            hashBytes = sha256.ComputeHash(inputBytes); // 32 bytes
+        }
+
+        // SHA-256 の 32 バイト (=256bit) を base24 にしたときの桁数の上限を計算して検証
+        // 256bit を base24 で表現するのに必要な桁数 = ceil(256 / log2(24))
+        // ※決定的処理のため、float の誤差に依存しないよう「整数演算 + ループ」で最小桁数を求める
+        int maxLetters = GetMaxBase24DigitsForSha256();
+
+        if (numLetters > maxLetters)
+        {
+            throw new ArgumentOutOfRangeException(
+                "numLetters",
+                string.Format("numLetters が大きすぎます。最大値は {0} です。", maxLetters));
+        }
+
+        // base24 変換（大きな整数扱い）
+        // データ構造: 24進数の各桁を 0..23 の数値として配列に保持し、最後にアルファベットへ変換する
+        // 方針:
+        //   256bit のビット列を上位ビットから順に base24 の「大きな数」へ変換する。
+        //   具体的には、現在値を base24 桁配列で保持しながら、
+        //     value = value * 256 + nextByte
+        //   を逐次行う（全て整数演算、決定的）。
+
+        // 桁配列（最上位桁が index 0 の想定で運用）
+        // 初期値 0
+        int[] digits = new int[maxLetters];
+        int digitsLength = 1; // 有効桁数（最初は 0 の 1 桁）
+        digits[0] = 0;
+
+        for (int i = 0; i < hashBytes.Length; i++)
+        {
+            // value = value * 256 + hashBytes[i]
+            MultiplyDigitsInPlace(digits, ref digitsLength, 256, 24);
+            AddSmallInPlace(digits, ref digitsLength, hashBytes[i], 24);
+        }
+
+        // 先頭（最上位側）から maxLetters 文字の full 表現を作る
+        // digitsLength が maxLetters より短い場合は、上位側を 0 (='A') で埋めることで
+        // 「常に同じ長さ」の表現にする（決定的・先頭切り出しの安定化）。
+        // 仕様は「base24 で表現し、その結果の先頭 numLetters」としかないが、
+        // 固定長表現にすることで、先頭切り出しが入力に対して一意に定まる。
+        StringBuilder full = new StringBuilder(maxLetters);
+
+        // 0 埋めの桁数
+        int padCount = maxLetters - digitsLength;
+        for (int i = 0; i < padCount; i++)
+        {
+            full.Append(StrHashToTag_Base24Alphabet[0]); // 0 を 'A'
+        }
+
+        for (int i = 0; i < digitsLength; i++)
+        {
+            int digit = digits[i];
+            full.Append(StrHashToTag_Base24Alphabet[digit]);
+        }
+
+        // 先頭 numLetters を返す
+        return full.ToString(0, numLetters);
+    }
+
+    /// <summary>
+    /// SHA-256 (256bit) を base24 で固定長表現するために必要な最小桁数を返す（決定的・整数のみ）。
+    /// </summary>
+    /// <remarks>
+    /// base24 の n 桁で表せる最大値は 24^n - 1。
+    /// 256bit の最大値は 2^256 - 1。
+    /// よって、24^n >= 2^256 を満たす最小 n が必要桁数。
+    /// </remarks>
+    private static int GetMaxBase24DigitsForSha256()
+    {
+        // BigInteger が .NET 3.5 にないため、比較も「桁配列」で行う。
+        // 2^256 を 24進数で表したときの桁数を求める:
+        //   n = 最小の n で 24^n >= 2^256
+        // 24^n を 24進の桁配列で表すと "1" の後に 0 が n 個…ではなく、
+        // 24進での 24^n は 1 followed by n zeros (base24)。
+        // これを 2^256 と比較するのは面倒なので、ここでは数値の桁配列を増やしつつ
+        // 「24進の 1 を 24 倍し続ける」ではなく、直接 n を探索する。
+        //
+        // 実装簡略:
+        //   2^256 を 24進に変換したときの桁数は固定なので、
+        //   「byte[32] が最大値」(全部 0xFF) を base24 変換し、桁数を採用しても良い。
+        //   ただし max を厳密にしたいので、2^256-1 を変換して桁数を数える。
+        //
+        // ここでは「0xFF *32」の値を変換して digitsLength を得て、それを最大桁数とする。
+        byte[] maxHash = new byte[32];
+        for (int i = 0; i < maxHash.Length; i++)
+        {
+            maxHash[i] = 0xFF;
+        }
+
+        // 変換して桁数取得
+        int[] digits = new int[200]; // 余裕
+        int digitsLength = 1;
+        digits[0] = 0;
+
+        for (int i = 0; i < maxHash.Length; i++)
+        {
+            MultiplyDigitsInPlace(digits, ref digitsLength, 256, 24);
+            AddSmallInPlace(digits, ref digitsLength, maxHash[i], 24);
+        }
+
+        // digitsLength が必要最大桁数（これ以上はあり得ない）
+        return digitsLength;
+    }
+
+    /// <summary>
+    /// baseBase 進数の桁配列（最上位が index 0）を、smallMultiplier 倍する。
+    /// </summary>
+    /// <param name="digits">各桁を 0..(baseBase-1) の int として保持する配列。</param>
+    /// <param name="digitsLength">有効桁数（先頭から digitsLength 個が有効）。必要なら増える。</param>
+    /// <param name="smallMultiplier">掛ける小さな整数（ここでは 256）。</param>
+    /// <param name="baseBase">基数（ここでは 24）。</param>
+    private static void MultiplyDigitsInPlace(int[] digits, ref int digitsLength, int smallMultiplier, int baseBase)
+    {
+        // 下位桁から処理するので、配列の末尾側に寄せるより
+        // 「先頭が最上位」のまま、後ろから carry を回す
+        int carry = 0;
+        for (int i = digitsLength - 1; i >= 0; i--)
+        {
+            int value = digits[i] * smallMultiplier + carry;
+            digits[i] = value % baseBase;
+            carry = value / baseBase;
+        }
+
+        while (carry > 0)
+        {
+            // 先頭に桁を追加する必要があるので、右シフトして先頭を空ける
+            // digitsLength が小さい（最大でも 60 程度）ので O(n) シフトで十分
+            EnsureCapacity(digits, digitsLength + 1);
+
+            for (int j = digitsLength; j > 0; j--)
+            {
+                digits[j] = digits[j - 1];
+            }
+
+            digits[0] = carry % baseBase;
+            carry /= baseBase;
+            digitsLength++;
+        }
+    }
+
+    /// <summary>
+    /// baseBase 進数の桁配列に smallAddend を加算する。
+    /// </summary>
+    /// <param name="digits">各桁を 0..(baseBase-1) の int として保持する配列。</param>
+    /// <param name="digitsLength">有効桁数（先頭から digitsLength 個が有効）。必要なら増える。</param>
+    /// <param name="smallAddend">加算する小さな整数（ここでは 0..255）。</param>
+    /// <param name="baseBase">基数（ここでは 24）。</param>
+    private static void AddSmallInPlace(int[] digits, ref int digitsLength, int smallAddend, int baseBase)
+    {
+        int carry = smallAddend;
+        for (int i = digitsLength - 1; i >= 0 && carry > 0; i--)
+        {
+            int value = digits[i] + carry;
+            digits[i] = value % baseBase;
+            carry = value / baseBase;
+        }
+
+        while (carry > 0)
+        {
+            EnsureCapacity(digits, digitsLength + 1);
+
+            for (int j = digitsLength; j > 0; j--)
+            {
+                digits[j] = digits[j - 1];
+            }
+
+            digits[0] = carry % baseBase;
+            carry /= baseBase;
+            digitsLength++;
+        }
+    }
+
+    /// <summary>
+    /// 配列が targetLength 以上であることを保証する（digits は固定配列として渡ってくるため、ここでは安全確認のみ）。
+    /// </summary>
+    /// <remarks>
+    /// 本課題の用途では digits 配列は十分大きく確保している前提。
+    /// サイズ不足は実装ミスなので例外にする。
+    /// </remarks>
+    private static void EnsureCapacity(int[] digits, int targetLength)
+    {
+        if (targetLength > digits.Length)
+        {
+            throw new InvalidOperationException("内部エラー: 桁配列の容量が不足しました。");
+        }
+    }
+
+
+
     public static string NormalizeComfortableUrl(string srcUrl)
     {
         if (srcUrl == null) return "";
