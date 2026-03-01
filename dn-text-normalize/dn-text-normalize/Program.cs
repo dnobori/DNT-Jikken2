@@ -95,7 +95,7 @@ internal class Program
             }
             else if (mode == Mode.BeginEndSectionWithTag)
             {
-                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8);
+                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8) + DateTime.Now.ToString("yyMMdd");
 
                 str = $"\r\n--- [TAG_{tag1}] ここから ---\r\n\r\n--- [/TAG_{tag1}] ここまで ---\r\n";
             }
