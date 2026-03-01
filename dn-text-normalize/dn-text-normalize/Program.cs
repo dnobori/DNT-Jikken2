@@ -29,6 +29,8 @@ internal class Program
         YymmddAndRandTag5Only = 8,
         RandTag8Only = 9,
         YymmddAndRandTag5AndBracket = 10,
+        BeginEndSectionWithNum = 11,
+        BeginEndSectionWithTag = 12,
     }
 
     [STAThread]
@@ -90,6 +92,18 @@ internal class Program
             else if (mode == Mode.RandTag8Only)
             {
                 str = Lib.GenerateRandTag(8);
+            }
+            else if (mode == Mode.BeginEndSectionWithTag)
+            {
+                string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(6);
+
+                str = $"\r\n--- BEGIN of [TAG{tag1}] ---\r\n\r\n--- END of [/TAG{tag1}] ---\r\n";
+            }
+            else if (mode == Mode.BeginEndSectionWithNum)
+            {
+                string tag1 = "" + GetAndIncrementSeqNo();
+
+                str = $"\r\n--- [{tag1}] ここから ---\r\n\r\n--- [{tag1}] ここまで ---\r\n";
             }
             else
             {
@@ -184,6 +198,62 @@ internal class Program
             }
         }
         catch { }
+    }
+
+    /// <summary>
+    /// HKCU\Software\dn-text-normalize\ の "seqno" (DWORD) を読み取り(無ければ0)、
+    /// +1して書き戻し、+1後の値を返す。
+    /// </summary>
+    public static int GetAndIncrementSeqNo()
+    {
+        const string subKeyPath = @"Software\dn-text-normalize";
+        string valueName = "seqno_" + DateTime.Now.ToString("yyyyMMdd");
+
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(subKeyPath))
+            {
+                if (key == null)
+                    return 1; // ここに来ることは通常ほぼ無いが、無理やり進めるなら1
+
+                int current = 0;
+
+                object obj = key.GetValue(valueName, 0);
+                if (obj != null)
+                {
+                    // DWORDは通常 Int32 として返るが、念のため広めに扱う
+                    if (obj is int)
+                    {
+                        current = (int)obj;
+                    }
+                    else if (obj is byte[])
+                    {
+                        byte[] b = (byte[])obj;
+                        if (b.Length >= 4)
+                            current = BitConverter.ToInt32(b, 0);
+                    }
+                    else
+                    {
+                        // 文字列などに化けていた場合は安全に0扱い
+                        current = 0;
+                    }
+                }
+
+                int next = unchecked(current + 1);
+
+                // DWORDとして書く
+                key.SetValue(valueName, next, RegistryValueKind.DWord);
+
+                return next;
+            }
+        }
+        catch
+        {
+            // 例外方針が不明なので、失敗時は「更新できなかったが1を返す」などにせず、
+            // 呼び出し側で扱えるように投げ直す設計もあり。
+            // 要件にないのでここでは「例外を握りつぶさず再スロー」推奨。
+            return 1;
+        }
     }
 }
 
