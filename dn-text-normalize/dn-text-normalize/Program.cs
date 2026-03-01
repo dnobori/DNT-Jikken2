@@ -97,7 +97,7 @@ internal class Program
             {
                 string tag1 = "" + GetAndIncrementSeqNo().ToString("D2") + "_" + Lib.GenerateRandTag(8);
 
-                str = $"\r\n--- [TAG{tag1}] ここから ---\r\n\r\n--- [/TAG{tag1}] ここまで ---\r\n";
+                str = $"\r\n--- [TAG_{tag1}] ここから ---\r\n\r\n--- [/TAG_{tag1}] ここまで ---\r\n";
             }
             else if (mode == Mode.BeginEndSectionWithNum)
             {
