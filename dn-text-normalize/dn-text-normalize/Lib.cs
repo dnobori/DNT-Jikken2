@@ -829,7 +829,7 @@ public static class Lib
 
     public static string GenerateRandTagWithYyymmdd(DateTimeOffset now, int numCharsInTagTotal)
     {
-        string dstr = now.LocalDateTime.ToString("yyMMdd"); 
+        string dstr = now.LocalDateTime.ToString("yyMMdd");
         string hourCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
         string minSecCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -839,9 +839,20 @@ public static class Lib
         return dstr + "_" + hourCandidates[now.LocalDateTime.Hour] + minSecCandidates[v1] + minSecCandidates[v2] + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsInTagTotal - 3, "23456789");
     }
 
+    public static string GenerateRandTagFromYyymmdd(DateTimeOffset now, int numCharsInTagTotal)
+    {
+        string hourCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        string minSecCandidates = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+        int v1 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Minute / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
+        int v2 = Math.Max(Math.Min((int)((double)now.LocalDateTime.Second / 60.0 * (double)minSecCandidates.Length), minSecCandidates.Length), 0);
+
+        return hourCandidates[now.LocalDateTime.Hour] + minSecCandidates[v1] + minSecCandidates[v2] + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsInTagTotal - 3, "23456789");
+    }
+
     public static string GenerateRandTag(int numCharsTotal)
-        {
-            return GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ", 1) + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsTotal - 1, "23456789");
+    {
+        return GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ", 1) + GenerateRandTagCore("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", numCharsTotal - 1, "23456789");
     }
 
     static string GenerateRandTagCore(string candidates, int numChars, string mustContainChars = "")
@@ -2855,3 +2866,592 @@ public static class UnicodeControlCodesNormalizeUtil
     }
 }
 
+
+public static class TimeBasedRandTagGenerator
+{
+    /// <summary>
+    /// now.LocalDateTime の時刻部分から、ASCII 昇順ソート時にも時刻順になる
+    /// 「時刻ベースタグ」を生成し、必要に応じて「完全ランダムタグ」を末尾に付与します。
+    /// </summary>
+    /// <param name="now">
+    /// 入力日時。時刻ベースタグの計算には now.LocalDateTime.TimeOfDay のみを使用します。
+    /// 重複回避用の YYYYMMDD キーには now.LocalDateTime の年月日を使用します。
+    /// </param>
+    /// <param name="numChars">生成する時刻ベースタグの文字数。1 以上。</param>
+    /// <param name="numCharsOfPadding">末尾に付与する完全ランダムタグの文字数。0 以上。</param>
+    /// <param name="lettersForFirst">時刻ベースタグの 1 文字目に使用する ASCII 昇順の文字セット。</param>
+    /// <param name="lettersForRest">時刻ベースタグの 2 文字目以降に使用する ASCII 昇順の文字セット。</param>
+    /// <param name="lettersForRandom">完全ランダムタグに使用する文字セット。</param>
+    /// <param name="merginPercent">最大タグ側に重複回避用として残す割合。0 ～ 90。</param>
+    /// <param name="loadLastProc">YYYYMMDD を受け取り、その日の最後の時刻ベースタグを返す処理。saveLastProc と同時指定。</param>
+    /// <param name="saveLastProc">YYYYMMDD と確定時刻ベースタグを受け取り保存する処理。loadLastProc と同時指定。</param>
+    /// <returns>「時刻ベースタグ」+「完全ランダムタグ」の結合文字列。</returns>
+    public static string GenerateRandTagFromTimeOfDay(DateTimeOffset now, int numChars = 4, int numCharsOfPadding = 1, string lettersForFirst = "ABCDEFGHJKLMNPQRSTUVWXYZ", string lettersForRest = "ABCDEFGHJKLMNPQRSTUVWXYZ", string lettersForRandom = "ABCDEFGHJKLMNPQRSTUVWXYZ", int merginPercent = 5, Func<string, string> loadLastProc = null, Action<string, string> saveLastProc = null)
+    {
+        /*
+         * DNNT 260610_AMC75A GenerateRandTagFromTimeOfDay 改良
+         *
+         * 仕様要約:
+         * - 返却値は「時刻ベースタグ」+「完全ランダムタグ」。
+         * - 時刻ベースタグは now.LocalDateTime.TimeOfDay のみから生成する。
+         *   日付はタグ本体の計算では無視する。
+         * - loadLastProc/saveLastProc を指定した場合のみ、now.LocalDateTime の年月日から
+         *   YYYYMMDD キーを作り、同一日内の時刻ベースタグ重複を回避する。
+         * - 00:00:00.000000 は最小タグになる。
+         * - 23:59:59.999999 は最大タグそのものではなく、最大タグから merginPercent%
+         *   程度手前のタグになる。残り上位側は短時間連続呼び出し時の桁上げ用に残す。
+         * - 文字列比較は ASCII 昇順を前提にするため、lettersForFirst と lettersForRest は
+         *   ASCII 表示可能文字で、かつ厳密な昇順である必要がある。
+         * - 完全ランダムタグの乱数源は RandGen.GenRandSInt31() のみを使用する。
+         * - BigInteger は使用せず、組合せ数と計算は long/int の範囲に制限する。
+         *
+         * [TAG_260512_EL_K4WVH_0036] 試算:
+         * 既定値 lettersForFirst = lettersForRest = "ABCDEFGHJKLMNPQRSTUVWXYZ" は 24 文字。
+         * 下表は「全組合せで 24 時間を均等分割した場合」の 1 領域の秒数。
+         * 実際の初期候補生成では merginPercent により上位側を予約する。
+         *
+         *   numChars | 全組合せ数              | 1 領域の秒数
+         *   ---------|-------------------------|----------------
+         *   1        | 24                      | 3600.000000 秒
+         *   2        | 576                     | 150.000000 秒
+         *   3        | 13,824                  | 6.250000 秒
+         *   4        | 331,776                 | 0.260417 秒
+         *   5        | 7,962,624               | 0.010851 秒
+         *   6        | 191,102,976             | 0.000452 秒
+         *   7        | 4,586,471,424           | 0.000019 秒
+         *   8        | 110,075,314,176         | 0.000001 秒
+         *
+         * 既定値 24 文字セットで long の組合せ数がオーバーフローしない限界:
+         *   24^13 = 876,488,338,465,357,824 <= long.MaxValue
+         *   24^14 = 21,035,720,123,168,587,776 > long.MaxValue
+         * よって、既定値では numChars = 13 が上限。
+         */
+
+        long totalCombinationCount = ValidateArgumentsAndGetCombinationCount(
+            numChars,
+            numCharsOfPadding,
+            lettersForFirst,
+            lettersForRest,
+            lettersForRandom,
+            merginPercent,
+            loadLastProc,
+            saveLastProc);
+
+        DateTime localDateTime = now.LocalDateTime;
+
+        string candidateTimeTag = GenerateTimeTagFromTimeOfDayTicks(
+            localDateTime.TimeOfDay.Ticks,
+            totalCombinationCount,
+            numChars,
+            lettersForFirst,
+            lettersForRest,
+            merginPercent);
+
+        string randomPaddingTag = GenerateRandomTag(numCharsOfPadding, lettersForRandom);
+
+        if (loadLastProc == null)
+        {
+            return CombineTags(candidateTimeTag, randomPaddingTag);
+        }
+
+        string dateKey = localDateTime.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+
+        // load/save の組を 1 つの臨界区間に入れ、同一プロセス内の同時呼び出し重複を避ける。
+        lock (LastProcSyncRoot)
+        {
+            string lastTimeTag = loadLastProc(dateKey);
+
+            string confirmedTimeTag = ResolveDuplicateTimeTag(
+                candidateTimeTag,
+                lastTimeTag,
+                lettersForFirst,
+                lettersForRest);
+
+            string result = CombineTags(confirmedTimeTag, randomPaddingTag);
+
+            saveLastProc(dateKey, confirmedTimeTag);
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// 日付別の load/save 処理を同一プロセス内で直列化するための同期オブジェクトです。
+    /// </summary>
+    private static readonly object LastProcSyncRoot = new object();
+
+    private const long TicksPerSecond = 10_000_000L;
+    private const long TicksPerDay = 24L * 60L * 60L * TicksPerSecond;
+    private const long TicksPerMicrosecond = 10L;
+
+    /// <summary>
+    /// 仕様例の 23:59:59.999999 に対応する、1 日の最後のマイクロ秒の tick 位置です。
+    /// DateTime は 100ns tick まで持てるため、それ以降の 900ns はこの位置に丸めます。
+    /// </summary>
+    private const long LastSpecifiedTimeOfDayTicks = TicksPerDay - TicksPerMicrosecond;
+
+    private const int MinPrintableAscii = 0x21;
+    private const int MaxPrintableAscii = 0x7E;
+
+    /// <summary>
+    /// 異常な巨大文字列生成による OutOfMemoryException を避けるための実装上の上限です。
+    /// </summary>
+    private const int MaxGeneratedTagLength = 1_000_000;
+
+    /// <summary>
+    /// 引数を検証し、時刻ベースタグの全組合せ数を long で返します。
+    /// </summary>
+    private static long ValidateArgumentsAndGetCombinationCount(
+        int numChars,
+        int numCharsOfPadding,
+        string lettersForFirst,
+        string lettersForRest,
+        string lettersForRandom,
+        int merginPercent,
+        Func<string, string> loadLastProc,
+        Action<string, string> saveLastProc)
+    {
+        if (numChars < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numChars), numChars, "numChars は 1 以上である必要があります。");
+        }
+
+        if (numCharsOfPadding < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numCharsOfPadding), numCharsOfPadding, "numCharsOfPadding は 0 以上である必要があります。");
+        }
+
+        if (merginPercent < 0 || merginPercent > 90)
+        {
+            throw new ArgumentOutOfRangeException(nameof(merginPercent), merginPercent, "merginPercent は 0 ～ 90 の範囲である必要があります。");
+        }
+
+        if ((loadLastProc == null) != (saveLastProc == null))
+        {
+            throw new ArgumentException("loadLastProc と saveLastProc は、両方 null、または両方 null でない必要があります。");
+        }
+
+        ValidateAsciiAscendingAlphabet(lettersForFirst, nameof(lettersForFirst));
+        ValidateAsciiAscendingAlphabet(lettersForRest, nameof(lettersForRest));
+
+        // 既定値 lettersForRandom は英字の後に数字が並ぶため、ASCII 昇順検査は行わず、
+        // タグとして安全な ASCII 表示可能文字かつ重複なしであることだけを検査する。
+        ValidateRandomAlphabet(lettersForRandom, nameof(lettersForRandom));
+
+        long totalOutputLength = (long)numChars + numCharsOfPadding;
+        if (totalOutputLength > MaxGeneratedTagLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(numCharsOfPadding),
+                numCharsOfPadding,
+                "生成結果が実装上の最大文字数を超えます。numChars と numCharsOfPadding を小さくしてください。");
+        }
+
+        return ComputeCombinationCount(numChars, lettersForFirst.Length, lettersForRest.Length);
+    }
+
+    /// <summary>
+    /// ASCII 表示可能文字で、かつ文字コードが厳密な昇順であることを検査します。
+    /// これにより、生成タグの ordinal 比較結果と時刻順を一致させます。
+    /// </summary>
+    private static void ValidateAsciiAscendingAlphabet(string alphabet, string parameterName)
+    {
+        if (alphabet == null)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        if (alphabet.Length == 0)
+        {
+            throw new ArgumentException("文字セットは空にできません。", parameterName);
+        }
+
+        char previous = '\0';
+
+        for (int position = 0; position < alphabet.Length; position++)
+        {
+            char current = alphabet[position];
+
+            ValidatePrintableAscii(current, parameterName, position);
+
+            if (position > 0 && current <= previous)
+            {
+                throw new ArgumentException(
+                    "文字セットは ASCII 文字コードの厳密な昇順で、重複がない必要があります。",
+                    parameterName);
+            }
+
+            previous = current;
+        }
+    }
+
+    /// <summary>
+    /// ランダム用文字セットを検査します。
+    /// ランダムタグでは文字の並び順は意味を持たないため、重複禁止のみを課します。
+    /// </summary>
+    private static void ValidateRandomAlphabet(string alphabet, string parameterName)
+    {
+        if (alphabet == null)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        if (alphabet.Length == 0)
+        {
+            throw new ArgumentException("文字セットは空にできません。", parameterName);
+        }
+
+        bool[] usedCharacters = new bool[MaxPrintableAscii + 1];
+
+        for (int position = 0; position < alphabet.Length; position++)
+        {
+            char current = alphabet[position];
+
+            ValidatePrintableAscii(current, parameterName, position);
+
+            if (usedCharacters[current])
+            {
+                throw new ArgumentException("文字セットには重複文字を含められません。", parameterName);
+            }
+
+            usedCharacters[current] = true;
+        }
+    }
+
+    /// <summary>
+    /// タグに使用する文字が空白を除く ASCII 表示可能文字か検査します。
+    /// </summary>
+    private static void ValidatePrintableAscii(char value, string parameterName, int position)
+    {
+        if (value < MinPrintableAscii || value > MaxPrintableAscii)
+        {
+            throw new ArgumentException(
+                $"{parameterName} の {position + 1} 文字目は、空白を除く ASCII 表示可能文字である必要があります。",
+                parameterName);
+        }
+    }
+
+    /// <summary>
+    /// 時刻ベースタグの全組合せ数を計算します。
+    /// データ構造としては、1 文字目だけ別基数、2 文字目以降は同一基数の固定長混合基数です。
+    /// </summary>
+    private static long ComputeCombinationCount(int numChars, int firstAlphabetLength, int restAlphabetLength)
+    {
+        try
+        {
+            checked
+            {
+                long totalCombinationCount = firstAlphabetLength;
+
+                for (int position = 1; position < numChars; position++)
+                {
+                    totalCombinationCount *= restAlphabetLength;
+                }
+
+                return totalCombinationCount;
+            }
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(numChars),
+                numChars,
+                "指定された numChars と文字セットでは、時刻ベースタグの組合せ数が long の範囲を超えます。");
+        }
+    }
+
+    /// <summary>
+    /// TimeOfDay の tick 値から時刻ベースタグを生成します。
+    /// 00:00:00.000000 は index 0、23:59:59.999999 は merginPercent 分を残した上限 index に写像します。
+    /// </summary>
+    private static string GenerateTimeTagFromTimeOfDayTicks(
+        long timeOfDayTicks,
+        long totalCombinationCount,
+        int numChars,
+        string lettersForFirst,
+        string lettersForRest,
+        int merginPercent)
+    {
+        if (timeOfDayTicks < 0 || timeOfDayTicks >= TicksPerDay)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeOfDayTicks), timeOfDayTicks, "TimeOfDay の tick 値が 1 日の範囲外です。");
+        }
+
+        long maxTagIndex = totalCombinationCount - 1;
+        long upperCandidateIndex = MultiplyByPercentFloor(maxTagIndex, 100 - merginPercent);
+
+        long clampedTimeTicks = timeOfDayTicks > LastSpecifiedTimeOfDayTicks
+            ? LastSpecifiedTimeOfDayTicks
+            : timeOfDayTicks;
+
+        long tagIndex = upperCandidateIndex == 0
+            ? 0
+            : MultiplyDivideFloorWhenMultiplicandIsAtMostDivisor(
+                clampedTimeTicks,
+                upperCandidateIndex,
+                LastSpecifiedTimeOfDayTicks);
+
+        return EncodeTimeTagIndex(
+            tagIndex,
+            totalCombinationCount,
+            numChars,
+            lettersForFirst,
+            lettersForRest);
+    }
+
+    /// <summary>
+    /// value * percent / 100 の floor を、long オーバーフローなしで計算します。
+    /// </summary>
+    private static long MultiplyByPercentFloor(long value, int percent)
+    {
+        long quotient = value / 100L;
+        long remainder = value % 100L;
+
+        return (quotient * percent) + ((remainder * percent) / 100L);
+    }
+
+    /// <summary>
+    /// floor(multiplicand * multiplier / divisor) を計算します。
+    /// multiplicand <= divisor の前提を使い、巨大な積を作らず long のみで二進展開します。
+    /// </summary>
+    private static long MultiplyDivideFloorWhenMultiplicandIsAtMostDivisor(
+        long multiplicand,
+        long multiplier,
+        long divisor)
+    {
+        if (divisor <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(divisor), divisor, "divisor は正である必要があります。");
+        }
+
+        if (multiplicand < 0 || multiplicand > divisor)
+        {
+            throw new ArgumentOutOfRangeException(nameof(multiplicand), multiplicand, "multiplicand は 0 以上 divisor 以下である必要があります。");
+        }
+
+        if (multiplier < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(multiplier), multiplier, "multiplier は 0 以上である必要があります。");
+        }
+
+        long quotient = 0;
+        long remainder = 0;
+        int highestBitIndex = GetHighestBitIndex(multiplier);
+
+        for (int bitIndex = highestBitIndex; bitIndex >= 0; bitIndex--)
+        {
+            quotient *= 2;
+            remainder *= 2;
+
+            if (((multiplier >> bitIndex) & 1L) != 0)
+            {
+                remainder += multiplicand;
+            }
+
+            while (remainder >= divisor)
+            {
+                remainder -= divisor;
+                quotient++;
+            }
+        }
+
+        return quotient;
+    }
+
+    /// <summary>
+    /// 非負 long 値の最上位 bit 位置を返します。value が 0 の場合は -1。
+    /// </summary>
+    private static int GetHighestBitIndex(long value)
+    {
+        if (value <= 0)
+        {
+            return -1;
+        }
+
+        int highestBitIndex = 0;
+
+        while ((value >>= 1) > 0)
+        {
+            highestBitIndex++;
+        }
+
+        return highestBitIndex;
+    }
+
+    /// <summary>
+    /// 混合基数の数値 index を、固定長の時刻ベースタグ文字列に変換します。
+    /// index が大きいほど、ASCII ordinal 比較でも大きい文字列になります。
+    /// </summary>
+    private static string EncodeTimeTagIndex(
+        long tagIndex,
+        long totalCombinationCount,
+        int numChars,
+        string lettersForFirst,
+        string lettersForRest)
+    {
+        if (tagIndex < 0 || tagIndex >= totalCombinationCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(tagIndex), tagIndex, "tagIndex が時刻ベースタグの組合せ範囲外です。");
+        }
+
+        char[] tagCharacters = new char[numChars];
+
+        long placeValue = totalCombinationCount / lettersForFirst.Length;
+
+        int firstCharacterIndex = (int)(tagIndex / placeValue);
+        tagCharacters[0] = lettersForFirst[firstCharacterIndex];
+
+        long remainder = tagIndex % placeValue;
+
+        for (int position = 1; position < numChars; position++)
+        {
+            placeValue /= lettersForRest.Length;
+
+            int characterIndex = (int)(remainder / placeValue);
+            tagCharacters[position] = lettersForRest[characterIndex];
+
+            remainder %= placeValue;
+        }
+
+        return new string(tagCharacters);
+    }
+
+    /// <summary>
+    /// loadLastProc が返した最終タグと候補タグを比較し、必要に応じて 1 つだけ大きいタグに進めます。
+    /// 最大値まで進んでいた場合は仕様どおりリセット扱いにし、候補タグを採用します。
+    /// </summary>
+    private static string ResolveDuplicateTimeTag(
+        string candidateTimeTag,
+        string lastTimeTag,
+        string lettersForFirst,
+        string lettersForRest)
+    {
+        if (string.IsNullOrEmpty(lastTimeTag))
+        {
+            return candidateTimeTag;
+        }
+
+        if (lastTimeTag.Length != candidateTimeTag.Length)
+        {
+            return candidateTimeTag;
+        }
+
+        ValidateLoadedTimeTag(lastTimeTag, lettersForFirst, lettersForRest);
+
+        if (string.CompareOrdinal(candidateTimeTag, lastTimeTag) <= 0)
+        {
+            string incrementedTimeTag = TryIncrementTimeTag(lastTimeTag, lettersForFirst, lettersForRest);
+
+            return incrementedTimeTag ?? candidateTimeTag;
+        }
+
+        return candidateTimeTag;
+    }
+
+    /// <summary>
+    /// loadLastProc から返された既存タグが、現在の文字セットで表現可能か検査します。
+    /// </summary>
+    private static void ValidateLoadedTimeTag(
+        string timeTag,
+        string lettersForFirst,
+        string lettersForRest)
+    {
+        if (lettersForFirst.IndexOf(timeTag[0]) < 0)
+        {
+            throw new InvalidOperationException("loadLastProc が返した時刻ベースタグの 1 文字目が、lettersForFirst に含まれていません。");
+        }
+
+        for (int position = 1; position < timeTag.Length; position++)
+        {
+            if (lettersForRest.IndexOf(timeTag[position]) < 0)
+            {
+                throw new InvalidOperationException("loadLastProc が返した時刻ベースタグの 2 文字目以降に、lettersForRest に含まれない文字があります。");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 固定長混合基数のタグを 1 つ進めます。
+    /// すでに最大値の場合は null を返します。
+    /// </summary>
+    private static string TryIncrementTimeTag(
+        string timeTag,
+        string lettersForFirst,
+        string lettersForRest)
+    {
+        char[] tagCharacters = timeTag.ToCharArray();
+
+        for (int position = tagCharacters.Length - 1; position >= 0; position--)
+        {
+            string alphabet = position == 0 ? lettersForFirst : lettersForRest;
+            int characterIndex = alphabet.IndexOf(tagCharacters[position]);
+
+            if (characterIndex < 0)
+            {
+                throw new InvalidOperationException("時刻ベースタグに現在の文字セットでは表現できない文字があります。");
+            }
+
+            if (characterIndex + 1 < alphabet.Length)
+            {
+                tagCharacters[position] = alphabet[characterIndex + 1];
+                return new string(tagCharacters);
+            }
+
+            tagCharacters[position] = alphabet[0];
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// RandGen.GenRandSInt31() だけを乱数源として、完全ランダムタグを生成します。
+    /// 剰余バイアスを避けるため、範囲外値は棄却します。
+    /// </summary>
+    private static string GenerateRandomTag(int numCharsOfPadding, string lettersForRandom)
+    {
+        if (numCharsOfPadding == 0)
+        {
+            return string.Empty;
+        }
+
+        char[] randomCharacters = new char[numCharsOfPadding];
+
+        for (int position = 0; position < numCharsOfPadding; position++)
+        {
+            int randomIndex = GenerateUniformRandomIndex(lettersForRandom.Length);
+            randomCharacters[position] = lettersForRandom[randomIndex];
+        }
+
+        return new string(randomCharacters);
+    }
+
+    /// <summary>
+    /// 0 以上 alphabetLength 未満の一様乱数 index を返します。
+    /// </summary>
+    private static int GenerateUniformRandomIndex(int alphabetLength)
+    {
+        const long randomRangeExclusive = 1L << 31;
+
+        long acceptedRangeExclusive = (randomRangeExclusive / alphabetLength) * alphabetLength;
+
+        while (true)
+        {
+            long randomValue = RandGen.GenRandSInt31();
+
+            if (randomValue < acceptedRangeExclusive)
+            {
+                return (int)(randomValue % alphabetLength);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 時刻ベースタグと完全ランダムタグを結合します。
+    /// </summary>
+    private static string CombineTags(string timeTag, string randomPaddingTag)
+    {
+        return randomPaddingTag.Length == 0
+            ? timeTag
+            : string.Concat(timeTag, randomPaddingTag);
+    }
+}

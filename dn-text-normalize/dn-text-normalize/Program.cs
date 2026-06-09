@@ -36,6 +36,18 @@ internal class Program
     [STAThread]
     static void Main(string[] args)
     {
+        if (false) // Test mode 2
+        {
+            while (true)
+            {
+                string testResult = GenerateTimeBasedRandTag();
+
+                Console.WriteLine(testResult);
+
+                Console.ReadLine();
+            }
+        }
+
         if (false) // Test mode
         {
             StringWriter testin = new StringWriter();
@@ -86,7 +98,7 @@ internal class Program
             }
             else if (mode == Mode.YymmddAndRandTag5AndBracket)
             {
-                string tag1 = "TAG_" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + Lib.GenerateRandTag(5) + "_" + GetAndIncrementSeqNo().ToString("D4");
+                string tag1 = "TAG_" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + GenerateTimeBasedRandTag() + "_" + GetAndIncrementSeqNo().ToString("D4");
 
                 str = "[" + tag1 + "]";
                 //strAppendTail = " ";
@@ -97,7 +109,7 @@ internal class Program
             }
             else if (mode == Mode.BeginEndSectionWithTag)
             {
-                string tag1 = "TAG_" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + Lib.GenerateRandTag(5) + "_" + GetAndIncrementSeqNo().ToString("D4");
+                string tag1 = "TAG_" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + GenerateTimeBasedRandTag() + "_" + GetAndIncrementSeqNo().ToString("D4");
 
                 str = $"\r\n--- [{tag1}] ここから ---\r\n\r\n--- [{tag1}] ここまで ---\r\n";
             }
@@ -200,6 +212,21 @@ internal class Program
             }
         }
         catch { }
+    }
+
+    public static string GenerateTimeBasedRandTag()
+    {
+        const string subKeyPath = @"Software\dn-text-normalize\timebased_randtag";
+        DateTimeOffset now = DateTimeOffset.Now;
+
+        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(subKeyPath))
+        {
+            if (key == null) throw new ApplicationException("CreateSubKey error");
+
+            return TimeBasedRandTagGenerator.GenerateRandTagFromTimeOfDay(now,
+                loadLastProc: dtStr => (string)key.GetValue(dtStr),
+                saveLastProc: (dtStr, data) => key.SetValue(dtStr, data, RegistryValueKind.String));
+        }
     }
 
     /// <summary>
