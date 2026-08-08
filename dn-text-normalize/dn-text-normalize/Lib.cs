@@ -95,6 +95,11 @@ public static class Lib
             str = "GoogleDrive/" + str.Substring(3);
             backSlashToSlash = true;
         }
+        else if (str.IndexOf(@"\.shortcut-targets-by-id\", StringComparison.OrdinalIgnoreCase) != -1)
+        {
+            isDir = IsDir(str);
+            backSlashToSlash = true;
+        }
         else if (str.StartsWith(@"M:\", StringComparison.OrdinalIgnoreCase))
         {
             isDir = IsDir(str);
@@ -114,6 +119,30 @@ public static class Lib
         if (backSlashToSlash)
         {
             str = str.Replace(@"\", "/");
+        }
+
+        str = str.Replace(@"GoogleDrive/DN Share/", @"GoogleDrive/");
+
+        if (str.StartsWith(@"GoogleDrive/", StringComparison.InvariantCultureIgnoreCase))
+        {
+            if (str.EndsWith(".gdoc", StringComparison.InvariantCultureIgnoreCase)) str = str.Substring(0, str.Length - 5);
+            if (str.EndsWith(".gsheet", StringComparison.InvariantCultureIgnoreCase)) str = str.Substring(0, str.Length - 7);
+            if (str.EndsWith(".gdraw", StringComparison.InvariantCultureIgnoreCase)) str = str.Substring(0, str.Length - 6);
+            if (str.EndsWith(".gslides", StringComparison.InvariantCultureIgnoreCase)) str = str.Substring(0, str.Length - 8);
+        }
+
+        string tag1 = @"/.shortcut-targets-by-id/";
+        int a = str.IndexOf(tag1, StringComparison.InvariantCultureIgnoreCase);
+        if (a != -1)
+        {
+            string s1 = str.Substring(a + tag1.Length);
+            int b = s1.IndexOf("/");
+            if (b != -1)
+            {
+                string s2 = s1.Substring(b + 1);
+
+                str = "GoogleDrive/" + s2;
+            }
         }
 
         return str;
@@ -270,7 +299,7 @@ public static class Lib
 
         string str1 = sb1.ToString();
 
-        str1 = ReplaceStr(str1, "　", "  ");
+        str1 = ReplaceStr(str1, " ", "  ");
         str1 = ReplaceStr(str1, "\t", "    ");
 
         string ret = (str1 + normalizeStrSoftEtherInternal2(str2));

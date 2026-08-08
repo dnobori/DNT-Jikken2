@@ -90,6 +90,12 @@ trust D9:91:90:3A:C1:4A
 connect D9:91:90:3A:C1:4A
 info D9:91:90:3A:C1:4A
 
+# Polar Sense 1 台目
+pair 24:AC:AC:12:1A:36
+trust 24:AC:AC:12:1A:36
+connect 24:AC:AC:12:1A:36
+info 24:AC:AC:12:1A:36
+
 
 # ペア済みデバイス一覧表示
 devices Paired
@@ -115,6 +121,10 @@ python3.11 -m venv .venv
 # venv アクティベート方法
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
 source ../.venv/bin/activate
+
+# pip でインストールパッケージ一覧を復元する方法
+cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
+pip install -r ../requirements.txt
 
 # pip で好きなパッケージをインストールする方法
 cd ~/DNT-Jikken2/dn-pysensors1-251207/src/
