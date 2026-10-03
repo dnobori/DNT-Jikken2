@@ -3,7 +3,8 @@ DNNT 261003_ZWCES4 31.5 MBytes ごとに分割する zip ファイル圧縮プ�
 
 目的:
   ファイル、フォルダ、および明示的に指定された ZIP の内容を、相対パスを保った
-  独立した複数の暗号化 ZIP にまとめる。1 個の上限は 31,500,000 bytes。
+  独立した最大 19 個の暗号化 ZIP にまとめる。1 個の目安は 31,500,000 bytes。
+  個数上限が絶対優先。必要なら目安容量を緩和し、できるだけ均等に配分する。
   これは .z01 等のマルチボリューム ZIP ではなく、各 ZIP を単独で展開できる形式。
 
 環境:
@@ -16,15 +17,20 @@ DNNT 261003_ZWCES4 31.5 MBytes ごとに分割する zip ファイル圧縮プ�
 動作原理:
   DeflateStream は圧縮・展開にだけ使用する。ZIP 構造、CRC、ZipCrypto、ZIP64、
   WinZip AES 読み取りはこのファイル内に実装。AES のブロック演算等は標準暗号 API。
-  候補を出力に試し書きし、中央ディレクトリ・暗号ヘッダ・末尾構造を含む正確な
-  完成サイズで採否を決定する。不採用なら書き始め位置に切り詰める。計測結果だけ
-  記憶し、後続候補を試す。後の ZIP では既知サイズから採否を判断するので、同じ
-  ファイルの実圧縮は最大 2 回。圧縮後データ全体のメモリ保持も一時ファイルも不要。
-  再圧縮時は元ファイルの識別子・日時・長さ、および平文 SHA-256 等を照合する。
+  全入力を最大 8 並列で事前圧縮し、本圧縮と同じ DeflateStream の既定設定で測る。
+  元 ZIP は必ず復号・展開してから新たに圧縮する。展開用一時ファイルは作らない。
+  圧縮結果は 64 KiB の断片で任意にキャッシュし、作成途中も含めて共通予算で管理。
+  予算は Windows の使用可能な物理/コミット/仮想空間の最小値の 80% を再評価する。
+  予算不足では古いものから破棄し、必要時だけ再圧縮。配列確保失敗ならキャッシュ停止。
+  ZIP 管理情報・暗号ヘッダ・ZIP64 境界を含む完成サイズで最大 19 個の計画を確定する。
+  通常容量で first-fit/best-fit を比較し、超過見込みなら大きい順の均等配置・移動・交換。
+  最小個数や完全な大域最適は保証しないが、19 個の上限と計画/実サイズ一致は検査する。
+  キャッシュ時も入力の実体・サイズ・日時を照合し、キャッシュを失った再圧縮時は
+  平文 SHA-256・CRC・圧縮量も照合する。成功するまで新規出力を所有ハンドルで保持。
 
 安全性 / 解釈:
   [T261004_EL_ATCEV_01] 旧出力の削除は、指定された最初の名前、または
-  「ベース名 + '.' + ASCII 数字 2～4 桁 + '.zip'」に完全一致する直下の通常ファイルだけ。
+  「ベース名 + '.' + ASCII 数字ちょうど 2 桁 + '.zip'」に完全一致する直下の通常ファイルだけ。
   ワイルドカード削除、再帰削除、名前を再検索しての失敗時削除は行わない。
   新規出力は CREATE_NEW で作り、DELETE アクセス付きハンドルを成功まで保持する。
   書き込みストリームとは別に所有ハンドルを保持し、失敗時だけ削除保留にして閉じる。
@@ -69,11 +75,11 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 
-
 /// <summary>単一ファイルで完結するアプリケーション。内部名は依頼の命名規則による。</summary>
 internal static class dnnt_261003_zwces4_zip_split_merge
 {
     private const long MAX_ONE_ZIP_FILE_SIZE = 31500000L;
+    private static int MAX_NUM_ZIP_FILES = 18;
     private const string ZIP_PASSWORD = "m";
     // UTF-8/Unicode Path の明示指定がない既存 ZIP 用。日本語 Windows の CP932 を優先。
     private const int LEGACY_ZIP_CODE_PAGE = 932;
@@ -134,6 +140,20 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 AddInputs(roots);
             }
 
+            Console.WriteLine();
+            Console.Write($"最大ファイル数 (無指定: {MAX_NUM_ZIP_FILES} 個): ");
+            string tmp1 = Console.ReadLine();
+
+            if (int.TryParse(tmp1, out var tmp2))
+            {
+                if (tmp2 >= 1)
+                {
+                    MAX_NUM_ZIP_FILES = tmp2;
+                }
+            }
+
+            Console.WriteLine();
+
             string outputPath = SelectOutput();
             using (DirectoryGuard guard = new DirectoryGuard(System.IO.Path.GetDirectoryName(outputPath)))
             {
@@ -147,13 +167,22 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 Console.WriteLine("対象: {0} 個のファイル、{1} 個の空フォルダ、合計 {2} bytes。",
                     manifest.FileCount, manifest.Items.Count - manifest.FileCount, FormatNumber(manifest.TotalBytes));
                 Console.WriteLine("注意: 出力は固定パスワード m の ZipCrypto です。機密保護には使用しないでください。");
-                transaction = new OutputTransaction(names);
-                transaction.RemovePreviousOutputs(manifest);
-                PackResult result = Pack(manifest, transaction);
-                string resultText = FormatResult(result, names);
-                transaction.Commit();
-                TryWriteLine(resultText);
-                exitCode = 0;
+                using (CompressedCache cache = new CompressedCache(Native.AvailableMemoryBytes))
+                {
+                    int workers = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
+                    Precompress(manifest, cache, workers);
+                    PackingPlan plan = PackingPlan.Build(manifest.Items);
+                    cache.Trim();
+                    plan.Show(names);
+                    // すべての復号・圧縮計測と配置検査が成功してから、初めて旧出力を削除する。
+                    transaction = new OutputTransaction(names);
+                    transaction.RemovePreviousOutputs(manifest);
+                    PackResult result = Pack(manifest, transaction, plan, cache);
+                    string resultText = FormatResult(result, names);
+                    transaction.Commit();
+                    TryWriteLine(resultText);
+                    exitCode = 0;
+                }
             }
         }
         catch (Exception ex)
@@ -231,7 +260,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             dialog.CheckPathExists = true;
             dialog.ValidateNames = true;
             dialog.RestoreDirectory = true;
-            dialog.FileName = "archive.zip";
+            dialog.FileName = Lib.GenTag() + "_MaterialFiles.zip";
             DialogResult result = dialog.ShowDialog(new ConsoleOwner());
             if (result != DialogResult.OK) throw new AppError(1223, "保存先の選択がキャンセルされました。");
             string path = PathRules.FullPath(dialog.FileName);
@@ -241,87 +270,116 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         }
     }
 
-    /// <summary>残りの候補を元の順序で走査し、完成物サイズが入るものを順に採用する。</summary>
-    private static PackResult Pack(Manifest manifest, OutputTransaction transaction)
+    /// <summary>本圧縮と事前圧縮で共用する Deflate 設定。.NET 4.0 の既定レベルを両方に使う。</summary>
+    private static DeflateStream CreateCompressor(Stream destination)
     {
+        return new DeflateStream(destination, CompressionMode.Compress, true);
+    }
+
+    /// <summary>各入力を独立した読取ハンドルで一度圧縮し、サイズ・検証値・任意のキャッシュを確定する。</summary>
+    /// <param name="manifest">重複検査済みの入力一覧。各要素をただ 1 個のワーカーが担当する。</param>
+    /// <param name="cache">全ワーカーで共有する、内部で同期済みの圧縮データキャッシュ。</param>
+    /// <param name="workers">同時処理数。既存 ZIP 内の別エントリも読取ハンドル・暗号状態を共有しない。</param>
+    private static void Precompress(Manifest manifest, CompressedCache cache, int workers)
+    {
+        Console.WriteLine("事前圧縮: {0} スレッドで全データを検証・計測します。", workers);
+        try
+        {
+            System.Threading.Tasks.ParallelOptions options = new System.Threading.Tasks.ParallelOptions();
+            options.MaxDegreeOfParallelism = workers;
+            System.Threading.Tasks.Parallel.For(0, manifest.Items.Count, options,
+                delegate (int index, System.Threading.Tasks.ParallelLoopState loop)
+                {
+                    if (loop.ShouldExitCurrentIteration) return;
+                    SourceItem item = manifest.Items[index];
+                    try
+                    {
+                        CheckCancellation();
+                        if (!item.IsDirectory)
+                            Console.WriteLine("事前圧縮: 全体 {0} / {1} 個目のファイル: {2} bytes: {3}",
+                                item.Ordinal, manifest.FileCount, FormatNumber(item.Length), item.ZipPath);
+                        Measurement measurement = new Measurement();
+                        measurement.Method = item.IsDirectory || item.Length == 0 ? (ushort)0 : (ushort)8;
+                        using (CaptureStream capture = new CaptureStream(cache, item))
+                        {
+                            ContentResult content;
+                            if (measurement.Method == 8)
+                                using (DeflateStream compressor = CreateCompressor(capture))
+                                    content = item.CopyPlaintextTo(compressor);
+                            else content = item.CopyPlaintextTo(capture);
+                            measurement.CompressedSize = checked(capture.Length + (item.IsDirectory ? 0L : 12L));
+                            measurement.UncompressedSize = content.Length;
+                            measurement.Crc = content.Crc;
+                            measurement.Digest = content.Digest;
+                            item.Measurement = measurement;
+                            capture.Complete();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        loop.Stop();
+                        throw new AppError(ErrorCode(ex), "事前圧縮に失敗しました: " + item.Origin +
+                            Environment.NewLine + "ZIP 内パス: " + item.ZipPath, ex);
+                    }
+                });
+        }
+        catch (AggregateException ex)
+        {
+            AggregateException errors = ex.Flatten();
+            Exception first = errors.InnerExceptions[0];
+            throw new AppError(ErrorCode(first), "事前圧縮を中止しました。旧出力はまだ削除していません。", errors);
+        }
+        cache.Trim();
+        long total = 0;
+        foreach (SourceItem item in manifest.Items)
+        {
+            if (item.Measurement == null) throw new AppError(13, "事前圧縮の計測結果がありません: " + item.Origin);
+            if (!item.IsDirectory) total = checked(total + item.Measurement.CompressedSize - 12L);
+        }
+        Console.WriteLine("事前圧縮完了: 圧縮データ合計 {0} bytes (ZIP 管理情報・暗号ヘッダを除く)。", FormatNumber(total));
+        Console.WriteLine("圧縮キャッシュ保持量: {0} bytes / 現在の上限 {1} bytes。", FormatNumber(cache.UsedBytes), FormatNumber(cache.LimitBytes));
+    }
+
+    /// <summary>事前確定した最大 19 個の計画を出力する。サイズや内容が変わった場合は全体を失敗させる。</summary>
+    private static PackResult Pack(Manifest manifest, OutputTransaction transaction, PackingPlan plan, CompressedCache cache)
+    {
+        plan.Validate(manifest.Items);
         PackResult result = new PackResult();
         result.FileCount = manifest.FileCount;
         result.OriginalBytes = manifest.TotalBytes;
         result.CycleCutCount = manifest.CycleCutCount;
-        List<SourceItem> remaining = new List<SourceItem>(manifest.Items);
-        if (remaining.Count == 0)
-        {
-            // 空 ZIP だけが入力であっても、その仮想ルート空フォルダが通常は残る。
-            OwnedOutput empty = transaction.CreateNext();
-            ZipOutput writer = new ZipOutput(empty.Stream);
-            empty.ExpectedLength = writer.Finish();
-            result.AddPart(empty.Name, empty.ExpectedLength);
-            return result;
-        }
-        while (remaining.Count != 0)
+        foreach (PlannedPart part in plan.Parts)
         {
             CheckCancellation();
             OwnedOutput output = transaction.CreateNext();
             ZipOutput writer = new ZipOutput(output.Stream);
-            List<SourceItem> deferred = new List<SourceItem>();
-            bool oversized = false;
-            for (int i = 0; i < remaining.Count; i++)
+            foreach (SourceItem item in part.Items)
             {
                 CheckCancellation();
-                SourceItem item = remaining[i];
-                if (oversized)
-                {
-                    deferred.Add(item);
-                    continue;
-                }
-                if (item.Measurement != null && writer.Count != 0 &&
-                    writer.Predict(item, item.Measurement) > MAX_ONE_ZIP_FILE_SIZE)
-                {
-                    deferred.Add(item);
-                    continue;
-                }
                 if (item.IsDirectory)
                     Console.WriteLine("{0}: 空フォルダ: {1}", output.Name, item.ZipPath);
                 else
                     Console.WriteLine("{0}: 全体 {1} / {2} 個目のファイル: {3} bytes: {4}",
                         output.Name, item.Ordinal, manifest.FileCount, FormatNumber(item.Length), item.ZipPath);
-
-                long start = output.Stream.Position;
-                EntryRecord record;
-                try { record = writer.WriteCandidate(item); }
-                catch (Exception ex)
+                try
                 {
-                    throw new AppError(ErrorCode(ex), "圧縮中のエラー: " + item.Origin +
-                        "\n出力先: " + output.Name + "\nZIP 内パス: " + item.ZipPath, ex);
-                }
-                long finalSize = writer.PredictRecord(record);
-                if (writer.Count == 0 || finalSize <= MAX_ONE_ZIP_FILE_SIZE)
-                {
+                    EntryRecord record = writer.WriteCandidate(item, cache);
                     writer.Accept(record);
                     if (!item.IsDirectory)
                         result.CompressedPayloadBytes = checked(result.CompressedPayloadBytes + record.CompressedSize - 12L);
-                    if (finalSize > MAX_ONE_ZIP_FILE_SIZE)
-                    {
-                        oversized = true;
-                        Console.WriteLine("警告: この 1 ファイルだけで上限を超えます。単独 ZIP として許容します ({0} bytes)。",
-                            FormatNumber(finalSize));
-                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    output.Stream.Position = start;
-                    output.Stream.SetLength(start);
-                    deferred.Add(item);
-                    Console.WriteLine("  容量超過のため後続 ZIP へ保留しました。後ろの候補を続けて調べます。");
+                    throw new AppError(ErrorCode(ex), "出力中のエラー: " + item.Origin +
+                        Environment.NewLine + "出力先: " + output.Name + Environment.NewLine + "ZIP 内パス: " + item.ZipPath, ex);
                 }
             }
-            if (writer.Count == 0) throw new AppError(13, "内部エラー: ZIP に候補を追加できませんでした。");
             output.ExpectedLength = writer.Finish();
-            if (!oversized && output.ExpectedLength > MAX_ONE_ZIP_FILE_SIZE)
-                throw new AppError(13, "内部エラー: ZIP の実サイズが計算値を超えました。");
+            if (output.ExpectedLength != part.Layout.Size)
+                throw new AppError(13, "ZIP の物理サイズが事前計画と一致しません: " + output.Name);
             result.AddPart(output.Name, output.ExpectedLength);
-            Console.WriteLine("{0}: 完成サイズ {1} bytes", output.Name, FormatNumber(output.ExpectedLength));
-            remaining = deferred;
+            Console.WriteLine("{0}: 完成サイズ {1} bytes{2}", output.Name, FormatNumber(output.ExpectedLength),
+                output.ExpectedLength > MAX_ONE_ZIP_FILE_SIZE ? " (31,500,000 bytes 超過)" : "");
         }
         return result;
     }
@@ -466,7 +524,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 full = full.Substring(0, full.Length - 1);
             string suffix = full.Substring(root.Length);
             if (suffix.Length > 0)
-                foreach (string component in suffix.Split('\\')) ValidateComponent(component);
+                foreach (string component in suffix.Split('\\')) ValidateComponent(component, true);
             return full;
         }
 
@@ -506,9 +564,13 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         }
 
         /// <summary>Windows 展開時に別名・上位移動・デバイス・ADS となる成分を拒否する。</summary>
-        private static void ValidateComponent(string value)
+        private static void ValidateComponent(string value, bool allowEmpty = false)
         {
-            if (value.Length == 0 || value == "." || value == ".." ||
+            if (allowEmpty == false && value.Length == 0)
+            {
+                throw new AppError(13, "安全でないパス成分です: [" + value + "]");
+            }
+            if (/*value.Length == 0 || */value == "." || value == ".." ||
                 value.EndsWith(" ", StringComparison.Ordinal) || value.EndsWith(".", StringComparison.Ordinal))
                 throw new AppError(13, "安全でないパス成分です: [" + value + "]");
             foreach (char c in value)
@@ -627,7 +689,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         }
     }
 
-    /// <summary>再圧縮に必要な 1 ファイルまたは 1 空フォルダのメタデータ。内容自体は保持しない。</summary>
+    /// <summary>再圧縮に必要な 1 ファイルまたは 1 空フォルダ。圧縮データの所有者は予算管理キャッシュ。</summary>
     private sealed class SourceItem
     {
         internal string ZipPath;
@@ -641,9 +703,20 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         internal ZipSource Archive;
         internal ZipEntry ArchiveEntry;
         internal Measurement Measurement;
+        internal CacheEntry CachedData;
 #if DNNT_SELF_TEST
         internal byte[] SelfTestBytes;
 #endif
+
+        /// <summary>キャッシュ採用時にも実体・サイズ・日時を照合し、転送中は入力を読取ハンドルで固定する。</summary>
+        internal Stream OpenValidationStream()
+        {
+            if (IsDirectory) return null;
+#if DNNT_SELF_TEST
+            if (SelfTestBytes != null) return null;
+#endif
+            return Archive == null ? Physical.Open() : Archive.OpenValidationStream();
+        }
 
         /// <summary>内容を平文として target に流し、CRC と SHA-256 を返す。一時展開はしない。</summary>
         internal ContentResult CopyPlaintextTo(Stream target)
@@ -669,7 +742,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         { Length = length; Crc = crc; Digest = digest; }
     }
 
-    /// <summary>最初の試行で確定した圧縮量。圧縮済みバイト列は保管しない。</summary>
+    /// <summary>事前圧縮で確定した圧縮量・内容検証値。圧縮データ自体は別の予算付きキャッシュで管理。</summary>
     private sealed class Measurement
     {
         internal long CompressedSize;
@@ -677,6 +750,589 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         internal uint Crc;
         internal byte[] Digest;
         internal ushort Method;
+    }
+
+    /// <summary>圧縮済みデータの 64 KiB 以下の断片。Count 以降の未使用容量も予算に含める。</summary>
+    private sealed class CacheBlock
+    {
+        internal readonly byte[] Bytes = new byte[BufferSize];
+        internal int Count;
+    }
+
+    /// <summary>1 入力のキャッシュ。削除時は Live=false とし、進行中の捕捉も計測専用へ切り替える。</summary>
+    private sealed class CacheEntry
+    {
+        internal LinkedList<CacheBlock> Blocks = new LinkedList<CacheBlock>();
+        internal SourceItem Owner;
+        internal LinkedListNode<CacheEntry> Node;
+        internal bool Live;
+        internal bool Complete;
+    }
+
+    /// <summary>FIFO キャッシュ。作成途中も同じ予算で計上し、古いエントリから丸ごと捨てる。</summary>
+    private sealed class CompressedCache : IDisposable
+    {
+        // 配列実容量に加え、管理オブジェクト・参照・リンクの分を保守的に計上する。
+        private const long EntryCharge = 512L;
+        private const long BlockCharge = BufferSize + 128L;
+        private readonly object gate = new object();
+        private readonly LinkedList<CacheEntry> fifo = new LinkedList<CacheEntry>();
+        private readonly Func<long> availableMemory;
+        private long used;
+        private long limit;
+        private bool disabled;
+        internal long UsedBytes { get { lock (gate) return used; } }
+        internal long LimitBytes { get { lock (gate) return limit; } }
+
+        /// <summary>available は使用可能メモリ bytes の取得関数。テストでは固定値を注入できる。</summary>
+        internal CompressedCache(Func<long> available)
+        {
+            if (available == null) throw new ArgumentNullException("available");
+            availableMemory = available;
+            Trim();
+        }
+
+        /// <summary>オーバーフローさせずに floor(bytes * 0.8) を計算する。</summary>
+        internal static long EightyPercent(long bytes)
+        {
+            return bytes <= 0 ? 0 : bytes / 5L * 4L + bytes % 5L * 4L / 5L;
+        }
+
+        /// <summary>現在の空きメモリを再取得し、予算超過なら古いデータから捨てる。gate 内でのみ呼ぶ。</summary>
+        private void Refresh()
+        {
+            limit = disabled ? 0L : EightyPercent(availableMemory());
+            while (used > limit && fifo.First != null) Release(fifo.First.Value);
+        }
+
+        /// <summary>capacity の追加を予約できるまで FIFO 削除する。確保後も空き量を再確認する。</summary>
+        private bool MakeRoom(long capacity)
+        {
+            Refresh();
+            while (capacity > limit - used && fifo.First != null) Release(fifo.First.Value);
+            return capacity <= limit - used;
+        }
+
+        /// <summary>エントリの所有参照を外し、保持配列を解放可能にする。呼出側の古い参照も無効化する。</summary>
+        private void Release(CacheEntry entry)
+        {
+            if (entry == null || !entry.Live) return;
+            used -= EntryCharge;
+            foreach (CacheBlock block in entry.Blocks)
+            {
+                Array.Clear(block.Bytes, 0, block.Bytes.Length);
+                used -= BlockCharge;
+            }
+            entry.Blocks.Clear();
+            fifo.Remove(entry.Node);
+            entry.Node = null;
+            entry.Live = false;
+            if (entry.Owner != null && Object.ReferenceEquals(entry.Owner.CachedData, entry)) entry.Owner.CachedData = null;
+            entry.Owner = null;
+        }
+
+        /// <summary>計測開始時に登録する。予算不足なら null を返し、圧縮はキャッシュなしで続行する。</summary>
+        internal CacheEntry Begin(SourceItem item)
+        {
+            lock (gate)
+            {
+                if (item.IsDirectory || !MakeRoom(EntryCharge)) return null;
+                try
+                {
+                    CacheEntry entry = new CacheEntry();
+                    entry.Owner = item;
+                    entry.Node = fifo.AddLast(entry);
+                    entry.Live = true;
+                    used += EntryCharge;
+                    item.CachedData = entry;
+                    Refresh();
+                    return entry;
+                }
+                catch (OutOfMemoryException) { Disable(); return null; }
+            }
+        }
+
+        /// <summary>圧縮断片を複製する。gate により並列登録・追記・追出しの競合を防止する。</summary>
+        internal void Append(CacheEntry entry, byte[] buffer, int offset, int count)
+        {
+            if (entry == null) return;
+            lock (gate)
+            {
+                Refresh();
+                while (count > 0 && entry.Live)
+                {
+                    CacheBlock block = entry.Blocks.Last == null ? null : entry.Blocks.Last.Value;
+                    if (block == null || block.Count == block.Bytes.Length)
+                    {
+                        // MakeRoom は自分自身を含む最古エントリを消すことがある。
+                        if (!MakeRoom(BlockCharge) || !entry.Live) { Release(entry); return; }
+                        try
+                        {
+                            block = new CacheBlock();
+                            entry.Blocks.AddLast(block);
+                            used += BlockCharge;
+                        }
+                        catch (OutOfMemoryException) { Disable(); return; }
+                        Refresh();
+                        if (!entry.Live) return;
+                    }
+                    int length = Math.Min(count, block.Bytes.Length - block.Count);
+                    Buffer.BlockCopy(buffer, offset, block.Bytes, block.Count, length);
+                    block.Count += length;
+                    offset += length;
+                    count -= length;
+                }
+            }
+        }
+
+        /// <summary>捕捉が正常終了したことを通知する。不完全なキャッシュは出力に使用しない。</summary>
+        internal void Complete(CacheEntry entry)
+        {
+            lock (gate) { Refresh(); if (entry != null && entry.Live) entry.Complete = true; }
+        }
+
+        /// <summary>キャッシュから転送して消費する。途中で予算が下がった場合も false を返す。</summary>
+        /// <remarks>false 時は一部が転送済みの場合がある。呼出側は暗号ヘッダから巻き戻して再圧縮する。</remarks>
+        internal bool TryCopyTo(SourceItem item, Stream target)
+        {
+            lock (gate)
+            {
+                CacheEntry entry = item.CachedData;
+                Refresh();
+                if (entry == null || !entry.Live || !entry.Complete) return false;
+                try
+                {
+                    while (entry.Blocks.First != null)
+                    {
+                        CheckCancellation();
+                        Refresh();
+                        if (!entry.Live) return false;
+                        CacheBlock block = entry.Blocks.First.Value;
+                        target.Write(block.Bytes, 0, block.Count);
+                        Array.Clear(block.Bytes, 0, block.Bytes.Length);
+                        entry.Blocks.RemoveFirst();
+                        used -= BlockCharge;
+                    }
+                    return true;
+                }
+                finally { Release(entry); }
+            }
+        }
+
+        /// <summary>失敗した捕捉を取り消す。すでに予算で追い出されたエントリでも安全。</summary>
+        internal void Discard(CacheEntry entry) { lock (gate) Release(entry); }
+        /// <summary>処理段階の境界でも上限を再評価する。</summary>
+        internal void Trim() { lock (gate) Refresh(); }
+        /// <summary>キャッシュの配列確保に失敗した場合だけ無効化する。入力検証・計測は続行する。</summary>
+        private void Disable()
+        {
+            disabled = true;
+            limit = 0;
+            while (fifo.First != null) Release(fifo.First.Value);
+        }
+        /// <summary>全圧縮データを破棄する。OS へのメモリ返却時期自体は CLR の GC が決める。</summary>
+        public void Dispose() { lock (gate) Disable(); }
+    }
+
+    /// <summary>圧縮結果のバイト数を必ず数え、予算がある間だけ断片キャッシュにも渡す書込先。</summary>
+    private sealed class CaptureStream : Stream
+    {
+        private readonly CompressedCache cache;
+        private readonly CacheEntry entry;
+        private long length;
+        private bool complete;
+        internal CaptureStream(CompressedCache owner, SourceItem item) { cache = owner; entry = owner.Begin(item); }
+        internal void Complete() { cache.Complete(entry); complete = true; }
+        public override bool CanRead { get { return false; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return true; } }
+        public override long Length { get { return length; } }
+        public override long Position { get { return length; } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ValidateBuffer(buffer, offset, count);
+            CheckCancellation();
+            length = checked(length + count);
+            cache.Append(entry, buffer, offset, count);
+        }
+        public override int Read(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+        public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && !complete) cache.Discard(entry);
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>圧縮済みサイズを ZIP の正確なレコード配置へ変換する純粋な計算状態。</summary>
+    private struct ZipLayout
+    {
+        internal long LocalBytes;
+        internal long CentralBytes;
+        internal int Count;
+        internal int Zip64Entries;
+        internal long Size { get { return ZipOutput.TotalSize(LocalBytes, CentralBytes, Count, Zip64Entries != 0); } }
+
+        /// <summary>item を offset に置いた場合のレコード。実出力と同じ EntryRecord の長さ計算を共用する。</summary>
+        internal static EntryRecord Record(SourceItem item, long offset)
+        {
+            Measurement measurement = item.Measurement;
+            if (measurement == null) throw new AppError(13, "配置計算前に圧縮量が確定していません: " + item.Origin);
+            EntryRecord record = new EntryRecord();
+            record.Source = item;
+            record.Offset = offset;
+            record.CompressedSize = measurement.CompressedSize;
+            record.UncompressedSize = measurement.UncompressedSize;
+            record.Method = measurement.Method;
+            record.End = checked(offset + record.LocalLength);
+            return record;
+        }
+
+        /// <summary>この値を変更せず、item 追加後の状態を返す。ZIP64 の位置・個数境界も含む。</summary>
+        internal ZipLayout With(SourceItem item)
+        {
+            EntryRecord record = Record(item, LocalBytes);
+            ZipLayout result = this;
+            result.LocalBytes = record.End;
+            result.CentralBytes = checked(CentralBytes + record.CentralLength);
+            result.Count = checked(Count + 1);
+            result.Zip64Entries = checked(Zip64Entries + (record.Uses64 ? 1 : 0));
+            return result;
+        }
+    }
+
+    /// <summary>1 個の ZIP の計画。Items の順序も実書込順序として保持する。</summary>
+    private sealed class PlannedPart
+    {
+        internal readonly List<SourceItem> Items = new List<SourceItem>();
+        internal ZipLayout Layout;
+        /// <summary>item を末尾に追加し、その追加を反映したサイズ状態を確定する。</summary>
+        internal void Add(SourceItem item) { Layout = Layout.With(item); Items.Add(item); }
+        /// <summary>並びの変更後に ZIP64 のオフセット依存情報を含めて再計算する。</summary>
+        internal void Rebuild()
+        {
+            Layout = new ZipLayout();
+            foreach (SourceItem item in Items) Layout = Layout.With(item);
+        }
+
+        /// <summary>removeIndex を削除し added を末尾へ足す仮計画。-1 / null はその操作なし。</summary>
+        internal ZipLayout Changed(int removeIndex, SourceItem added)
+        {
+            EntryRecord removed = removeIndex < 0 ? null : ZipLayout.Record(Items[removeIndex], 0);
+            EntryRecord inserted = added == null ? null : ZipLayout.Record(added, 0);
+            long local = checked(Layout.LocalBytes - (removed == null ? 0L : removed.LocalLength) +
+                (inserted == null ? 0L : inserted.LocalLength));
+            if (Layout.LocalBytes < Zip32Limit && local < Zip32Limit)
+            {
+                // すべてのオフセットが 32 bit に収まる場合だけ、定数時間の差分計算が可能。
+                ZipLayout result = Layout;
+                result.LocalBytes = local;
+                result.CentralBytes = checked(Layout.CentralBytes - (removed == null ? 0L : removed.CentralLength) +
+                    (inserted == null ? 0L : inserted.CentralLength));
+                result.Count += (inserted == null ? 0 : 1) - (removed == null ? 0 : 1);
+                result.Zip64Entries += (inserted != null && inserted.Uses64 ? 1 : 0) -
+                    (removed != null && removed.Uses64 ? 1 : 0);
+                return result;
+            }
+            ZipLayout full = new ZipLayout();
+            for (int i = 0; i < Items.Count; i++) if (i != removeIndex) full = full.With(Items[i]);
+            if (added != null) full = full.With(added);
+            return full;
+        }
+    }
+
+    /// <summary>最大 19 個の配置計画。正確な完成サイズを評価し、容量優先と均等化を切り替える。</summary>
+    private sealed class PackingPlan
+    {
+        internal readonly List<PlannedPart> Parts = new List<PlannedPart>();
+        internal bool Relaxed;
+        private const int RefinementPasses = 12;
+        private const int CandidateSamples = 32;
+        private const long RefinementBudget = 2000000L;
+
+        /// <summary>通常容量で複数の貪欲解を比較し、19 個に収まらなければ均等配分と局所改善を行う。</summary>
+        internal static PackingPlan Build(List<SourceItem> items)
+        {
+            CheckCancellation();
+            if (items.Count == 0)
+            {
+                PackingPlan empty = new PackingPlan();
+                empty.Parts.Add(new PlannedPart());
+                return empty;
+            }
+            List<SourceItem> descending = new List<SourceItem>(items);
+            Dictionary<SourceItem, int> positions = new Dictionary<SourceItem, int>();
+            for (int i = 0; i < items.Count; i++) positions.Add(items[i], i);
+            descending.Sort(delegate (SourceItem first, SourceItem second)
+            {
+                long a = new ZipLayout().With(first).Size;
+                long b = new ZipLayout().With(second).Size;
+                int comparison = b.CompareTo(a);
+                return comparison != 0 ? comparison : positions[first].CompareTo(positions[second]);
+            });
+            PackingPlan best = Capacity(items, MAX_ONE_ZIP_FILE_SIZE, false);
+            best = PreferCompact(best, Capacity(descending, MAX_ONE_ZIP_FILE_SIZE, false));
+            best = PreferCompact(best, Capacity(descending, MAX_ONE_ZIP_FILE_SIZE, true));
+            if (best == null)
+            {
+                Console.WriteLine("通常容量での配置が 19 個を超える見込みのため、最大 19 個へ均等化します...");
+                best = Balanced(descending);
+                // 中間容量の best-fit も比較する。探索は有限であり、数学的な大域最適を保証しない。
+                long low = MAX_ONE_ZIP_FILE_SIZE;
+                long high = best.Maximum();
+                for (int attempt = 0; attempt < 12 && high > low + 1L; attempt++)
+                {
+                    CheckCancellation();
+                    long middle = low + (high - low) / 2L;
+                    PackingPlan trial = Capacity(descending, middle, true);
+                    if (trial == null) low = middle;
+                    else
+                    {
+                        high = middle;
+                        while (trial.Parts.Count < Math.Min(MAX_NUM_ZIP_FILES, items.Count)) trial.Parts.Add(new PlannedPart());
+                        if (CompareBalance(trial, best) < 0) best = trial;
+                    }
+                }
+                best.ImproveBalance();
+                best.Parts.RemoveAll(delegate (PlannedPart part) { return part.Items.Count == 0; });
+            }
+            if (best.CapacityLegal()) best.Compact();
+            best.Relaxed = !best.CapacityLegal();
+            best.Validate(items);
+            return best;
+        }
+
+        /// <summary>追加後に最初に収まる ZIP、または最も残りの少ない ZIP を選ぶ。19 個で打切る。</summary>
+        private static PackingPlan Capacity(List<SourceItem> items, long capacity, bool bestFit)
+        {
+            PackingPlan result = new PackingPlan();
+            foreach (SourceItem item in items)
+            {
+                CheckCancellation();
+                int selected = -1;
+                long fullest = -1;
+                for (int i = 0; i < result.Parts.Count; i++)
+                {
+                    long size = result.Parts[i].Layout.With(item).Size;
+                    if (size <= capacity && (!bestFit || size > fullest))
+                    {
+                        selected = i;
+                        fullest = size;
+                        if (!bestFit) break;
+                    }
+                }
+                if (selected < 0)
+                {
+                    if (result.Parts.Count >= MAX_NUM_ZIP_FILES) return null;
+                    selected = result.Parts.Count;
+                    result.Parts.Add(new PlannedPart());
+                }
+                // 単独でも容量超過の入力は、この段階では単独 ZIP とする。
+                result.Parts[selected].Add(item);
+            }
+            return result;
+        }
+
+        /// <summary>同じ容量制約なら ZIP 数が少ない計画を採る。同数なら先の計画を保持する。</summary>
+        private static PackingPlan PreferCompact(PackingPlan first, PackingPlan second)
+        {
+            if (first == null) return second;
+            if (second == null) return first;
+            return second.Parts.Count < first.Parts.Count ? second : first;
+        }
+
+        /// <summary>大きいファイルから、追加後の完成サイズが最小になる ZIP へ置く (LPT 型)。</summary>
+        private static PackingPlan Balanced(List<SourceItem> descending)
+        {
+            PackingPlan result = new PackingPlan();
+            for (int i = 0; i < Math.Min(MAX_NUM_ZIP_FILES, descending.Count); i++) result.Parts.Add(new PlannedPart());
+            foreach (SourceItem item in descending)
+            {
+                CheckCancellation();
+                int selected = 0;
+                long smallest = Int64.MaxValue;
+                for (int i = 0; i < result.Parts.Count; i++)
+                {
+                    long size = result.Parts[i].Layout.With(item).Size;
+                    if (size < smallest) { selected = i; smallest = size; }
+                }
+                result.Parts[selected].Add(item);
+            }
+            return result;
+        }
+
+        /// <summary>容量内の先行 ZIP へ後続候補を移す。移せる未処理ファイルが残らないところまで詰める。</summary>
+        private void Compact()
+        {
+            for (int i = 0; i < Parts.Count; i++)
+            {
+                PlannedPart destination = Parts[i];
+                if (destination.Layout.Size > MAX_ONE_ZIP_FILE_SIZE) continue;
+                for (int j = i + 1; j < Parts.Count; j++)
+                {
+                    PlannedPart source = Parts[j];
+                    List<SourceItem> remaining = new List<SourceItem>();
+                    foreach (SourceItem item in source.Items)
+                    {
+                        CheckCancellation();
+                        if (destination.Layout.With(item).Size <= MAX_ONE_ZIP_FILE_SIZE) destination.Add(item);
+                        else remaining.Add(item);
+                    }
+                    if (remaining.Count != source.Items.Count)
+                    {
+                        source.Items.Clear();
+                        source.Items.AddRange(remaining);
+                        source.Rebuild();
+                    }
+                }
+            }
+            Parts.RemoveAll(delegate (PlannedPart part) { return part.Items.Count == 0; });
+        }
+
+        /// <summary>31.5 MB 超過がすべて単一エントリ由来なら、通常容量ルールを満たす。</summary>
+        private bool CapacityLegal()
+        {
+            foreach (PlannedPart part in Parts)
+                if (part.Layout.Size > MAX_ONE_ZIP_FILE_SIZE && part.Items.Count != 1) return false;
+            return true;
+        }
+
+        /// <summary>均等化比較用の、完成サイズ降順の配列。メタデータ量の差も含む。</summary>
+        private long[] SortedSizes()
+        {
+            long[] sizes = new long[Parts.Count];
+            for (int i = 0; i < sizes.Length; i++) sizes[i] = Parts[i].Layout.Size;
+            Array.Sort(sizes);
+            Array.Reverse(sizes);
+            return sizes;
+        }
+        /// <summary>完成サイズを大きい順に比較する。負数なら first の最大側のサイズ列が小さい。</summary>
+        private static int CompareBalance(PackingPlan first, PackingPlan second)
+        {
+            long[] a = first.SortedSizes();
+            long[] b = second.SortedSizes();
+            for (int i = 0; i < Math.Min(a.Length, b.Length); i++)
+            {
+                int comparison = a[i].CompareTo(b[i]);
+                if (comparison != 0) return comparison;
+            }
+            return a.Length.CompareTo(b.Length);
+        }
+        /// <summary>計画全体で最大の完成 ZIP サイズを bytes で返す。</summary>
+        internal long Maximum()
+        {
+            long maximum = 0;
+            foreach (PlannedPart part in Parts) maximum = Math.Max(maximum, part.Layout.Size);
+            return maximum;
+        }
+
+        /// <summary>先頭・末尾を含む最大 32 候補を等間隔で選び、非常に多数の入力でも探索を有限にする。</summary>
+        private static List<int> Samples(int count)
+        {
+            List<int> indices = new List<int>();
+            int samples = Math.Min(CandidateSamples, count);
+            for (int i = 0; i < samples; i++)
+                indices.Add(samples == 1 ? 0 : (int)((long)i * (count - 1) / (samples - 1)));
+            return indices;
+        }
+
+        /// <summary>最大側から最小側への単独移動・二者交換で、対の最大サイズと偏りを改善する。</summary>
+        private void ImproveBalance()
+        {
+            long budget = RefinementBudget;
+            for (int pass = 0; pass < RefinementPasses && budget > 0; pass++)
+            {
+                int bestFirst = -1, bestSecond = -1, bestRemove = -1, bestExchange = -1;
+                long bestGain = -1, bestGap = -1;
+                for (int a = 0; a < Parts.Count && budget > 0; a++)
+                    for (int b = 0; b < Parts.Count && budget > 0; b++)
+                    {
+                        CheckCancellation();
+                        PlannedPart heavy = Parts[a], light = Parts[b];
+                        long oldMaximum = heavy.Layout.Size;
+                        long oldGap = oldMaximum - light.Layout.Size;
+                        if (a == b || oldGap <= 0) continue;
+                        List<int> firstIndices = Samples(heavy.Items.Count);
+                        List<int> secondIndices = Samples(light.Items.Count);
+                        secondIndices.Insert(0, -1); // -1 は交換でなく単独移動。
+                        foreach (int remove in firstIndices)
+                        {
+                            if (budget <= 0) break;
+                            foreach (int exchange in secondIndices)
+                            {
+                                if (budget <= 0) break;
+                                if (exchange < 0 && heavy.Items.Count <= 1) continue;
+                                SourceItem outgoing = heavy.Items[remove];
+                                SourceItem incoming = exchange < 0 ? null : light.Items[exchange];
+                                // ZIP64 オフセットがある計画では再計算の件数も探索予算へ計上する。
+                                budget -= heavy.Layout.LocalBytes >= Zip32Limit || light.Layout.LocalBytes >= Zip32Limit ?
+                                    (long)heavy.Items.Count + light.Items.Count + 2L : 1L;
+                                ZipLayout newHeavy = heavy.Changed(remove, incoming);
+                                ZipLayout newLight = light.Changed(exchange, outgoing);
+                                long maximum = Math.Max(newHeavy.Size, newLight.Size);
+                                long gap = Math.Abs(newHeavy.Size - newLight.Size);
+                                long gain = oldMaximum - maximum;
+                                long gapGain = oldGap - gap;
+                                if (gain < 0 || (gain == 0 && gapGain <= 0)) continue;
+                                if (gain > bestGain || (gain == bestGain && gapGain > bestGap))
+                                {
+                                    bestFirst = a; bestSecond = b; bestRemove = remove; bestExchange = exchange;
+                                    bestGain = gain; bestGap = gapGain;
+                                }
+                            }
+                        }
+                    }
+                if (bestFirst < 0) break;
+                PlannedPart first = Parts[bestFirst], second = Parts[bestSecond];
+                SourceItem moving = first.Items[bestRemove];
+                SourceItem returning = bestExchange < 0 ? null : second.Items[bestExchange];
+                first.Items.RemoveAt(bestRemove);
+                if (returning != null) second.Items.RemoveAt(bestExchange);
+                if (returning != null) first.Items.Add(returning);
+                second.Items.Add(moving);
+                first.Rebuild();
+                second.Rebuild();
+            }
+        }
+
+        /// <summary>生成上限・各入力のちょうど 1 回の出力・サイズ式を、削除前と出力開始時に再確認する。</summary>
+        internal void Validate(List<SourceItem> expected)
+        {
+            if (Parts.Count < 1 || Parts.Count > MAX_NUM_ZIP_FILES)
+                throw new AppError(13, "ZIP 生成数の内部エラー: 最大 " + MAX_NUM_ZIP_FILES + " 個です。");
+            HashSet<SourceItem> found = new HashSet<SourceItem>();
+            foreach (PlannedPart part in Parts)
+            {
+                CheckCancellation();
+                if (part.Items.Count == 0 && !(Parts.Count == 1 && expected.Count == 0))
+                    throw new AppError(13, "空の分割計画が残っています。");
+                ZipLayout layout = new ZipLayout();
+                foreach (SourceItem item in part.Items)
+                {
+                    if (!found.Add(item)) throw new AppError(13, "同じ入力が複数の ZIP に配置されています: " + item.ZipPath);
+                    layout = layout.With(item);
+                }
+                if (layout.Size != part.Layout.Size) throw new AppError(13, "配置サイズの内部不一致。");
+            }
+            if (found.Count != expected.Count) throw new AppError(13, "配置したファイル数が入力数と一致しません。");
+            foreach (SourceItem item in expected)
+                if (!found.Contains(item)) throw new AppError(13, "配置されていない入力があります: " + item.ZipPath);
+        }
+
+        /// <summary>計画結果とサイズ超過理由を、既存ファイルを削除する前に表示する。</summary>
+        internal void Show(OutputNames names)
+        {
+            Console.WriteLine("配置計画: {0} 個 (絶対上限 {1} 個)", Parts.Count, MAX_NUM_ZIP_FILES);
+            for (int i = 0; i < Parts.Count; i++)
+                Console.WriteLine("  {0}: {1} bytes / {2} エントリ{3}", System.IO.Path.GetFileName(names.PartPath(i + 1)),
+                    FormatNumber(Parts[i].Layout.Size), Parts[i].Items.Count,
+                    Parts[i].Layout.Size > MAX_ONE_ZIP_FILE_SIZE ? " (目安容量超過)" : "");
+            if (Relaxed) Console.WriteLine("警告: 最大 19 個を優先し、容量の目安を緩和して均等化しました。ファイル内容は分割しません。");
+            else if (Maximum() > MAX_ONE_ZIP_FILE_SIZE)
+                Console.WriteLine("警告: 単独のファイルだけで目安容量を超える ZIP があります。");
+        }
     }
 
     /// <summary>名前空間の 1 ノード。ディレクトリ同士は統合できるが、ファイルの衝突は許可しない。</summary>
@@ -962,15 +1618,16 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             if (String.IsNullOrEmpty(BaseName)) throw new AppError(87, "ZIP のベース名が空です。");
         }
 
-        /// <summary>1 は指定名、2 以降は最小 2 桁の連番。10000 以降も生成自体は可能。</summary>
+        /// <summary>1 は指定名、2～19 はちょうど 2 桁の連番。それ以外は作成前に拒否する。</summary>
         internal string PartPath(int number)
         {
-            if (number <= 0) throw new ArgumentOutOfRangeException("number");
+            if (number <= 0 || number > MAX_NUM_ZIP_FILES) throw new ArgumentOutOfRangeException("number",
+                "ZIP の番号は 1～" + MAX_NUM_ZIP_FILES + " の範囲です。");
             if (number == 1) return FirstPath;
             return System.IO.Path.Combine(DirectoryPath, BaseName + "." + number.ToString("D2", NumberCulture) + ".zip");
         }
 
-        /// <summary>ファイル名全体を検査する。数字は ASCII の 0～9 だけで、必ず 2～4 桁。</summary>
+        /// <summary>ファイル名全体を検査する。数字は ASCII の 0～9 だけで、必ずちょうど 2 桁。</summary>
         internal bool IsOldName(string name)
         {
             return MatchesOldName(name, firstName, BaseName);
@@ -986,7 +1643,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                 !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
             int digits = name.Length - prefix.Length - suffix.Length;
-            if (digits < 2 || digits > 4) return false;
+            if (digits != 2) return false;
             for (int i = prefix.Length; i < prefix.Length + digits; i++)
                 if (name[i] < '0' || name[i] > '9') return false;
             return true;
@@ -1111,6 +1768,8 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>新規ファイルだけを作る。列挙後に出現した同名ファイルは絶対に上書きしない。</summary>
         internal OwnedOutput CreateNext()
         {
+            if (outputs.Count >= MAX_NUM_ZIP_FILES)
+                throw new AppError(13, "ZIP の生成数が絶対上限 " + MAX_NUM_ZIP_FILES + " 個を超えようとしました。");
             string path = names.PartPath(checked(outputs.Count + 1));
             OwnedOutput item = new OwnedOutput();
             item.Path = path;
@@ -1222,6 +1881,41 @@ internal static class dnnt_261003_zwces4_zip_split_merge
     /// <summary>Win32 のファイル識別・安全な削除・コンソール確保だけを担当する。</summary>
     private static class Native
     {
+        /// <summary>GlobalMemoryStatusEx の ABI と同じ順序・幅のメモリ情報。</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MemoryStatus
+        {
+            internal uint Length;
+            internal uint MemoryLoad;
+            internal ulong TotalPhysical;
+            internal ulong AvailablePhysical;
+            internal ulong TotalPageFile;
+            internal ulong AvailablePageFile;
+            internal ulong TotalVirtual;
+            internal ulong AvailableVirtual;
+            internal ulong AvailableExtendedVirtual;
+        }
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+        private static int memoryWarning;
+
+        /// <summary>物理・コミット可能量・プロセスの空き仮想空間の最小値。失敗時は 0 でキャッシュ禁止。</summary>
+        internal static long AvailableMemoryBytes()
+        {
+            MemoryStatus status = new MemoryStatus();
+            status.Length = (uint)Marshal.SizeOf(typeof(MemoryStatus));
+            if (!GlobalMemoryStatusEx(ref status))
+            {
+                int code = Marshal.GetLastWin32Error();
+                if (Interlocked.Exchange(ref memoryWarning, 1) == 0)
+                    TryWriteLine("警告: 使用可能メモリを取得できないためキャッシュを使用しません。Win32 エラー " + code);
+                return 0;
+            }
+            ulong available = Math.Min(status.AvailablePhysical, Math.Min(status.AvailablePageFile, status.AvailableVirtual));
+            return available > (ulong)Int64.MaxValue ? Int64.MaxValue : (long)available;
+        }
+
         private const uint GenericRead = 0x80000000U;
         private const uint GenericWrite = 0x40000000U;
         private const uint DeleteAccess = 0x00010000U;
@@ -1559,8 +2253,11 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             return record;
         }
 
-        /// <summary>実圧縮してローカル領域を書く。採否はまだ確定しないので呼出側が取り消せる。</summary>
-        internal EntryRecord WriteCandidate(SourceItem item)
+        /// <summary>新たに圧縮したキャッシュを使用するか再圧縮してローカル領域を書く。元 ZIP の圧縮データは再利用しない。</summary>
+        /// <param name="item">出力対象と既知の計測値。値があれば再圧縮結果を照合する。</param>
+        /// <param name="cache">事前圧縮キャッシュ。null または失効時は通常の圧縮処理。</param>
+        /// <returns>採用前のローカルレコード情報。呼出側が Accept で確定する。</returns>
+        internal EntryRecord WriteCandidate(SourceItem item, CompressedCache cache = null)
         {
             if (finished) throw new InvalidOperationException("ZIP はすでに完了しています。");
             if (stream.Position != dataEnd) throw new AppError(13, "内部エラー: 出力位置が一致しません。");
@@ -1574,14 +2271,31 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             }
             else
             {
-                using (CryptoWriteStream encrypted = new CryptoWriteStream(stream, (byte)(item.DosTime >> 8)))
+                content = null;
+                if (cache != null && item.Measurement != null)
                 {
-                    if (record.Method == 8)
+                    // キャッシュは今回新たに作った圧縮データだけ。入力 ZIP の圧縮領域は再利用しない。
+                    using (Stream validation = item.OpenValidationStream())
+                    using (CryptoWriteStream encrypted = new CryptoWriteStream(stream, (byte)(item.DosTime >> 8)))
                     {
-                        using (DeflateStream compressor = new DeflateStream(encrypted, CompressionMode.Compress, true))
-                            content = item.CopyPlaintextTo(compressor);
+                        if (cache.TryCopyTo(item, encrypted))
+                            content = new ContentResult(item.Measurement.UncompressedSize, item.Measurement.Crc, item.Measurement.Digest);
                     }
-                    else content = item.CopyPlaintextTo(encrypted);
+                }
+                if (content == null)
+                {
+                    // 転送中の予算縮小でも、暗号鍵状態を使い回さずヘッダから完全にやり直す。
+                    stream.Position = dataStart;
+                    stream.SetLength(dataStart);
+                    using (CryptoWriteStream encrypted = new CryptoWriteStream(stream, (byte)(item.DosTime >> 8)))
+                    {
+                        if (record.Method == 8)
+                        {
+                            using (DeflateStream compressor = CreateCompressor(encrypted))
+                                content = item.CopyPlaintextTo(compressor);
+                        }
+                        else content = item.CopyPlaintextTo(encrypted);
+                    }
                 }
             }
             record.CompressedSize = stream.Position - dataStart;
@@ -2592,6 +3306,9 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         }
 #endif
 
+        /// <summary>キャッシュ使用時の入力 ZIP の状態照合用ハンドル。復号・展開は事前処理で検証済み。</summary>
+        internal Stream OpenValidationStream() { return snapshot.Open(); }
+
         /// <summary>索引済みエントリを復号・展開し、実サイズ、CRC または AES 認証を検証する。</summary>
         internal ContentResult CopyEntry(ZipEntry entry, Stream target)
         {
@@ -2646,6 +3363,9 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 TestExternalFixtures();
                 TestSizeFormula();
                 TestCountBoundary();
+                TestPackingPlans();
+                TestPlannedLayouts();
+                TestPrecompressionCache();
                 Console.WriteLine("PASS: " + assertions.ToString(NumberCulture) + " assertions");
                 Console.WriteLine("保存ダイアログ・Win32 リンク解決・削除保留・実ファイル権限の試験は別途必要です。");
                 return 0;
@@ -2694,8 +3414,8 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>削除対象の完全一致、危険なパス、および大小文字を無視した全体衝突の検査。</summary>
         private static void TestNames()
         {
-            string[] yes = { "a.zip", "A.ZIP", "a.02.zip", "A.00.ZIP", "a.01.zip", "a.0000.zip", "a.9999.zip" };
-            string[] no = { "a.2.zip", "a.00000.zip", "a.10000.zip", "a.０２.zip", "a.02.zip.bak",
+            string[] yes = { "a.zip", "A.ZIP", "a.02.zip", "A.00.ZIP", "a.01.zip", "a.19.zip", "a.20.zip", "a.99.zip" };
+            string[] no = { "a.2.zip", "a.002.zip", "a.0000.zip", "a.9999.zip", "a.100.zip", "a.00000.zip", "a.10000.zip", "a.０２.zip", "a.02.zip.bak",
                 "aX02.zip", "ab.02.zip", "a..zip", "a. 2.zip", "a.-2.zip", "a.02a.zip", "sub/a.02.zip", "sub\\a.02.zip" };
             foreach (string name in yes) Check(OutputNames.MatchesOldName(name, "a.zip", "a"), "削除対象: " + name);
             foreach (string name in no) Check(!OutputNames.MatchesOldName(name, "a.zip", "a"), "削除禁止: " + name);
@@ -3070,6 +3790,225 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 ZipOutput writer = new ZipOutput(memory);
                 long expected = (30 + 5 + 20 + 100 + 24) + (46 + 5 + 12) + 98;
                 Check(writer.Predict(large, measurement) == expected, "4 GiB 超の単一エントリ計算");
+            }
+        }
+
+        /// <summary>任意の単独 ZIP サイズを持つ計画専用入力を作る。大容量データ自体は確保しない。</summary>
+        private static SourceItem SyntheticItem(int number, long singleSize)
+        {
+            SourceItem item = MakeSource("f" + number.ToString("D5", NumberCulture) + ".bin", new byte[1]);
+            item.Measurement = new Measurement();
+            item.Measurement.Method = 8;
+            item.Measurement.UncompressedSize = 1;
+            item.Measurement.CompressedSize = 12;
+            item.Measurement.Digest = new byte[0];
+            long baseline = new ZipLayout().With(item).Size;
+            item.Measurement.CompressedSize = checked(12L + singleSize - baseline);
+            if (item.Measurement.CompressedSize < 12) throw new ArgumentOutOfRangeException("singleSize");
+            return item;
+        }
+
+        /// <summary>19 個境界、均等化、単独超過、正常時の隙間詰めと各入力の一意配置を検査する。</summary>
+        private static void TestPackingPlans()
+        {
+            List<SourceItem> empty = new List<SourceItem>();
+            PackingPlan emptyPlan = PackingPlan.Build(empty);
+            emptyPlan.Validate(empty);
+            Check(emptyPlan.Parts.Count == 1 && emptyPlan.Maximum() == 22, "空 ZIP の 1 個計画");
+            List<SourceItem> exact = new List<SourceItem>();
+            for (int i = 0; i < 19; i++) exact.Add(SyntheticItem(i, MAX_ONE_ZIP_FILE_SIZE));
+            PackingPlan nineteen = PackingPlan.Build(exact);
+            Check(nineteen.Parts.Count == 19 && nineteen.Maximum() == MAX_ONE_ZIP_FILE_SIZE, "19 個ちょうど・容量ちょうど");
+            exact.Add(SyntheticItem(19, MAX_ONE_ZIP_FILE_SIZE));
+            PackingPlan twenty = PackingPlan.Build(exact);
+            Check(twenty.Parts.Count == 19 && twenty.Relaxed, "20 個目を作らず再配分");
+            Check(twenty.Maximum() == MAX_ONE_ZIP_FILE_SIZE * 2L - 22L, "不可分な 20 個を 19 個に置く最小の最大サイズ");
+
+            List<SourceItem> uniform = new List<SourceItem>();
+            for (int i = 0; i < 380; i++) uniform.Add(SyntheticItem(i, 2000000L));
+            PackingPlan equal = PackingPlan.Build(uniform);
+            Check(equal.Parts.Count == 19 && equal.Relaxed, "通常容量で 19 個に収まらない 380 エントリ");
+            long equalSize = 20L * (2000000L - 22L) + 22L;
+            foreach (PlannedPart part in equal.Parts)
+                Check(part.Layout.Size == equalSize && part.Items.Count == 20, "超過時の 19 個均等配置");
+
+            List<SourceItem> oversized = new List<SourceItem>();
+            oversized.Add(SyntheticItem(0, 50000000L));
+            oversized.Add(SyntheticItem(1, 1000000L));
+            PackingPlan singles = PackingPlan.Build(oversized);
+            Check(singles.Parts.Count == 2 && !singles.Relaxed, "個数に余裕がある単独容量超過は隔離");
+            List<SourceItem> small = new List<SourceItem>();
+            long[] sizes = { 21000000L, 22000000L, 10000000L, 9000000L, 3000000L, 2500000L, 500000L };
+            for (int i = 0; i < sizes.Length; i++) small.Add(SyntheticItem(i, sizes[i]));
+            PackingPlan filled = PackingPlan.Build(small);
+            Check(!filled.Relaxed, "通常容量の範囲で小さい後続候補を利用");
+            for (int i = 0; i < filled.Parts.Count; i++)
+            for (int j = i + 1; j < filled.Parts.Count; j++)
+            foreach (SourceItem item in filled.Parts[j].Items)
+                Check(filled.Parts[i].Layout.With(item).Size > MAX_ONE_ZIP_FILE_SIZE, "先行 ZIP に入る後続候補を残さない");
+
+            Random random = new Random(261004);
+            for (int trial = 0; trial < 12; trial++)
+            {
+                List<SourceItem> items = new List<SourceItem>();
+                for (int i = 0; i < 20 + trial * 3; i++) items.Add(SyntheticItem(i, 1000L + random.Next(40000000)));
+                PackingPlan plan = PackingPlan.Build(items);
+                plan.Validate(items);
+                Check(plan.Parts.Count <= MAX_NUM_ZIP_FILES, "乱数入力の絶対個数上限");
+                foreach (PlannedPart part in plan.Parts)
+                    Check(part.Items.Count != 0, "空の余分な ZIP を作らない");
+            }
+            OutputNames names = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.zip"));
+            Check(System.IO.Path.GetFileName(names.PartPath(19)) == "a.19.zip", "最大番号は 2 桁");
+            bool rejected = false;
+            try { names.PartPath(20); }
+            catch (ArgumentOutOfRangeException) { rejected = true; }
+            Check(rejected, "20 個目の名前を生成前に拒否");
+            for (int i = 0; i <= 99; i++)
+                Check(OutputNames.MatchesOldName("a." + i.ToString("D2", NumberCulture) + ".zip", "a.zip", "a"), "2 桁だけ削除対象");
+            for (int i = 100; i <= 9999; i++)
+                Check(!OutputNames.MatchesOldName("a." + i.ToString(NumberCulture) + ".zip", "a.zip", "a"), "3～4 桁は削除禁止");
+        }
+
+        /// <summary>高速な差分評価を全件再計算と照合する。4 GiB と個数境界も再現する。</summary>
+        private static void TestPlannedLayouts()
+        {
+            Random random = new Random(1303);
+            for (int test = 0; test < 80; test++)
+            {
+                PlannedPart part = new PlannedPart();
+                for (int i = 0; i < 7; i++)
+                {
+                    SourceItem item = SyntheticItem(i, 1000L + random.Next(100000));
+                    if (test % 3 == 0 && i == 2)
+                    {
+                        item.Measurement.CompressedSize = Zip32Limit + test;
+                        item.Measurement.UncompressedSize = Zip32Limit * 2L;
+                    }
+                    part.Add(item);
+                }
+                SourceItem incoming = SyntheticItem(99, 100000L);
+                if (test % 3 == 1) incoming.Measurement.CompressedSize = Zip32Limit;
+                int index = test % part.Items.Count;
+                ZipLayout predicted = part.Changed(index, incoming);
+                ZipLayout reference = new ZipLayout();
+                for (int i = 0; i < part.Items.Count; i++) if (i != index) reference = reference.With(part.Items[i]);
+                reference = reference.With(incoming);
+                Check(predicted.Size == reference.Size && predicted.LocalBytes == reference.LocalBytes &&
+                    predicted.CentralBytes == reference.CentralBytes && predicted.Zip64Entries == reference.Zip64Entries,
+                    "ZIP64 オフセットを含む差分配置計算");
+            }
+            SourceItem directory = MakeSource("empty", new byte[0]);
+            directory.IsDirectory = true;
+            directory.ZipPath += "/";
+            directory.NameBytes = Utf8.GetBytes(directory.ZipPath);
+            directory.Measurement = new Measurement();
+            ZipLayout countLayout = new ZipLayout();
+            for (int i = 0; i < 65535; i++) countLayout = countLayout.With(directory);
+            Check(countLayout.Size == (30L + 46L + 2L * directory.NameBytes.Length) * 65535L + 98L,
+                "計画の 65535 エントリ ZIP64 末尾");
+        }
+
+        /// <summary>疑似入力一覧。count 個をメモリ上で作り、事前圧縮の並列処理を実際に通す。</summary>
+        private static Manifest MemoryManifest(int count, int bytes)
+        {
+            Manifest manifest = new Manifest();
+            Random random = new Random(261003);
+            for (int i = 0; i < count; i++)
+            {
+                byte[] content = new byte[bytes + i];
+                random.NextBytes(content);
+                SourceItem item = MakeSource("cache/" + i.ToString("D3", NumberCulture) + ".bin", content);
+                item.Ordinal = i + 1;
+                manifest.Items.Add(item);
+                manifest.FileCount++;
+                manifest.TotalBytes += content.Length;
+            }
+            return manifest;
+        }
+
+        /// <summary>計画どおりメモリ ZIP を書き、通常の読取コードで復号・展開して元データと照合する。</summary>
+        private static void VerifyMemoryPlan(Manifest manifest, PackingPlan plan, CompressedCache cache)
+        {
+            foreach (PlannedPart part in plan.Parts)
+            using (MemoryStream output = new MemoryStream())
+            {
+                ZipOutput writer = new ZipOutput(output);
+                foreach (SourceItem item in part.Items) writer.Accept(writer.WriteCandidate(item, cache));
+                long actual = writer.Finish();
+                Check(actual == part.Layout.Size, "計画サイズと本番 ZIP 書込の一致");
+                List<ZipEntry> entries = ZipSource.InspectMemory(output);
+                Check(entries.Count == part.Items.Count, "キャッシュ経由 ZIP のエントリ数");
+                for (int i = 0; i < entries.Count; i++)
+                using (MemoryStream plain = new MemoryStream())
+                {
+                    ZipSource.DecodePayload(output, entries[i], plain);
+                    Check(FixedEquals(plain.ToArray(), part.Items[i].SelfTestBytes), "キャッシュ/再圧縮後の復号内容一致");
+                }
+            }
+        }
+
+        /// <summary>全件キャッシュ、FIFO 追出し、キャッシュなし、出力途中の上限縮小と内容変更を検査。</summary>
+        private static void TestPrecompressionCache()
+        {
+            Check(CompressedCache.EightyPercent(101) == 80, "80% の整数丸め");
+            Check(CompressedCache.EightyPercent(Int64.MaxValue) > 0, "80% の計算で桁あふれしない");
+            Manifest manifest = MemoryManifest(16, 32768);
+            using (CompressedCache cache = new CompressedCache(delegate { return 200000000L; }))
+            {
+                Precompress(manifest, cache, 4);
+                Check(cache.UsedBytes > 0 && cache.UsedBytes <= cache.LimitBytes, "作成途中を含む共有キャッシュ予算");
+                PackingPlan plan = PackingPlan.Build(manifest.Items);
+                VerifyMemoryPlan(manifest, plan, cache);
+                Check(cache.UsedBytes == 0, "使い終えたキャッシュの解放");
+            }
+            using (CompressedCache cache = new CompressedCache(delegate { return 250000L; }))
+            {
+                Precompress(manifest, cache, 4);
+                Check(cache.UsedBytes <= cache.LimitBytes, "並列追出し後も予算内");
+                VerifyMemoryPlan(manifest, PackingPlan.Build(manifest.Items), cache);
+            }
+            using (CompressedCache cache = new CompressedCache(delegate { return 0L; }))
+            {
+                Precompress(manifest, cache, 4);
+                Check(cache.UsedBytes == 0, "使用可能メモリ 0 でも計測を継続");
+                VerifyMemoryPlan(manifest, PackingPlan.Build(manifest.Items), cache);
+                SourceItem changed = manifest.Items[0];
+                changed.SelfTestBytes[0] ^= 1;
+                ExpectFailure(delegate {
+                    using (MemoryStream memory = new MemoryStream()) new ZipOutput(memory).WriteCandidate(changed, cache);
+                }, "追出し後の再圧縮で内容変更を拒否");
+                changed.SelfTestBytes[0] ^= 1;
+            }
+
+            long available = 200000L;
+            using (CompressedCache cache = new CompressedCache(delegate { return available; }))
+            {
+                SourceItem a = MakeSource("a", new byte[1]), b = MakeSource("b", new byte[1]), c = MakeSource("c", new byte[1]);
+                CacheEntry first = cache.Begin(a);
+                cache.Append(first, new byte[1], 0, 1); cache.Complete(first);
+                CacheEntry second = cache.Begin(b);
+                cache.Append(second, new byte[1], 0, 1); cache.Complete(second);
+                CacheEntry third = cache.Begin(c);
+                cache.Append(third, new byte[1], 0, 1); cache.Complete(third);
+                Check(!first.Live && second.Live && third.Live, "最古のキャッシュを先に削除");
+                available = 100L;
+                cache.Trim();
+                Check(cache.UsedBytes == 0, "空きメモリ低下時に既存キャッシュを削除");
+            }
+
+            Manifest large = MemoryManifest(1, BufferSize * 4);
+            bool writing = false;
+            int calls = 0;
+            using (CompressedCache cache = new CompressedCache(delegate {
+                return writing && ++calls >= 3 ? 0L : 200000000L;
+            }))
+            {
+                Precompress(large, cache, 1);
+                PackingPlan plan = PackingPlan.Build(large.Items);
+                writing = true;
+                VerifyMemoryPlan(large, plan, cache);
+                Check(cache.UsedBytes == 0 && calls >= 3, "キャッシュ転送途中の追出しで暗号ヘッダから再実行");
             }
         }
 
