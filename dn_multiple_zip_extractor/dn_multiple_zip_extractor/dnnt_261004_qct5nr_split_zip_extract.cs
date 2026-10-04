@@ -39,6 +39,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
 namespace dnnt_261004_qct5nr_split_zip_extract
@@ -49,6 +50,11 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal static volatile bool CancelRequested;
         internal static readonly CultureInfo NumberCulture = CultureInfo.InvariantCulture;
         internal static Encoding LegacyEncoding;
+
+        // ダイアログ履歴はユーザーごとに保持する。管理者権限を必要とする HKLM は使用しない。
+        private const string DialogRegistrySubKey = @"Software\DNNT\dnnt_261004_qct5nr_split_zip_extract";
+        private const string SourceDialogDirectoryValue = "SourceDialogDirectory";
+        private const string DestinationDialogParentValue = "DestinationDialogParentDirectory";
 
         /// <summary>引数は入力ファイル群。戻り値は Win32 に準じた終了コード。</summary>
         [STAThread]
@@ -62,7 +68,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     throw new PlatformNotSupportedException("Windows Vista 以降が必要です。");
                 Native.EnsureConsole();
                 consoleReady = true;
-                Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs e)
+                Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
                 {
                     e.Cancel = true;
                     CancelRequested = true;
@@ -87,7 +93,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     foreach (string path in excluded) Console.WriteLine("  " + Text.Safe(path));
                 }
                 if (sources.Count == 0) throw new InvalidDataException("ファイル名に zip を含む対象ファイルがありません。");
-                sources.Sort(delegate(string a, string b) { return StringComparer.Ordinal.Compare(Path.GetFileName(a), Path.GetFileName(b)); });
+                sources.Sort(delegate (string a, string b) { return StringComparer.Ordinal.Compare(Path.GetFileName(a), Path.GetFileName(b)); });
                 using (SourceSet sourceSet = new SourceSet(sources))
                 {
                     DetectedArchives detected = Detector.Detect(sourceSet.Parts);
@@ -145,6 +151,78 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             return Encoding.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
         }
 
+        /// <summary>
+        /// ユーザーレジストリからダイアログの初期ディレクトリを取得する。
+        /// 登録値がない、絶対パスとして不正、または現在存在しない場合は null を返す。
+        /// </summary>
+        /// <param name="valueName">本プログラム専用レジストリキー内の文字列値名。</param>
+        /// <returns>利用可能な絶対ディレクトリ。利用不能なら null。</returns>
+        private static string ReadDialogDirectory(string valueName)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(DialogRegistrySubKey, false))
+                {
+                    if (key == null) return null;
+                    string value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                    if (String.IsNullOrEmpty(value)) return null;
+                    try
+                    {
+                        string full = WindowsPaths.TrimSlash(WindowsPaths.Full(value));
+                        return Directory.Exists(full) ? full : null;
+                    }
+                    catch (ArgumentException) { return null; }
+                    catch (NotSupportedException) { return null; }
+                    catch (PathTooLongException) { return null; }
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリから読み取れません: " + Text.Safe(ex.Message));
+                return null;
+            }
+            catch (IOException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリから読み取れません: " + Text.Safe(ex.Message));
+                return null;
+            }
+            catch (System.Security.SecurityException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリから読み取れません: " + Text.Safe(ex.Message));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// ダイアログで確定した絶対ディレクトリを HKEY_CURRENT_USER に REG_SZ として保存する。
+        /// </summary>
+        /// <param name="valueName">本プログラム専用レジストリキー内の文字列値名。</param>
+        /// <param name="directory">保存する絶対ディレクトリ。</param>
+        private static void WriteDialogDirectory(string valueName, string directory)
+        {
+            string full = WindowsPaths.TrimSlash(WindowsPaths.Full(directory));
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(DialogRegistrySubKey))
+                {
+                    if (key == null) throw new IOException("ダイアログ履歴用のユーザーレジストリキーを作成できません。");
+                    key.SetValue(valueName, full, RegistryValueKind.String);
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリへ保存できません: " + Text.Safe(ex.Message));
+            }
+            catch (IOException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリへ保存できません: " + Text.Safe(ex.Message));
+            }
+            catch (System.Security.SecurityException ex)
+            {
+                Console.Error.WriteLine("警告: ダイアログ履歴をレジストリへ保存できません: " + Text.Safe(ex.Message));
+            }
+        }
+
         /// <summary>入力ダイアログまたは引数を検証し、同一フォルダ内の重複除去済みパスを返す。</summary>
         private static string[] GetInputs(string[] args)
         {
@@ -158,8 +236,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     dialog.Multiselect = true;
                     dialog.CheckFileExists = true;
                     dialog.RestoreDirectory = true;
+
+                    // 前回ダイアログで選択した 1 個目の入力ファイルを含むディレクトリ b を復元する。
+                    string rememberedSourceDirectory = ReadDialogDirectory(SourceDialogDirectoryValue);
+                    if (rememberedSourceDirectory != null) dialog.InitialDirectory = rememberedSourceDirectory;
+
                     if (dialog.ShowDialog() != DialogResult.OK) throw new OperationCanceledException("ファイル選択が取り消されました。");
                     selected = dialog.FileNames;
+
                 }
             }
             List<string> answer = new List<string>();
@@ -185,10 +269,22 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 answer.Add(full);
             }
             if (answer.Count == 0) throw new ArgumentException("入力ファイルがありません。");
+
+            // 入力元ディレクトリ b は、ダイアログ選択・コマンドライン指定の別を問わず保存する。
+            // ここまでで全入力の実在・絶対パス・同一ディレクトリ性を検証済みなので、
+            // directory はユーザーが指定した 1 個目の有効入力ファイルを含む絶対ディレクトリでもある。
+            if (!String.IsNullOrEmpty(directory))
+                WriteDialogDirectory(SourceDialogDirectoryValue, directory);
+
             return answer.ToArray();
         }
 
-        /// <summary>保存ダイアログの架空ファイル名の親ディレクトリを返す。ファイルは作成しない。</summary>
+        /// <summary>
+        /// 保存ダイアログの架空ファイル名の親ディレクトリを返す。ファイルは作成しない。
+        /// 前回選択先の 1 つ上のディレクトリ a がレジストリにあれば、それを初期位置として使用する。
+        /// </summary>
+        /// <param name="initial">履歴がない場合に使用する初期ディレクトリ。</param>
+        /// <returns>ユーザーが指定した架空ファイルを含む、実際の展開先絶対ディレクトリ。</returns>
         private static string SelectDestination(string initial)
         {
             using (SaveFileDialog dialog = new SaveFileDialog())
@@ -196,7 +292,10 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 dialog.Title = "展開先ディレクトリを選択（_dummy.txt は作成しません）";
                 dialog.Filter = "すべてのファイル (*.*)|*.*";
                 dialog.FileName = "_dummy.txt";
-                dialog.InitialDirectory = initial;
+
+                string rememberedParent = ReadDialogDirectory(DestinationDialogParentValue);
+                dialog.InitialDirectory = rememberedParent ?? initial;
+
                 dialog.AddExtension = false;
                 dialog.CheckFileExists = false;
                 dialog.CheckPathExists = true;
@@ -204,7 +303,16 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 dialog.CreatePrompt = false;
                 dialog.RestoreDirectory = true;
                 if (dialog.ShowDialog() != DialogResult.OK) throw new OperationCanceledException("展開先の指定が取り消されました。");
-                return WindowsPaths.TrimSlash(Path.GetDirectoryName(WindowsPaths.Full(dialog.FileName)));
+
+                string selectedFile = WindowsPaths.Full(dialog.FileName);
+                string destination = WindowsPaths.TrimSlash(Path.GetDirectoryName(selectedFile));
+
+                // ユーザー指定ファイルを含むディレクトリの 1 つ上を a として保存する。
+                // ドライブ/UNC 共有のルートを直接選んだ場合は親が存在しないため、履歴値は更新しない。
+                DirectoryInfo parent = Directory.GetParent(destination);
+                if (parent != null) WriteDialogDirectory(DestinationDialogParentValue, parent.FullName);
+
+                return destination;
             }
         }
 
@@ -822,7 +930,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 source.Position = metadataEnd;
             }
             if (source.Position != metadataEnd) throw new InvalidDataException("中央ディレクトリの消費サイズが一致しません。");
-            archive.Entries.Sort(delegate(ZipEntry a, ZipEntry b) { return a.LocalOffset.CompareTo(b.LocalOffset); });
+            archive.Entries.Sort(delegate (ZipEntry a, ZipEntry b) { return a.LocalOffset.CompareTo(b.LocalOffset); });
             long cursor = 0;
             for (int i = 0; i < archive.Entries.Count; i++)
             {
@@ -1478,7 +1586,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal void RestoreCreatedDirectoryTimes(Dictionary<string, DirectoryPlan> plans)
         {
             List<CreatedDirectory> list = new List<CreatedDirectory>(created.Values);
-            list.Sort(delegate(CreatedDirectory a, CreatedDirectory b) { return WindowsPaths.Depth(b.Relative).CompareTo(WindowsPaths.Depth(a.Relative)); });
+            list.Sort(delegate (CreatedDirectory a, CreatedDirectory b) { return WindowsPaths.Depth(b.Relative).CompareTo(WindowsPaths.Depth(a.Relative)); });
             foreach (CreatedDirectory item in list)
             {
                 try
@@ -2407,10 +2515,10 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     /// <summary>RFC 1951 の Store / fixed / dynamic ブロックを解釈する厳密なストリーミング inflater。</summary>
     internal static class StrictDeflate
     {
-        private static readonly int[] LengthBase = { 3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258 };
-        private static readonly int[] LengthExtra = { 0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0 };
-        private static readonly int[] DistanceBase = { 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577 };
-        private static readonly int[] DistanceExtra = { 0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13 };
+        private static readonly int[] LengthBase = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
+        private static readonly int[] LengthExtra = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
+        private static readonly int[] DistanceBase = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 };
+        private static readonly int[] DistanceExtra = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
         private static readonly Huffman FixedLiterals = MakeFixedLiterals();
         private static readonly Huffman FixedDistances = MakeFixedDistances();
         private static Huffman MakeFixedLiterals()
@@ -2474,7 +2582,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             int literalCount = bits.Read(5) + 257, distanceCount = bits.Read(5) + 1, codeCount = bits.Read(4) + 4;
             if (literalCount > 286) throw new InvalidDataException("Deflate HLIT が範囲外です。");
             // 規定の permutation: 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15。
-            int[] order = { 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 };
+            int[] order = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
             int[] codeLengths = new int[19];
             for (int i = 0; i < codeCount; i++) codeLengths[order[i]] = bits.Read(3);
             Huffman codeTree = new Huffman(codeLengths, false, false);
