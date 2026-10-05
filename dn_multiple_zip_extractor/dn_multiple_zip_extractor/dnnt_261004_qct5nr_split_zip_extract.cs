@@ -16,12 +16,16 @@ DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
       新規ディレクトリだけに日時を設定する。既存ディレクトリは設定しない。
       自作コードであること自体は無脆弱性を保証しない。README の制約・検証範囲参照。
 
-本プログラムは生成 AI により生成されました。
+改修 [T261005_EL_SKCJM_04]: 展開先選択のダミー名は、入力物理ファイル名を
+      大文字小文字を無視して比較した先頭名に、先頭 _ と末尾 .txt を付ける。
+      比較のために入力リストを並べ替えず、ZIP の認識・結合・展開順は維持する。
+
+本プログラムは生成 AI により生成され、本改修も生成 AI により実施されました。
 AI バージョン・モデル: GPT-6 Astra Pro（内部ビルド識別子は取得不可）
 思考レベル: このセッションの公開設定値は取得不可のため不明。
 セッション開始日時(JST): 正確な値は取得不可。
-本生成作業の最初の時計記録(JST): 2026-10-04 15:44:36 +09:00。
-応答生成日時(JST): 2026-10-04 16:22:27 +0900 (JST)
+本改修作業の最初の時計記録(JST): 2026-10-05 17:17:40 +09:00。
+応答生成日時(JST): 2026-10-05 17:23:31 +0900 (JST)
 
 主な一次資料（仕様の転載ではなく独立実装）:
 https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
@@ -98,7 +102,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 {
                     DetectedArchives detected = Detector.Detect(sourceSet.Parts);
                     Console.WriteLine("認識結果: {0} / 物理ファイル {1:N0} 個 / 論理 ZIP {2:N0} 個", detected.Mode, sources.Count, detected.Archives.Count);
-                    string root = SelectDestination(Path.GetDirectoryName(sources[0]));
+                    string root = SelectDestination(Path.GetDirectoryName(sources[0]), sources);
                     WarningBook warnings = new WarningBook();
                     using (SafeRoot safeRoot = new SafeRoot(root, warnings))
                     {
@@ -284,14 +288,32 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// 前回選択先の 1 つ上のディレクトリ a がレジストリにあれば、それを初期位置として使用する。
         /// </summary>
         /// <param name="initial">履歴がない場合に使用する初期ディレクトリ。</param>
+        /// <param name="sources">展開対象の検証済み物理ファイルのフルパス一覧。1 件以上必要。順序は変更しない。</param>
         /// <returns>ユーザーが指定した架空ファイルを含む、実際の展開先絶対ディレクトリ。</returns>
-        private static string SelectDestination(string initial)
+        private static string SelectDestination(string initial, IList<string> sources)
         {
+            if (sources == null) throw new ArgumentNullException("sources");
+            if (sources.Count == 0) throw new ArgumentException("展開対象の物理ファイルがありません。", "sources");
+
+            // ダミー名だけを大文字小文字無視のファイル名順で決める。
+            // sources 自体をソートすると ZIP 断片の結合順や重複時の優先順が変わるため、
+            // 先頭に相当する名前だけを走査で求める。同順位なら元の一覧で先のものを維持する。
+            string firstFileName = Path.GetFileName(sources[0]);
+            for (int index = 1; index < sources.Count; index++)
+            {
+                string fileName = Path.GetFileName(sources[index]);
+                if (StringComparer.OrdinalIgnoreCase.Compare(fileName, firstFileName) < 0)
+                    firstFileName = fileName;
+            }
+
+            // 元の拡張子と大文字小文字をそのまま残す。架空ファイル自体は作成しない。
+            string dummyFileName = "_" + firstFileName + ".txt";
+
             using (SaveFileDialog dialog = new SaveFileDialog())
             {
-                dialog.Title = "展開先ディレクトリを選択（_dummy.txt は作成しません）";
+                dialog.Title = "展開先ディレクトリを選択（" + dummyFileName + " は作成しません）";
                 dialog.Filter = "すべてのファイル (*.*)|*.*";
-                dialog.FileName = "_dummy.txt";
+                dialog.FileName = dummyFileName;
 
                 string rememberedParent = ReadDialogDirectory(DestinationDialogParentValue);
                 dialog.InitialDirectory = rememberedParent ?? initial;
