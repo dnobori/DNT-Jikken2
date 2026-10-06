@@ -1,18 +1,22 @@
 ﻿/*
-DNNT 261003_ZWCES4 31.5 MBytes ごとに分割する zip ファイル圧縮プログラム
+DNNT 261006_VQYBR5 31.5 MBytes ごとに分割する zip ファイル圧縮プログラム 改造 1
 
 目的:
   ファイル、フォルダ、および明示的に指定された ZIP の内容を、相対パスを保った
-  独立した最大 19 個の暗号化 ZIP にまとめる。1 個の目安は 31,500,000 bytes。
+  独立した暗号化 ZIP にまとめる。最大数の既定値は 18、1 個の目安は 31,500,000 bytes。
   個数上限が絶対優先。必要なら目安容量を緩和し、できるだけ均等に配分する。
   これは .z01 等のマルチボリューム ZIP ではなく、各 ZIP を単独で展開できる形式。
+  生成が 1 個なら指定名.zip、2～99 個なら指定名.01.zip から始まる 2 桁連番。
+  100～999 個なら 3 桁、1000～9999 個なら 4 桁で、1 個目から同じ桁数を付ける。
+  桁数は設定上限でなく確定した生成数で決める。生成数 10000 個以上は、
+  旧出力の削除・新規出力の作成前に例外とし、9999 個へ自動的に丸めない。
 
 環境:
   C# 4.0 / .NET Framework 4.0 / AnyCPU。実行時の外部 DLL・NuGet ライブラリ不要。
   WinExe としてビルドし、必要に応じて Win32 コンソールを確保する。/target:exe も可。
   Windows 7 以降のデスクトップ環境を想定。管理者権限は不要。
   Visual Studio 2026 の通常の IDE では .NET Framework 4.0 はサポート外。
-  同梱プロジェクトと参照アセンブリを使うコマンドラインビルドについて README 参照。
+  VS 2026 付属コンパイラと v4.0 参照アセンブリを使う手順は同梱 README 参照。
 
 動作原理:
   DeflateStream は圧縮・展開にだけ使用する。ZIP 構造、CRC、ZipCrypto、ZIP64、
@@ -22,15 +26,16 @@ DNNT 261003_ZWCES4 31.5 MBytes ごとに分割する zip ファイル圧縮プ�
   圧縮結果は 64 KiB の断片で任意にキャッシュし、作成途中も含めて共通予算で管理。
   予算は Windows の使用可能な物理/コミット/仮想空間の最小値の 80% を再評価する。
   予算不足では古いものから破棄し、必要時だけ再圧縮。配列確保失敗ならキャッシュ停止。
-  ZIP 管理情報・暗号ヘッダ・ZIP64 境界を含む完成サイズで最大 19 個の計画を確定する。
+  ZIP 管理情報・暗号ヘッダ・ZIP64 境界を含む完成サイズで指定上限内の計画を確定する。
   通常容量で first-fit/best-fit を比較し、超過見込みなら大きい順の均等配置・移動・交換。
-  最小個数や完全な大域最適は保証しないが、19 個の上限と計画/実サイズ一致は検査する。
+  最小個数や完全な大域最適は保証しないが、指定上限・9999 個以下・実サイズ一致は検査する。
   キャッシュ時も入力の実体・サイズ・日時を照合し、キャッシュを失った再圧縮時は
   平文 SHA-256・CRC・圧縮量も照合する。成功するまで新規出力を所有ハンドルで保持。
 
 安全性 / 解釈:
-  [T261004_EL_ATCEV_01] 旧出力の削除は、指定された最初の名前、または
-  「ベース名 + '.' + ASCII 数字ちょうど 2 桁 + '.zip'」に完全一致する直下の通常ファイルだけ。
+  旧出力の削除は、指定名そのもの、または
+  「ベース名 + '.' + ASCII 数字 2～4 桁 + '.zip'」に完全一致する直下の通常ファイルだけ。
+  旧規則の 00 は維持するが、新たな 000 / 0000 は対象外。候補は必ず一覧・確認する。
   ワイルドカード削除、再帰削除、名前を再検索しての失敗時削除は行わない。
   新規出力は CREATE_NEW で作り、DELETE アクセス付きハンドルを成功まで保持する。
   書き込みストリームとは別に所有ハンドルを保持し、失敗時だけ削除保留にして閉じる。
@@ -76,10 +81,12 @@ using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 
 /// <summary>単一ファイルで完結するアプリケーション。内部名は依頼の命名規則による。</summary>
-internal static class dnnt_261003_zwces4_zip_split_merge
+internal static class dnnt_261006_vqybr5_zip_split_merge
 {
     private const long MAX_ONE_ZIP_FILE_SIZE = 31500000L;
     private static int MAX_NUM_ZIP_FILES = 18;
+    // 設定上限とは別に、確定した生成数に適用する命名形式の絶対上限。
+    private const int MaximumOutputZipFiles = 9999;
     private const string ZIP_PASSWORD = "m";
     // UTF-8/Unicode Path の明示指定がない既存 ZIP 用。日本語 Windows の CP932 を優先。
     private const int LEGACY_ZIP_CODE_PAGE = 932;
@@ -141,15 +148,13 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             }
 
             Console.WriteLine();
-            Console.Write($"最大ファイル数 (無指定: {MAX_NUM_ZIP_FILES} 個): ");
-            string tmp1 = Console.ReadLine();
-
-            if (int.TryParse(tmp1, out var tmp2))
+            Console.Write("最大ファイル数 (無指定: {0} 個): ", MAX_NUM_ZIP_FILES);
+            string maximumCountText = Console.ReadLine();
+            int maximumCount;
+            if (Int32.TryParse(maximumCountText, out maximumCount) && maximumCount >= 1)
             {
-                if (tmp2 >= 1)
-                {
-                    MAX_NUM_ZIP_FILES = tmp2;
-                }
+                // 10000 個以上の禁止は設定値でなく、後で確定する実際の生成数へ適用する。
+                MAX_NUM_ZIP_FILES = maximumCount;
             }
 
             Console.WriteLine();
@@ -160,8 +165,8 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 // 保存ダイアログのフォルダがリンクでも、以後は固定した実体にだけ書く。
                 OutputNames names = new OutputNames(System.IO.Path.Combine(guard.CanonicalPath,
                     System.IO.Path.GetFileName(outputPath)));
-                if (!String.Equals(names.FirstPath, outputPath, StringComparison.OrdinalIgnoreCase))
-                    Console.WriteLine("保存先の実体パス: {0}", names.FirstPath);
+                if (!String.Equals(names.RequestedPath, outputPath, StringComparison.OrdinalIgnoreCase))
+                    Console.WriteLine("保存先の実体パス: {0}", names.RequestedPath);
                 Console.WriteLine("入力内容と名前の重複を検査しています...");
                 Manifest manifest = Manifest.Build(roots, names);
                 Console.WriteLine("対象: {0} 個のファイル、{1} 個の空フォルダ、合計 {2} bytes。",
@@ -175,7 +180,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                     cache.Trim();
                     plan.Show(names);
                     // すべての復号・圧縮計測と配置検査が成功してから、初めて旧出力を削除する。
-                    transaction = new OutputTransaction(names);
+                    transaction = new OutputTransaction(names, plan.Parts.Count);
                     transaction.RemovePreviousOutputs(manifest);
                     PackResult result = Pack(manifest, transaction, plan, cache);
                     string resultText = FormatResult(result, names);
@@ -247,12 +252,12 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         return line;
     }
 
-    /// <summary>STA 上で保存コモンダイアログを開き、選択された絶対 .zip パスを返す。</summary>
+    /// <summary>STA 上で保存コモンダイアログを開き、連番付加前の絶対 .zip パスを返す。</summary>
     private static string SelectOutput()
     {
         using (SaveFileDialog dialog = new SaveFileDialog())
         {
-            dialog.Title = "最初の ZIP ファイルの保存先";
+            dialog.Title = "ZIP ファイルの保存先と基本名（複数時は連番を付加）";
             dialog.Filter = "ZIP ファイル (*.zip)|*.zip";
             dialog.DefaultExt = "zip";
             dialog.AddExtension = true;
@@ -260,7 +265,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             dialog.CheckPathExists = true;
             dialog.ValidateNames = true;
             dialog.RestoreDirectory = true;
-            dialog.FileName = Lib.GenTag() + "_MaterialFiles.zip";
+            dialog.FileName = DateTime.Now.ToString("yyMMdd_HHmmss", NumberCulture) + "_MaterialFiles.zip";
             DialogResult result = dialog.ShowDialog(new ConsoleOwner());
             if (result != DialogResult.OK) throw new AppError(1223, "保存先の選択がキャンセルされました。");
             string path = PathRules.FullPath(dialog.FileName);
@@ -340,7 +345,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         Console.WriteLine("圧縮キャッシュ保持量: {0} bytes / 現在の上限 {1} bytes。", FormatNumber(cache.UsedBytes), FormatNumber(cache.LimitBytes));
     }
 
-    /// <summary>事前確定した最大 19 個の計画を出力する。サイズや内容が変わった場合は全体を失敗させる。</summary>
+    /// <summary>指定上限内・9999 個以下で事前確定した計画を出力し、サイズや内容の変更は拒否する。</summary>
     private static PackResult Pack(Manifest manifest, OutputTransaction transaction, PackingPlan plan, CompressedCache cache)
     {
         plan.Validate(manifest.Items);
@@ -396,7 +401,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             "圧縮後ファイル容量: {5} bytes ({6} % 削減)" + Environment.NewLine +
             "生成された {2} 個の zip ファイルの合計容量: {7} bytes" + Environment.NewLine +
             "このうち最大の .zip ファイルは、{8} ({9} 個目) であり {10} bytes です。",
-            names.FirstPath, result.LastName, result.PartCount, result.FileCount,
+            names.PartPath(1, result.PartCount), result.LastName, result.PartCount, result.FileCount,
             FormatNumber(result.OriginalBytes), FormatNumber(result.CompressedPayloadBytes),
             percent.ToString("F1", NumberCulture), FormatNumber(result.TotalZipBytes),
             result.LargestName, result.LargestIndex, FormatNumber(result.LargestBytes));
@@ -1043,7 +1048,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         }
     }
 
-    /// <summary>最大 19 個の配置計画。正確な完成サイズを評価し、容量優先と均等化を切り替える。</summary>
+    /// <summary>指定上限内の配置計画。正確な完成サイズを評価し、容量優先と均等化を切り替える。</summary>
     private sealed class PackingPlan
     {
         internal readonly List<PlannedPart> Parts = new List<PlannedPart>();
@@ -1052,7 +1057,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         private const int CandidateSamples = 32;
         private const long RefinementBudget = 2000000L;
 
-        /// <summary>通常容量で複数の貪欲解を比較し、19 個に収まらなければ均等配分と局所改善を行う。</summary>
+        /// <summary>通常容量で複数の貪欲解を比較し、指定上限に収まらなければ均等配分と局所改善を行う。</summary>
         internal static PackingPlan Build(List<SourceItem> items)
         {
             CheckCancellation();
@@ -1077,7 +1082,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             best = PreferCompact(best, Capacity(descending, MAX_ONE_ZIP_FILE_SIZE, true));
             if (best == null)
             {
-                Console.WriteLine("通常容量での配置が 19 個を超える見込みのため、最大 19 個へ均等化します...");
+                Console.WriteLine("通常容量での配置が {0} 個を超える見込みのため、最大 {0} 個へ均等化します...", MAX_NUM_ZIP_FILES);
                 best = Balanced(descending);
                 // 中間容量の best-fit も比較する。探索は有限であり、数学的な大域最適を保証しない。
                 long low = MAX_ONE_ZIP_FILE_SIZE;
@@ -1104,7 +1109,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             return best;
         }
 
-        /// <summary>追加後に最初に収まる ZIP、または最も残りの少ない ZIP を選ぶ。19 個で打切る。</summary>
+        /// <summary>追加後に最初に収まる ZIP、または最も残りの少ない ZIP を選ぶ。指定上限で打切る。</summary>
         private static PackingPlan Capacity(List<SourceItem> items, long capacity, bool bestFit)
         {
             PackingPlan result = new PackingPlan();
@@ -1300,7 +1305,9 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>生成上限・各入力のちょうど 1 回の出力・サイズ式を、削除前と出力開始時に再確認する。</summary>
         internal void Validate(List<SourceItem> expected)
         {
-            if (Parts.Count < 1 || Parts.Count > MAX_NUM_ZIP_FILES)
+            // 10000 個以上の計画は、旧出力の削除より前に例外とする。
+            OutputNames.ValidatePartCount(Parts.Count);
+            if (Parts.Count > MAX_NUM_ZIP_FILES)
                 throw new AppError(13, "ZIP 生成数の内部エラー: 最大 " + MAX_NUM_ZIP_FILES + " 個です。");
             HashSet<SourceItem> found = new HashSet<SourceItem>();
             foreach (PlannedPart part in Parts)
@@ -1324,12 +1331,12 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>計画結果とサイズ超過理由を、既存ファイルを削除する前に表示する。</summary>
         internal void Show(OutputNames names)
         {
-            Console.WriteLine("配置計画: {0} 個 (絶対上限 {1} 個)", Parts.Count, MAX_NUM_ZIP_FILES);
+            Console.WriteLine("配置計画: {0} 個 (設定上限 {1} 個 / 生成可能上限 {2} 個)", Parts.Count, MAX_NUM_ZIP_FILES, MaximumOutputZipFiles);
             for (int i = 0; i < Parts.Count; i++)
-                Console.WriteLine("  {0}: {1} bytes / {2} エントリ{3}", System.IO.Path.GetFileName(names.PartPath(i + 1)),
+                Console.WriteLine("  {0}: {1} bytes / {2} エントリ{3}", System.IO.Path.GetFileName(names.PartPath(i + 1, Parts.Count)),
                     FormatNumber(Parts[i].Layout.Size), Parts[i].Items.Count,
                     Parts[i].Layout.Size > MAX_ONE_ZIP_FILE_SIZE ? " (目安容量超過)" : "");
-            if (Relaxed) Console.WriteLine("警告: 最大 19 個を優先し、容量の目安を緩和して均等化しました。ファイル内容は分割しません。");
+            if (Relaxed) Console.WriteLine("警告: 最大 {0} 個を優先し、容量の目安を緩和して均等化しました。ファイル内容は分割しません。", MAX_NUM_ZIP_FILES);
             else if (Maximum() > MAX_ONE_ZIP_FILE_SIZE)
                 Console.WriteLine("警告: 単独のファイルだけで目安容量を超える ZIP があります。");
         }
@@ -1431,7 +1438,7 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                     result.Items.Add(item);
                 }
             }
-            string candidate = System.IO.Path.Combine(outputDirectory.CanonicalPath, System.IO.Path.GetFileName(output.FirstPath));
+            string candidate = System.IO.Path.Combine(outputDirectory.CanonicalPath, System.IO.Path.GetFileName(output.RequestedPath));
             if (result.InputPaths.Contains(candidate))
                 throw new AppError(87, "保存先が入力ファイルそのものです: " + candidate);
             return result;
@@ -1605,35 +1612,68 @@ internal static class dnnt_261003_zwces4_zip_split_merge
     /// <summary>分割 ZIP の命名と、旧出力を削除できる名前かの厳密な判定。</summary>
     private sealed class OutputNames
     {
-        internal readonly string FirstPath;
+        // 保存ダイアログの指定名。複数生成時の実際の先頭名とは区別する。
+        internal readonly string RequestedPath;
         internal readonly string DirectoryPath;
         internal readonly string BaseName;
-        private readonly string firstName;
-        internal OutputNames(string firstPath)
+        private readonly string requestedName;
+
+        /// <summary>連番を付ける前の検査済み絶対パスを保持し、保存先とベース名を分離する。</summary>
+        /// <param name="requestedPath">保存ダイアログで選んだ .zip 名を出力実体フォルダへ結合したパス。</param>
+        internal OutputNames(string requestedPath)
         {
-            FirstPath = firstPath;
-            DirectoryPath = System.IO.Path.GetDirectoryName(firstPath);
-            firstName = System.IO.Path.GetFileName(firstPath);
-            BaseName = System.IO.Path.GetFileNameWithoutExtension(firstName);
+            RequestedPath = requestedPath;
+            DirectoryPath = System.IO.Path.GetDirectoryName(requestedPath);
+            requestedName = System.IO.Path.GetFileName(requestedPath);
+            BaseName = System.IO.Path.GetFileNameWithoutExtension(requestedName);
             if (String.IsNullOrEmpty(BaseName)) throw new AppError(87, "ZIP のベース名が空です。");
         }
 
-        /// <summary>1 は指定名、2～19 はちょうど 2 桁の連番。それ以外は作成前に拒否する。</summary>
-        internal string PartPath(int number)
+        /// <summary>実際の生成数を検査する。設定上限が大きいだけの場合はここでは拒否しない。</summary>
+        /// <param name="totalCount">確定した生成数。1～9999 が有効。</param>
+        /// <exception cref="AppError">0 以下は内部エラー、10000 以上は生成数の仕様違反。</exception>
+        internal static void ValidatePartCount(int totalCount)
         {
-            if (number <= 0 || number > MAX_NUM_ZIP_FILES) throw new ArgumentOutOfRangeException("number",
-                "ZIP の番号は 1～" + MAX_NUM_ZIP_FILES + " の範囲です。");
-            if (number == 1) return FirstPath;
-            return System.IO.Path.Combine(DirectoryPath, BaseName + "." + number.ToString("D2", NumberCulture) + ".zip");
+            if (totalCount < 1) throw new AppError(13, "ZIP の生成数は 1 個以上でなければなりません。");
+            if (totalCount > MaximumOutputZipFiles)
+                throw new AppError(87, "ZIP の生成数が 10000 個以上になるため処理できません。" +
+                    "生成予定: " + totalCount.ToString(NumberCulture) + " 個、許容上限: " +
+                    MaximumOutputZipFiles.ToString(NumberCulture) + " 個です。");
         }
 
-        /// <summary>ファイル名全体を検査する。数字は ASCII の 0～9 だけで、必ずちょうど 2 桁。</summary>
+        /// <summary>1 個なら指定名、複数なら総数に応じた 2～4 桁を、1 個目から一律に付ける。</summary>
+        /// <param name="number">1 始まりの出力番号。totalCount 以下であること。</param>
+        /// <param name="totalCount">設定上限ではなく、計画で確定した実際の生成数。</param>
+        /// <returns>生成時にそのまま使用する絶対パス。番号・個数・パスが不正なら例外。</returns>
+        internal string PartPath(int number, int totalCount)
+        {
+            ValidatePartCount(totalCount);
+            if (number < 1 || number > totalCount) throw new ArgumentOutOfRangeException("number",
+                "ZIP の番号は 1～" + totalCount.ToString(NumberCulture) + " の範囲です。");
+            string path = RequestedPath;
+            if (totalCount > 1)
+            {
+                string format = totalCount < 100 ? "D2" : (totalCount < 1000 ? "D3" : "D4");
+                path = System.IO.Path.Combine(DirectoryPath,
+                    BaseName + "." + number.ToString(format, NumberCulture) + ".zip");
+            }
+            // 全名前を計画表示時に評価するため、連番付加による長さ超過も旧出力削除前に拒否する。
+            if (path.Length >= 260 || System.IO.Path.GetFileName(path).Length > 255)
+                throw new AppError(206, "連番を含む出力パスが通常の Windows パス長上限を超えます: " + path);
+            return PathRules.FullPath(path);
+        }
+
+        /// <summary>新旧出力に使われる無連番名と ASCII 2～4 桁名を、今回の桁数に依存せず判定する。</summary>
         internal bool IsOldName(string name)
         {
-            return MatchesOldName(name, firstName, BaseName);
+            return MatchesOldName(name, requestedName, BaseName);
         }
 
-        /// <summary>削除規則の純粋関数。ディレクトリの有無は呼出側で別に必ず検査する。</summary>
+        /// <summary>削除規則の純粋関数。直下の通常ファイルかどうかは呼出側で別に必ず検査する。</summary>
+        /// <param name="name">ディレクトリ部分を含まない候補名。</param>
+        /// <param name="first">連番付加前の指定ファイル名。</param>
+        /// <param name="stem">末尾の .zip だけを除去した指定ファイル名。</param>
+        /// <returns>無連番名、旧規則の 00～99、または 001～999 / 0001～9999 なら true。</returns>
         internal static bool MatchesOldName(string name, string first, string stem)
         {
             if (name.IndexOf('/') >= 0 || name.IndexOf('\\') >= 0) return false;
@@ -1643,10 +1683,15 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                 !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
             int digits = name.Length - prefix.Length - suffix.Length;
-            if (digits != 2) return false;
+            if (digits < 2 || digits > 4) return false;
+            int number = 0;
             for (int i = prefix.Length; i < prefix.Length + digits; i++)
+            {
                 if (name[i] < '0' || name[i] > '9') return false;
-            return true;
+                number = number * 10 + (name[i] - '0');
+            }
+            // 旧来の .00.zip は維持する。新形式では生成しない .000.zip / .0000.zip を削除対象に広げない。
+            return digits == 2 || number != 0;
         }
     }
 
@@ -1699,10 +1744,21 @@ internal static class dnnt_261003_zwces4_zip_split_merge
     private sealed class OutputTransaction : IDisposable
     {
         private readonly OutputNames names;
+        // 全出力で同じ桁数を使うため、削除開始前に確定した実際の生成数を固定して保持する。
+        private readonly int plannedPartCount;
         private readonly List<OwnedOutput> outputs = new List<OwnedOutput>();
         private bool committed;
         private bool rolledBack;
-        internal OutputTransaction(OutputNames outputNames) { names = outputNames; }
+
+        /// <summary>名前の基準と生成数を保持する。この時点ではファイル操作をしない。</summary>
+        /// <param name="outputNames">保存先と連番付加前の指定名。</param>
+        /// <param name="partCount">配置計画で確定した生成数。1～9999。</param>
+        internal OutputTransaction(OutputNames outputNames, int partCount)
+        {
+            OutputNames.ValidatePartCount(partCount);
+            names = outputNames;
+            plannedPartCount = partCount;
+        }
 
         /// <summary>直下だけ列挙し、全対象を検査・ハンドルで固定・確認してから削除する。</summary>
         internal void RemovePreviousOutputs(Manifest manifest)
@@ -1768,9 +1824,9 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>新規ファイルだけを作る。列挙後に出現した同名ファイルは絶対に上書きしない。</summary>
         internal OwnedOutput CreateNext()
         {
-            if (outputs.Count >= MAX_NUM_ZIP_FILES)
-                throw new AppError(13, "ZIP の生成数が絶対上限 " + MAX_NUM_ZIP_FILES + " 個を超えようとしました。");
-            string path = names.PartPath(checked(outputs.Count + 1));
+            if (outputs.Count >= plannedPartCount)
+                throw new AppError(13, "ZIP の生成数が事前計画 " + plannedPartCount.ToString(NumberCulture) + " 個を超えようとしました。");
+            string path = names.PartPath(checked(outputs.Count + 1), plannedPartCount);
             OwnedOutput item = new OwnedOutput();
             item.Path = path;
             item.Name = System.IO.Path.GetFileName(path);
@@ -1809,6 +1865,9 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>全体をディスクまでフラッシュして実サイズを検査する。完了するまでは全所有ハンドルを保持。</summary>
         internal void Commit()
         {
+            if (outputs.Count != plannedPartCount)
+                throw new AppError(13, "ZIP の生成数が事前計画と一致しません。予定: " +
+                    plannedPartCount.ToString(NumberCulture) + " 個、実際: " + outputs.Count.ToString(NumberCulture) + " 個。");
             foreach (OwnedOutput item in outputs)
             {
                 CheckCancellation();
@@ -3354,6 +3413,8 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 Check(Crc32.Compute(Encoding.ASCII.GetBytes("123456789")) == 0xCBF43926U, "CRC-32 既知値");
                 TestClassicVector();
                 TestNames();
+                TestOutputNumbering();
+                TestOutputCountLimits();
                 TestInputZipRootNames();
                 TestLegacyNames();
                 TestDirectoryTraversalRules();
@@ -3414,11 +3475,21 @@ internal static class dnnt_261003_zwces4_zip_split_merge
         /// <summary>削除対象の完全一致、危険なパス、および大小文字を無視した全体衝突の検査。</summary>
         private static void TestNames()
         {
-            string[] yes = { "a.zip", "A.ZIP", "a.02.zip", "A.00.ZIP", "a.01.zip", "a.19.zip", "a.20.zip", "a.99.zip" };
-            string[] no = { "a.2.zip", "a.002.zip", "a.0000.zip", "a.9999.zip", "a.100.zip", "a.00000.zip", "a.10000.zip", "a.０２.zip", "a.02.zip.bak",
+            string[] yes = { "a.zip", "A.ZIP", "a.02.zip", "A.00.ZIP", "a.01.zip", "a.19.zip", "a.20.zip", "a.99.zip",
+                "a.001.zip", "a.002.zip", "a.012.zip", "a.100.zip", "a.999.zip", "A.0001.ZIP", "a.0012.zip", "a.1000.zip", "a.9999.zip" };
+            string[] no = { "a.2.zip", "a.000.zip", "a.0000.zip", "a.00000.zip", "a.10000.zip", "a.０２.zip", "a.02.zip.bak",
                 "aX02.zip", "ab.02.zip", "a..zip", "a. 2.zip", "a.-2.zip", "a.02a.zip", "sub/a.02.zip", "sub\\a.02.zip" };
             foreach (string name in yes) Check(OutputNames.MatchesOldName(name, "a.zip", "a"), "削除対象: " + name);
             foreach (string name in no) Check(!OutputNames.MatchesOldName(name, "a.zip", "a"), "削除禁止: " + name);
+            for (int width = 2; width <= 4; width++)
+            {
+                int maximum = width == 2 ? 99 : (width == 3 ? 999 : 9999);
+                for (int number = width == 2 ? 0 : 1; number <= maximum; number++)
+                {
+                    string name = "a." + number.ToString(NumberCulture).PadLeft(width, '0') + ".zip";
+                    Check(OutputNames.MatchesOldName(name, "a.zip", "a"), "新旧連番の削除候補を全数検査: " + name);
+                }
+            }
             Check(OutputNames.MatchesOldName("a+b.[x].02.zip", "a+b.[x].zip", "a+b.[x]"), "正規表現メタ文字を含むベース名");
             string[] unsafeNames = { "../x", "/x", "C:/x", "a//x", "a/../x", "a\\..\\x", "CON", "a/NUL.txt", "a:x", "x.", "x " };
             foreach (string name in unsafeNames)
@@ -3434,6 +3505,114 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             Manifest second = new Manifest();
             second.AddFile("x", MakeSource("unused", new byte[0]));
             ExpectFailure(delegate { second.AddFile("X/y", MakeSource("other", new byte[0])); }, "親が既存ファイル");
+        }
+
+        /// <summary>アプリケーション例外の種類と終了コードを確認する。ファイル操作は行わない。</summary>
+        /// <param name="action">例外を投げるべき検査処理。</param>
+        /// <param name="code">期待する AppError.Code。</param>
+        /// <param name="name">失敗時に表示する検査名。</param>
+        private static void ExpectAppError(Action action, int code, string name)
+        {
+            bool failed = false;
+            try { action(); }
+            catch (AppError ex) { failed = ex.Code == code; }
+            Check(failed, name);
+        }
+
+        /// <summary>総数の境界で先頭・末尾・全番号を検査し、桁数の統一、重複、順序も確かめる。</summary>
+        private static void TestOutputNumbering()
+        {
+            OutputNames names = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.zip"));
+            int[] counts = { 1, 2, 99, 100, 999, 1000, 9999 };
+            int[] widths = { 0, 2, 2, 3, 3, 4, 4 };
+            string[] firstNames = { "a.zip", "a.01.zip", "a.01.zip", "a.001.zip", "a.001.zip", "a.0001.zip", "a.0001.zip" };
+            string[] lastNames = { "a.zip", "a.02.zip", "a.99.zip", "a.100.zip", "a.999.zip", "a.1000.zip", "a.9999.zip" };
+            for (int test = 0; test < counts.Length; test++)
+            {
+                int count = counts[test];
+                Check(System.IO.Path.GetFileName(names.PartPath(1, count)) == firstNames[test], "総数境界の先頭名: " + count);
+                Check(System.IO.Path.GetFileName(names.PartPath(count, count)) == lastNames[test], "総数境界の末尾名: " + count);
+                HashSet<string> generated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                string previous = null;
+                for (int number = 1; number <= count; number++)
+                {
+                    string actual = System.IO.Path.GetFileName(names.PartPath(number, count));
+                    string expected = count == 1 ? "a.zip" :
+                        "a." + number.ToString(NumberCulture).PadLeft(widths[test], '0') + ".zip";
+                    Check(actual == expected, "同一セットの全番号で桁数一致: " + actual);
+                    Check(generated.Add(actual), "出力名の一意性: " + actual);
+                    Check(names.IsOldName(actual), "生成した名前を次回の旧出力判定で認識: " + actual);
+                    Check(previous == null || String.CompareOrdinal(previous, actual) < 0, "名前順と番号順の一致: " + actual);
+                    previous = actual;
+                }
+            }
+            Check(System.IO.Path.GetFileName(names.PartPath(12, 100)) == "a.012.zip", "3 桁の 12 個目");
+            Check(System.IO.Path.GetFileName(names.PartPath(12, 1000)) == "a.0012.zip", "4 桁の 12 個目");
+            OutputNames upper = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "A.ZIP"));
+            Check(System.IO.Path.GetFileName(upper.PartPath(1, 1)) == "A.ZIP", "単一出力の指定名と拡張子を維持");
+            OutputNames numberedStem = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.07.zip"));
+            Check(System.IO.Path.GetFileName(numberedStem.PartPath(1, 2)) == "a.07.01.zip", "指定名中の既存数字は削らない");
+            OutputNames symbols = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a+b.[x].zip"));
+            Check(System.IO.Path.GetFileName(symbols.PartPath(1, 100)) == "a+b.[x].001.zip", "ベース名の記号をそのまま保持");
+
+            int[] invalidNumbers = { -1, 0, 3 };
+            foreach (int number in invalidNumbers)
+            {
+                bool rejected = false;
+                try { names.PartPath(number, 2); }
+                catch (ArgumentOutOfRangeException ex) { rejected = ex.ParamName == "number"; }
+                Check(rejected, "生成番号が 1～総数の範囲外なら拒否: " + number);
+            }
+            ExpectAppError(delegate { names.PartPath(1, 0); }, 13, "総数 0 を拒否");
+            ExpectAppError(delegate { names.PartPath(1, -1); }, 13, "負の総数を拒否");
+            ExpectAppError(delegate { names.PartPath(1, 10000); }, 87, "総数 10000 は最初の名前から拒否");
+            ExpectAppError(delegate { names.PartPath(1, Int32.MaxValue); }, 87, "極端な総数でも 5 桁以上を作らない");
+
+            // 実ファイルを作らず、連番の付加で通常パス長をまたぐ条件だけを再現する。
+            OutputNames longName = new OutputNames("C:/x/" + new string('a', 247) + ".zip");
+            Check(longName.PartPath(1, 99).Length == 259, "2 桁付加後に 259 文字のパスは受理");
+            ExpectAppError(delegate { longName.PartPath(1, 100); }, 206, "3 桁付加で 260 文字になるパスは拒否");
+            ExpectAppError(delegate { longName.PartPath(1, 1000); }, 206, "4 桁付加で上限超過するパスは拒否");
+        }
+
+        /// <summary>設定上限と実際の生成数を区別し、9999/10000 境界と不完全な成功確定を検査する。</summary>
+        private static void TestOutputCountLimits()
+        {
+            int savedMaximum = MAX_NUM_ZIP_FILES;
+            try
+            {
+                MAX_NUM_ZIP_FILES = 10000;
+                OutputNames names = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.zip"));
+                List<SourceItem> single = new List<SourceItem>();
+                single.Add(SyntheticItem(0, 1000L));
+                PackingPlan one = PackingPlan.Build(single);
+                Check(one.Parts.Count == 1 && System.IO.Path.GetFileName(names.PartPath(1, one.Parts.Count)) == "a.zip",
+                    "設定 10000 でも実際 1 個なら無連番で許可");
+
+                // 圧縮データや実ファイルは作らず、計画メタデータだけで実際の上限を検査する。
+                List<SourceItem> items = new List<SourceItem>();
+                PackingPlan plan = new PackingPlan();
+                for (int number = 1; number <= 9999; number++)
+                {
+                    SourceItem item = SyntheticItem(number, 1000L);
+                    items.Add(item);
+                    PlannedPart part = new PlannedPart();
+                    part.Add(item);
+                    plan.Parts.Add(part);
+                }
+                plan.Validate(items);
+                Check(plan.Parts.Count == 9999, "9999 個の確定計画を許可");
+                SourceItem excess = SyntheticItem(10000, 1000L);
+                items.Add(excess);
+                PlannedPart excessPart = new PlannedPart();
+                excessPart.Add(excess);
+                plan.Parts.Add(excessPart);
+                ExpectAppError(delegate { plan.Validate(items); }, 87, "設定上限内でも 10000 個の確定計画は拒否");
+                ExpectAppError(delegate { new OutputTransaction(names, 10000); }, 87, "トランザクション開始前にも 10000 個を拒否");
+                using (OutputTransaction incomplete = new OutputTransaction(names, 2))
+                    ExpectAppError(delegate { incomplete.Commit(); }, 13, "生成数が事前計画に足りない成功確定を拒否");
+            }
+            finally { MAX_NUM_ZIP_FILES = savedMaximum; }
         }
 
         /// <summary>入力 ZIP の拡張子除去、通常入力の維持、除去後の衝突、暗号化 ZIP の名前を検査。</summary>
@@ -3641,10 +3820,12 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             result.FileCount = 2;
             result.OriginalBytes = 1000;
             result.CompressedPayloadBytes = 600;
-            result.AddPart("a.zip", 120);
+            result.AddPart("a.01.zip", 120);
             result.AddPart("a.02.zip", 560);
             string text = FormatResult(result, names);
             string newline = Environment.NewLine;
+            Check(text.StartsWith(newline + names.PartPath(1, 2) + " ～ a.02.zip", StringComparison.Ordinal),
+                "成功表示の先頭も実際の .01.zip を使用");
             Check(text.Contains("圧縮しました。" + newline + newline + "圧縮前ファイル容量: 1,000 bytes" + newline), "概要の後に空行");
             Check(text.Contains("圧縮後ファイル容量: 600 bytes (40.0 % 削減)" + newline), "圧縮後容量の改行");
             Check(text.Contains("合計容量: 680 bytes" + newline + "このうち最大の .zip ファイルは、a.02.zip (2 個目) であり 560 bytes です。"),
@@ -3808,8 +3989,20 @@ internal static class dnnt_261003_zwces4_zip_split_merge
             return item;
         }
 
-        /// <summary>19 個境界、均等化、単独超過、正常時の隙間詰めと各入力の一意配置を検査する。</summary>
+        /// <summary>本番の既定値を変えず、既存の 19 個境界テストを明示的な設定で実行する。</summary>
         private static void TestPackingPlans()
+        {
+            int savedMaximum = MAX_NUM_ZIP_FILES;
+            try
+            {
+                MAX_NUM_ZIP_FILES = 19;
+                TestPackingPlansAtNineteen();
+            }
+            finally { MAX_NUM_ZIP_FILES = savedMaximum; }
+        }
+
+        /// <summary>19 個境界、均等化、単独超過、正常時の隙間詰めと各入力の一意配置を検査する。</summary>
+        private static void TestPackingPlansAtNineteen()
         {
             List<SourceItem> empty = new List<SourceItem>();
             PackingPlan emptyPlan = PackingPlan.Build(empty);
@@ -3858,16 +4051,6 @@ internal static class dnnt_261003_zwces4_zip_split_merge
                 foreach (PlannedPart part in plan.Parts)
                     Check(part.Items.Count != 0, "空の余分な ZIP を作らない");
             }
-            OutputNames names = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.zip"));
-            Check(System.IO.Path.GetFileName(names.PartPath(19)) == "a.19.zip", "最大番号は 2 桁");
-            bool rejected = false;
-            try { names.PartPath(20); }
-            catch (ArgumentOutOfRangeException) { rejected = true; }
-            Check(rejected, "20 個目の名前を生成前に拒否");
-            for (int i = 0; i <= 99; i++)
-                Check(OutputNames.MatchesOldName("a." + i.ToString("D2", NumberCulture) + ".zip", "a.zip", "a"), "2 桁だけ削除対象");
-            for (int i = 100; i <= 9999; i++)
-                Check(!OutputNames.MatchesOldName("a." + i.ToString(NumberCulture) + ".zip", "a.zip", "a"), "3～4 桁は削除禁止");
         }
 
         /// <summary>高速な差分評価を全件再計算と照合する。4 GiB と個数境界も再現する。</summary>
