@@ -1,12 +1,14 @@
 ﻿/*
-DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
+DNNT 261007_VGD8KZ 分割 ZIP 結合展開ユーティリティ R03
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r02_261007_tfdxe5.cs
-今回バージョン: R02 (入力ソースの指定バージョン: R01)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r03_261007_vgd8kz.cs
+今回バージョン: R03 (入力ソースの指定バージョン: R02)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
+前回標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
+初版標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
 
-目的: 同一ディレクトリの ZIP / UNIX split 相当の ZIP 断片を認識し、安全に展開する。
+目的: 同一ディレクトリの ZIP / UNIX split 相当の ZIP 断片 / 両者のハイブリッドを認識し、
+      通常展開または /d・-d 指定によるベースライン＋差分の統合展開を行う。
 対象: Windows Vista 以降 / .NET Framework 4.0 API / C# 4 / AnyCPU / WinExe。
 原理: シーク可能な仮想連結ストリーム上で EOCD、ZIP64、中央・ローカルヘッダ、
       data descriptor の範囲と一致を検証する。連結中間ファイルは作らない。
@@ -34,7 +36,29 @@ DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       ローカル ZIP64 extra の構造・数値範囲検査も維持する。
       現行の保存処理と古い説明の相違、既存の競合制約は readme の R02 追記参照。
 
-今回の生成情報 (R02):
+改修 R03 / DNNT 261007_VGD8KZ / 2026/10/07 21:28:46 (JST):
+      個別ZIP・全連結ZIP・Q.zip.Pによる群別仮想連結の三候補を構造検証する。
+      差分/ベースラインを独立して検査し、明示・暗黙ディレクトリを含む仮想木の
+      同一相対パス・同一種別の一致数を最大化する。完全同値の部分木を圧縮し、
+      相対パスの整数索引とprefix filterで、最良値に届き得る候補だけを厳密に照合する。
+      同じ一致数では深さ和の最小を選び、なお複数解なら詳細例外で中断する。
+      ベースライン基準配下を差分基準へ写像し、外側を _base_misc_files/yyMMdd_HHmmss へ保管。
+      上書き対象のベースラインは遅延し、差分成功時は一切展開せず、個別失敗時だけ救済する。
+      二群の同名ZIPでも警告を識別する。終了コード0のときe/E/o/Oで出力先をExplorerで開く。
+      一時保存先の後片付けI/O例外が元の例外を隠さないよう、Disposeを局所補修した。
+      最大cは近似しない。入力形状によって相対パス総量や候補数が二乗に増える最悪例はある。
+      C#の実コンパイル/Windows実行は未検証。独立モデル照合と静的レビューの範囲はREADME参照。
+
+今回の生成情報 (R03):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: 公開された設定値を取得できないため不明。
+      セッション開始日時(JST): 正確な値は取得不可。
+      今回依頼の受信日時(JST): 2026/10/07 21:05:43 (会話で提供された時刻情報)。
+      今回の最初の明示的な環境時計記録(JST): 2026/10/07 21:11:00。
+      応答生成用成果物の確定日時(JST): 2026/10/07 21:28:46 (JST)。
+
+前版の生成情報 (R02 の入力記録を保持):
       本プログラムは生成 AI により生成され、今回の修正も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: 公開された設定値は取得不可のため記載しない。
@@ -91,12 +115,16 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         {
             int result = 31;
             bool consoleReady = false;
+            string completedRoot = null;
             try
             {
                 if (Environment.OSVersion.Platform != PlatformID.Win32NT || Environment.OSVersion.Version.Major < 6)
                     throw new PlatformNotSupportedException("Windows Vista 以降が必要です。");
                 Native.EnsureConsole();
                 consoleReady = true;
+                bool differential;
+                string[] inputArguments = ParseArguments(args, out differential);
+                Console.WriteLine(differential ? "【差分 ZIP モード】" : "【通常 ZIP モード】");
                 Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
                 {
                     e.Cancel = true;
@@ -107,47 +135,41 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 LegacyEncoding = LoadEncoding();
                 PasswordManager passwords = new PasswordManager();
                 passwords.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "password_list.txt"));
-                string[] paths = GetInputs(args);
-                Console.WriteLine("入力ファイル群 ({0:N0} 個のファイル) の認識中...", paths.Length);
-                List<string> sources = new List<string>();
-                List<string> excluded = new List<string>();
-                foreach (string path in paths)
+                using (ArchiveInput primary = ReadInput(inputArguments, differential
+                    ? "(1) まず、差分 zip 群を指定してください" : "入力ファイル群を選択",
+                    differential ? "差分 ZIP 群" : null))
                 {
-                    if (Path.GetFileName(path).IndexOf("zip", StringComparison.OrdinalIgnoreCase) >= 0) sources.Add(path);
-                    else excluded.Add(path);
-                }
-                if (excluded.Count != 0)
-                {
-                    Console.WriteLine("無関係な除外ファイルリスト:");
-                    foreach (string path in excluded) Console.WriteLine("  " + Text.Safe(path));
-                }
-                if (sources.Count == 0) throw new InvalidDataException("ファイル名に zip を含む対象ファイルがありません。");
-                sources.Sort(delegate (string a, string b) { return StringComparer.Ordinal.Compare(Path.GetFileName(a), Path.GetFileName(b)); });
-                using (SourceSet sourceSet = new SourceSet(sources))
-                {
-                    DetectedArchives detected = Detector.Detect(sourceSet.Parts);
-                    Console.WriteLine("認識結果: {0} / 物理ファイル {1:N0} 個 / 論理 ZIP {2:N0} 個", detected.Mode, sources.Count, detected.Archives.Count);
-                    string root = SelectDestination(Path.GetDirectoryName(sources[0]), sources);
-                    WarningBook warnings = new WarningBook();
-                    using (SafeRoot safeRoot = new SafeRoot(root, warnings))
+                    if (differential)
                     {
-                        ExtractionPlan plan = ExtractionPlan.Build(detected.Archives, safeRoot, sourceSet, warnings);
+                        // 二群を独立して検査する。群内の先勝ち重複と群間の差分上書きを混同しない。
+                        ExtractionPlan delta = ExtractionPlan.BuildVirtual(primary.Detected.Archives);
+                        delta.ConfirmDuplicates();
+                        using (ArchiveInput baseline = ReadInput(new string[0],
+                            "(2) 次に、ベースライン zip 群を指定してください", "ベースライン ZIP 群"))
+                        {
+                            ExtractionPlan original = ExtractionPlan.BuildVirtual(baseline.Detected.Archives);
+                            original.ConfirmDuplicates();
+                            Console.WriteLine("基準ディレクトリを計算中...");
+                            DiffMatch match = DiffMatcher.Find(DiffTree.Build(original.Entries), DiffTree.Build(delta.Entries));
+                            DifferentialPlan merged = DifferentialPlan.Build(original, delta, match,
+                                DifferentialPlan.GetBaselineTimestamp(baseline.Sources[0]));
+                            merged.PrintSummary();
+                            string root = SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, true);
+                            result = RunExtraction(merged.Output, root,
+                                new SourceSet[] { primary.SourceSet, baseline.SourceSet }, passwords,
+                                checked(primary.Sources.Count + baseline.Sources.Count),
+                                "差分 ZIP モード / ベースライン: " + baseline.Detected.Mode + " / 差分: " + primary.Detected.Mode, merged);
+                            completedRoot = root;
+                        }
+                    }
+                    else
+                    {
+                        string root = SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, false);
+                        ExtractionPlan plan = ExtractionPlan.BuildVirtual(primary.Detected.Archives);
                         plan.ConfirmDuplicates();
-                        plan.BuildDirectoryTimes();
-                        OverwritePolicy policy = new OverwritePolicy(plan, safeRoot, warnings);
-                        policy.Preflight();
-                        Extractor extractor = new Extractor(plan, safeRoot, passwords, policy, warnings);
-                        try { extractor.Run(); }
-                        finally { safeRoot.RestoreCreatedDirectoryTimes(plan.Directories); }
-                        string summary = String.Format(NumberCulture,
-                            "【{0:N0} 個の zip ファイル群 (モード: {1}) から、{2:N0} 個のファイル (合計 {3:N0} bytes) を展開完了】",
-                            sources.Count, detected.Mode, extractor.SuccessCount, extractor.SuccessBytes);
-                        Console.WriteLine(summary);
-                        warnings.Print();
-                        Console.WriteLine("意図的な省略: 重複 {0:N0} 個 / 上書きしない指定 {1:N0} 個", plan.DuplicateCount, extractor.SkippedCount);
-                        Console.WriteLine(summary);
-                        Console.WriteLine("展開先ディレクトリフルパス:\n" + Text.Safe(WindowsPaths.WithSlash(root)));
-                        result = warnings.HasWarnings ? 299 : 0; // ERROR_PARTIAL_COPY
+                        result = RunExtraction(plan, root, new SourceSet[] { primary.SourceSet }, passwords,
+                            primary.Sources.Count, primary.Detected.Mode, null);
+                        completedRoot = root;
                     }
                 }
             }
@@ -161,13 +183,150 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             {
                 if (consoleReady)
                 {
+                    bool openAvailable = result == 0 && completedRoot != null;
+                    if (openAvailable) Console.WriteLine("e または o キーを押すとこのフォルダを開きます。");
                     Console.WriteLine("何かキーを押すと終了します...");
-                    try { Console.ReadKey(true); }
-                    catch (InvalidOperationException) { Console.ReadLine(); }
-                    catch (IOException) { }
+                    char choice = ReadExitKey();
+                    if (openAvailable && (choice == 'e' || choice == 'E' || choice == 'o' || choice == 'O'))
+                    {
+                        try { OpenDestination(completedRoot); }
+                        catch (Exception ex)
+                        {
+                            result = ExitCode(ex);
+                            Console.Error.WriteLine("エクスプローラで展開先を開けません: " + Text.Safe(ex.Message));
+                            Console.WriteLine("何かキーを押すと終了します...");
+                            ReadExitKey();
+                        }
+                    }
                 }
             }
             return result;
+        }
+
+        /// <summary>終了待ちのキーを返す。入力リダイレクト時は一行、EOF/読取不可時は空文字相当。</summary>
+        private static char ReadExitKey()
+        {
+            try
+            {
+                try { return Console.ReadKey(true).KeyChar; }
+                catch (InvalidOperationException)
+                {
+                    string line = Console.ReadLine();
+                    return String.IsNullOrEmpty(line) ? '\0' : line[0];
+                }
+            }
+            catch (IOException) { return '\0'; }
+        }
+
+        /// <summary>/d または -d を取り除く。残りは従来どおり入力ファイルの絶対パス。</summary>
+        internal static string[] ParseArguments(string[] args, out bool differential)
+        {
+            differential = false;
+            List<string> paths = new List<string>();
+            foreach (string arg in args)
+            {
+                if (String.Equals(arg, "/d", StringComparison.OrdinalIgnoreCase)
+                    || String.Equals(arg, "-d", StringComparison.OrdinalIgnoreCase)) differential = true;
+                else paths.Add(arg);
+            }
+            return paths.ToArray();
+        }
+
+        /// <summary>一群だけを選択・除外・整列・構造検査する。返値が入力ハンドルを所有する。</summary>
+        private static ArchiveInput ReadInput(string[] args, string title, string label)
+        {
+            if (label != null) Console.WriteLine("【" + label + "】");
+            string[] paths = GetInputs(args, title);
+            Console.WriteLine("入力ファイル群 ({0:N0} 個のファイル) の認識中...", paths.Length);
+            List<string> sources = new List<string>();
+            List<string> excluded = new List<string>();
+            foreach (string path in paths)
+            {
+                if (Path.GetFileName(path).IndexOf("zip", StringComparison.OrdinalIgnoreCase) >= 0) sources.Add(path);
+                else excluded.Add(path);
+            }
+            if (excluded.Count != 0)
+            {
+                Console.WriteLine("無関係な除外ファイルリスト:");
+                foreach (string path in excluded) Console.WriteLine("  " + Text.Safe(path));
+            }
+            if (sources.Count == 0) throw new InvalidDataException("ファイル名に zip を含む対象ファイルがありません。");
+            sources.Sort(delegate (string a, string b) { return StringComparer.Ordinal.Compare(Path.GetFileName(a), Path.GetFileName(b)); });
+            ArchiveInput input = new ArchiveInput(sources);
+            try
+            {
+                foreach (ZipArchiveData archive in input.Detected.Archives)
+                    foreach (ZipEntry entry in archive.Entries)
+                    {
+                        Program.CheckCancel();
+                        entry.InputGroupLabel = label;
+                    }
+                Console.WriteLine("認識結果: {0} / 物理ファイル {1:N0} 個 / 論理 ZIP {2:N0} 個",
+                    input.Detected.Mode, sources.Count, input.Detected.Archives.Count);
+                return input;
+            }
+            catch { input.Dispose(); throw; }
+        }
+
+        /// <summary>出力計画を実在先と照合し、共通の上書き・復号・保存・集計処理を行う。</summary>
+        private static int RunExtraction(ExtractionPlan plan, string root, IList<SourceSet> inputs,
+            PasswordManager passwords, int physicalCount, string mode, DifferentialPlan differential)
+        {
+            WarningBook warnings = new WarningBook();
+            using (SafeRoot safeRoot = new SafeRoot(root, warnings))
+            {
+                plan.CheckDestination(safeRoot, inputs);
+                plan.BuildDirectoryTimes();
+                OverwritePolicy policy = new OverwritePolicy(plan, safeRoot, warnings);
+                policy.Preflight();
+                Extractor extractor = new Extractor(plan, safeRoot, passwords, policy, warnings);
+                try { extractor.Run(); }
+                finally { safeRoot.RestoreCreatedDirectoryTimes(plan.Directories); }
+                if (differential != null)
+                {
+                    Console.WriteLine("【差分 ZIP モードでの展開終了】");
+                    differential.PrintSummary();
+                    Console.WriteLine("差分成功によるベースライン読取・書込省略: {0:N0} 個 / 差分失敗時のベースライン救済保存: {1:N0} 個",
+                        extractor.SupersededCount, extractor.FallbackSuccessCount);
+                }
+                string summary = String.Format(NumberCulture,
+                    "【{0:N0} 個の zip ファイル群 (モード: {1}) から、{2:N0} 個のファイル (合計 {3:N0} bytes) を展開完了】",
+                    physicalCount, mode, extractor.SuccessCount, extractor.SuccessBytes);
+                Console.WriteLine(summary);
+                warnings.Print();
+                Console.WriteLine("意図的な省略: 重複 {0:N0} 個 / 上書きしない指定 {1:N0} 個", plan.DuplicateCount, extractor.SkippedCount);
+                Console.WriteLine(summary);
+                Console.WriteLine("展開先ディレクトリフルパス:\n" + Text.Safe(WindowsPaths.WithSlash(root)));
+                return warnings.HasWarnings ? 299 : 0; // ERROR_PARTIAL_COPY
+            }
+        }
+
+        /// <summary>検証済みの出力先を Windows の explorer.exe で開く。シェルコマンドは組み立てない。</summary>
+        private static void OpenDestination(string root)
+        {
+            string executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+            System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo();
+            start.FileName = executable;
+            start.Arguments = QuoteArgument(root);
+            start.UseShellExecute = false;
+            using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start)) { }
+        }
+
+        /// <summary>Windows の引数引用規則で一つの引数を囲む。ドライブルート末尾の逆斜線も保持する。</summary>
+        internal static string QuoteArgument(string value)
+        {
+            StringBuilder result = new StringBuilder("\"");
+            int slashes = 0;
+            foreach (char c in value)
+            {
+                if (c == '\\') { slashes++; continue; }
+                result.Append('\\', c == '"' ? checked(slashes * 2 + 1) : slashes);
+                result.Append(c);
+                slashes = 0;
+            }
+            result.Append('\\', checked(slashes * 2));
+            result.Append('"');
+            return result.ToString();
         }
 
         /// <summary>既定の旧式ファイル名符号化を取得する。不正な環境設定は明示的に失敗させる。</summary>
@@ -253,14 +412,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
 
         /// <summary>入力ダイアログまたは引数を検証し、同一フォルダ内の重複除去済みパスを返す。</summary>
-        private static string[] GetInputs(string[] args)
+        private static string[] GetInputs(string[] args, string title)
         {
             string[] selected = args;
             if (args.Length == 0)
             {
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
-                    dialog.Title = "入力ファイル群を選択";
+                    dialog.Title = title;
                     dialog.Filter = "すべてのファイル (*.*)|*.*";
                     dialog.Multiselect = true;
                     dialog.CheckFileExists = true;
@@ -314,8 +473,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// </summary>
         /// <param name="initial">履歴がない場合に使用する初期ディレクトリ。</param>
         /// <param name="sources">展開対象の検証済み物理ファイルのフルパス一覧。1 件以上必要。順序は変更しない。</param>
+        /// <param name="differential">差分モードのとき true。保存先ダイアログのタイトルへ反映する。</param>
         /// <returns>ユーザーが指定した架空ファイルを含む、実際の展開先絶対ディレクトリ。</returns>
-        private static string SelectDestination(string initial, IList<string> sources)
+        private static string SelectDestination(string initial, IList<string> sources, bool differential)
         {
             if (sources == null) throw new ArgumentNullException("sources");
             if (sources.Count == 0) throw new ArgumentException("展開対象の物理ファイルがありません。", "sources");
@@ -336,7 +496,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
 
             using (SaveFileDialog dialog = new SaveFileDialog())
             {
-                dialog.Title = "展開先ディレクトリを選択（" + dummyFileName + " は作成しません）";
+                dialog.Title = differential ? "差分 ZIP モードで展開する先を指定してください" : "通常 ZIP モードで展開する先を指定してください";
                 dialog.Filter = "すべてのファイル (*.*)|*.*";
                 dialog.FileName = dummyFileName;
 
@@ -527,6 +687,24 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             return false;
         }
         public void Dispose() { foreach (SourcePart part in Parts) part.Dispose(); }
+    }
+
+    /// <summary>一群の物理入力と検出結果をまとめて所有する。差分群とベースライン群は別インスタンス。</summary>
+    internal sealed class ArchiveInput : IDisposable
+    {
+        internal readonly List<string> Sources;
+        internal readonly SourceSet SourceSet;
+        internal readonly DetectedArchives Detected;
+
+        /// <param name="sources">検証・重複除去・Ordinal 整列済みの物理パス。</param>
+        internal ArchiveInput(List<string> sources)
+        {
+            Sources = sources;
+            SourceSet = new SourceSet(sources);
+            try { Detected = Detector.Detect(SourceSet.Parts); }
+            catch { SourceSet.Dispose(); throw; }
+        }
+        public void Dispose() { SourceSet.Dispose(); }
     }
 
     /// <summary>複数ファイルを 64 bit オフセットの単一読取ストリームとして見せる。元ハンドルは所有しない。</summary>
@@ -767,12 +945,25 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal AesInfo Aes;
         internal bool IsDirectory, Keep = true;
         internal string SpecialObject, TimestampWarning, PlanError, Relative;
+        // 異なる入力ディレクトリの同名ZIPでも、差分とベースラインの警告キーを区別する。
+        internal string InputGroupLabel;
         internal readonly EntryTimes Times = new EntryTimes();
         internal bool Encrypted { get { return (Flags & 1) != 0; } }
         internal int Compression { get { return Aes == null ? Method : Aes.Method; } }
         internal string Label
         {
-            get { return "'" + Name + "' (" + Archive.Label + " 内, local=0x" + LocalOffset.ToString("X", CultureInfo.InvariantCulture) + ")"; }
+            get { return (InputGroupLabel == null ? "" : "【" + InputGroupLabel + "】 ")
+                + "'" + Name + "' (" + Archive.Label + " 内, local=0x" + LocalOffset.ToString("X", CultureInfo.InvariantCulture) + ")"; }
+        }
+
+        /// <summary>読取元の名称・位置・日時を保ち、出力相対パスだけを独立したコピーへ割り当てる。</summary>
+        /// <param name="relative">正規化済みの出力相対パス。メタデータは変更しない。</param>
+        internal ZipEntry AtOutput(string relative)
+        {
+            ZipEntry copy = (ZipEntry)MemberwiseClone();
+            copy.Relative = WindowsPaths.Relative(relative.Length == 0 ? "." : relative, IsDirectory);
+            copy.PlanError = null;
+            return copy;
         }
     }
 
@@ -790,35 +981,56 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
     }
 
-    /// <summary>二つの候補モードの判定結果。</summary>
+    /// <summary>個別・全連結・群別仮想連結の検証から確定した論理 ZIP 群。</summary>
     internal sealed class DetectedArchives
     {
         internal string Mode;
         internal List<ZipArchiveData> Archives;
     }
 
-    /// <summary>全ファイル個別検証と仮想連結検証を行い、混在・欠落・矛盾を報告する。</summary>
+    /// <summary>三候補を構造検証し、名前だけによる誤認を避けて論理 ZIP 群を確定する。</summary>
     internal static class Detector
     {
+        /// <summary>元の入力位置と、Q.zip.P の末尾 P。入力ハンドルは所有しない。</summary>
+        private sealed class NamedPart
+        {
+            internal SourcePart Source;
+            internal int SourceIndex;
+            internal string Suffix;
+        }
+
+        /// <summary>Prefix が null なら単独候補、それ以外は完全一致する Q の候補群。</summary>
+        private sealed class NameGroup
+        {
+            internal string Prefix;
+            internal readonly List<NamedPart> Members = new List<NamedPart>();
+        }
+
+        /// <summary>入力は従来どおりファイル名の Ordinal 昇順。元の配列やハンドルは変更しない。</summary>
         internal static DetectedArchives Detect(IList<SourcePart> parts)
         {
+            if (parts == null || parts.Count == 0) throw new InvalidDataException("認識する ZIP 入力がありません。");
             List<ZipArchiveData> separate = new List<ZipArchiveData>();
+            ZipArchiveData[] individual = new ZipArchiveData[parts.Count];
+            string[] individualProblems = new string[parts.Count];
             List<string> problems = new List<string>();
             bool allSeparate = true;
-            foreach (SourcePart part in parts)
+            for (int i = 0; i < parts.Count; i++)
             {
                 Program.CheckCancel();
                 ZipArchiveData archive;
                 string problem;
-                if (TryRead(new SourcePart[] { part }, out archive, out problem))
+                if (TryRead(new SourcePart[] { parts[i] }, out archive, out problem))
                 {
+                    individual[i] = archive;
                     separate.Add(archive);
-                    problems.Add(Path.GetFileName(part.PathName) + ": 単独 ZIP として整合");
+                    problems.Add(Path.GetFileName(parts[i].PathName) + ": 単独 ZIP として整合");
                 }
                 else
                 {
                     allSeparate = false;
-                    problems.Add(Path.GetFileName(part.PathName) + ": " + problem);
+                    individualProblems[i] = problem;
+                    problems.Add(Path.GetFileName(parts[i].PathName) + ": " + problem);
                 }
             }
             if (parts.Count == 1)
@@ -826,16 +1038,191 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (!allSeparate) throw new InvalidDataException("入力の一貫性欠如:\n" + String.Join("\n", problems.ToArray()));
                 return new DetectedArchives { Mode = "個別複数 ZIP モード（単一 ZIP）", Archives = separate };
             }
+
             ZipArchiveData joined;
             string joinedProblem;
             bool joinedValid = TryRead(parts, out joined, out joinedProblem);
-            if (allSeparate && joinedValid)
-                throw new InvalidDataException("両モードで整合する曖昧な入力です。安全のため自動選択しません。");
+            List<ZipArchiveData> joinedList = new List<ZipArchiveData>();
+            if (joinedValid) joinedList.Add(joined);
+            List<ZipArchiveData> hybrid;
+            string hybridProblem;
+            bool hybridValid = TryReadHybrid(parts, individual, individualProblems, joined, joinedProblem,
+                out hybrid, out hybridProblem);
+
+            // 同じ断片・同じ順序の全連結と群別連結は一候補である。異なる構成だけを曖昧とする。
+            List<string> candidates = new List<string>();
+            if (allSeparate) candidates.Add("個別複数 ZIP モード");
+            if (joinedValid) candidates.Add("巨大 ZIP 分割モード");
+            if (hybridValid && !(allSeparate && SameLayout(separate, hybrid))
+                && !(joinedValid && SameLayout(joinedList, hybrid))) candidates.Add("ハイブリッド ZIP モード");
+            if (candidates.Count > 1)
+                throw new InvalidDataException("複数の異なる ZIP 構成が構造検証に成功する曖昧な入力です。自動選択しません。\n"
+                    + "成立候補: " + String.Join(" / ", candidates.ToArray())
+                    + "\n" + String.Join("\n", problems.ToArray())
+                    + "\n全断片の仮想連結: " + (joinedValid ? "整合" : joinedProblem)
+                    + "\n群別仮想連結の検査:\n" + hybridProblem);
+
+            // ファイル名は推定材料に限る。既存モードが実際に整合する場合、命名条件だけで拒否しない。
             if (allSeparate) return new DetectedArchives { Mode = "個別複数 ZIP モード", Archives = separate };
-            if (joinedValid) return new DetectedArchives { Mode = "巨大 ZIP 分割モード", Archives = new List<ZipArchiveData> { joined } };
-            throw new InvalidDataException("入力の一貫性欠如。欠落断片、順序違い、別 ZIP との混在、破損または対象外形式が考えられます。\n"
-                + String.Join("\n", problems.ToArray()) + "\n全断片の仮想連結: " + joinedProblem);
+            if (joinedValid) return new DetectedArchives { Mode = "巨大 ZIP 分割モード", Archives = joinedList };
+            if (hybridValid) return new DetectedArchives { Mode = "ハイブリッド ZIP モード", Archives = hybrid };
+            throw new InvalidDataException("入力の一貫性欠如。欠落断片、順序違い、命名規則の不一致、別 ZIP との混在、破損または対象外形式が考えられます。\n"
+                + String.Join("\n", problems.ToArray()) + "\n全断片の仮想連結: " + joinedProblem
+                + "\n群別仮想連結の検査:\n" + hybridProblem);
         }
+
+        /// <summary>
+        /// Q を Ordinal 完全一致で分類し、同じ Q の複数断片だけを P の Ordinal 昇順で仮想連結する。
+        /// .zip. の表記は大小文字を許すが、Q と P の大小文字は同一視しない。失敗理由は全候補群で集約する。
+        /// </summary>
+        private static bool TryReadHybrid(IList<SourcePart> parts, ZipArchiveData[] individual,
+            string[] individualProblems, ZipArchiveData joined, string joinedProblem,
+            out List<ZipArchiveData> archives, out string problem)
+        {
+            List<NameGroup> groups = new List<NameGroup>();
+            Dictionary<string, NameGroup> namedGroups = new Dictionary<string, NameGroup>(StringComparer.Ordinal);
+            for (int i = 0; i < parts.Count; i++)
+            {
+                Program.CheckCancel();
+                string name = Path.GetFileName(parts[i].PathName);
+                int marker = name.LastIndexOf(".zip.", StringComparison.OrdinalIgnoreCase);
+                NameGroup group;
+                if (marker < 0)
+                {
+                    group = new NameGroup();
+                    groups.Add(group);
+                }
+                else
+                {
+                    string prefix = name.Substring(0, marker);
+                    if (!namedGroups.TryGetValue(prefix, out group))
+                    {
+                        group = new NameGroup { Prefix = prefix };
+                        namedGroups.Add(prefix, group);
+                        groups.Add(group);
+                    }
+                }
+                group.Members.Add(new NamedPart { Source = parts[i], SourceIndex = i,
+                    Suffix = marker < 0 ? null : name.Substring(marker + 5) });
+            }
+
+            archives = new List<ZipArchiveData>();
+            List<string> details = new List<string>();
+            bool valid = true, hasSplitGroup = false;
+            // 論理 ZIP 同士は入力順の最初の構成断片を基準に処理する。重複時の先勝ち規則を保つ。
+            foreach (NameGroup group in groups)
+            {
+                Program.CheckCancel();
+                if (group.Members.Count == 1)
+                {
+                    NamedPart member = group.Members[0];
+                    ZipArchiveData archive = individual[member.SourceIndex];
+                    string label = Path.GetFileName(member.Source.PathName);
+                    if (group.Prefix != null) label += " [Q='" + group.Prefix + "' に対する断片候補は 1 個]";
+                    if (archive != null)
+                    {
+                        archives.Add(archive);
+                        details.Add(label + ": 単独の論理 ZIP として整合");
+                    }
+                    else
+                    {
+                        valid = false;
+                        details.Add(label + ": 単独の論理 ZIP として不整合: " + individualProblems[member.SourceIndex]);
+                    }
+                    continue;
+                }
+
+                hasSplitGroup = true;
+                group.Members.Sort(delegate (NamedPart a, NamedPart b) { return StringComparer.Ordinal.Compare(a.Suffix, b.Suffix); });
+                List<SourcePart> groupParts = new List<SourcePart>();
+                StringBuilder description = new StringBuilder();
+                description.Append("Q='").Append(group.Prefix).Append("' の ").Append(group.Members.Count)
+                    .Append(" 断片 (P の Ordinal 昇順):");
+                foreach (NamedPart member in group.Members)
+                {
+                    groupParts.Add(member.Source);
+                    description.Append("\n  P='").Append(member.Suffix).Append("' / ").Append(member.Source.PathName);
+                }
+                string namingProblem = CheckPartNames(group);
+                if (namingProblem != null)
+                {
+                    valid = false;
+                    details.Add(description.ToString() + "\n  命名条件が不整合のため、この群の順序を採用しません:\n" + namingProblem);
+                    continue;
+                }
+
+                ZipArchiveData groupArchive;
+                string groupProblem;
+                bool groupValid;
+                if (SameParts(parts, groupParts))
+                {
+                    // 全連結と同じ物理順序の一群なら、既に済ませた構造検査の結果を再利用する。
+                    groupArchive = joined;
+                    groupProblem = joinedProblem;
+                    groupValid = joined != null;
+                }
+                else groupValid = TryRead(groupParts, out groupArchive, out groupProblem);
+                if (groupValid)
+                {
+                    archives.Add(groupArchive);
+                    details.Add(description.ToString() + "\n  1 個の論理 ZIP として整合");
+                }
+                else
+                {
+                    valid = false;
+                    details.Add(description.ToString() + "\n  仮想連結 ZIP が不整合: " + groupProblem);
+                }
+            }
+            if (!hasSplitGroup) details.Add("同一 Q の複数断片群がないため、ハイブリッド候補はありません。");
+            problem = String.Join("\n", details.ToArray());
+            return valid && hasSplitGroup;
+        }
+
+        /// <summary>群内の P が非空の ASCII 英数字、同幅、一意であることを調べる。連番の開始値・間隔は仮定しない。</summary>
+        private static string CheckPartNames(NameGroup group)
+        {
+            List<string> errors = new List<string>();
+            int width = group.Members[0].Suffix.Length;
+            for (int i = 0; i < group.Members.Count; i++)
+            {
+                Program.CheckCancel();
+                NamedPart member = group.Members[i];
+                string suffix = member.Suffix;
+                string label = "  " + Path.GetFileName(member.Source.PathName) + ": P='" + suffix + "'";
+                if (suffix.Length == 0) errors.Add(label + " は空です。");
+                if (suffix.Length != width) errors.Add(label + " の桁数 " + suffix.Length
+                    + " は、先頭断片の桁数 " + width + " と異なります。");
+                for (int j = 0; j < suffix.Length; j++)
+                {
+                    char c = suffix[j];
+                    if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) continue;
+                    errors.Add(label + " は ASCII 英数字以外を含みます (位置 " + (j + 1)
+                        + ", U+" + ((int)c).ToString("X4", CultureInfo.InvariantCulture) + ")。");
+                    break;
+                }
+                if (i != 0 && String.Equals(group.Members[i - 1].Suffix, suffix, StringComparison.Ordinal))
+                    errors.Add(label + " は直前断片と同じ P であり、連結順序が一意に定まりません。");
+            }
+            return errors.Count == 0 ? null : String.Join("\n", errors.ToArray());
+        }
+
+        /// <summary>論理 ZIP の順序と、その中の物理断片の順序が同じ候補を重複判定する。</summary>
+        private static bool SameLayout(IList<ZipArchiveData> a, IList<ZipArchiveData> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (!SameParts(a[i].Parts, b[i].Parts)) return false;
+            return true;
+        }
+
+        /// <summary>仮想連結を構成するハンドルの同一性と順序を比較する。</summary>
+        private static bool SameParts(IList<SourcePart> a, IList<SourcePart> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (!Object.ReferenceEquals(a[i], b[i])) return false;
+            return true;
+        }
+
+        /// <summary>ZIP 構造に起因する失敗だけを候補の不成立へ変換し、I/O 障害・取消し等は伝播する。</summary>
         private static bool TryRead(IList<SourcePart> parts, out ZipArchiveData archive, out string problem)
         {
             archive = null;
@@ -1749,8 +2136,15 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 }
                 finally
                 {
-                    Stream.Dispose();
-                    streamClosed = true;
+                    // 復号・検証中の本来の例外（安全性違反・取消し等を含む）を、
+                    // 後片付け中の通常I/O例外で置き換えない。Commit前のFlush失敗は従来どおり伝播する。
+                    try { Stream.Dispose(); }
+                    catch (Exception ex)
+                    {
+                        if (!Program.Recoverable(ex)) throw;
+                        warnings.Add(entry, "一時保存先を閉じる際に失敗しました: " + TemporaryPath + " / " + ex.Message);
+                    }
+                    finally { streamClosed = true; }
                 }
                 return;
             }
@@ -1789,6 +2183,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     {
         internal readonly List<ZipEntry> Entries = new List<ZipEntry>();
         internal readonly Dictionary<string, DirectoryPlan> Directories = new Dictionary<string, DirectoryPlan>(StringComparer.OrdinalIgnoreCase);
+        // 差分保存が失敗した場合だけ読むベースライン。キーは出力計画中の差分エントリ。
+        internal readonly Dictionary<ZipEntry, ZipEntry> Fallbacks = new Dictionary<ZipEntry, ZipEntry>();
         private readonly Dictionary<string, List<ZipEntry>> groups = new Dictionary<string, List<ZipEntry>>(StringComparer.OrdinalIgnoreCase);
         private readonly List<List<ZipEntry>> groupOrder = new List<List<ZipEntry>>();
         internal long DuplicateCount;
@@ -1796,56 +2192,93 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         {
             get { long n = 0; foreach (ZipEntry e in Entries) if (!e.IsDirectory && e.Keep) n++; return n; }
         }
-        /// <summary>展開先に書き込まずに全 ZIP を検査し、順序を保持した計画を作成する。</summary>
-        internal static ExtractionPlan Build(List<ZipArchiveData> archives, SafeRoot root, SourceSet inputs, WarningBook warnings)
+        /// <summary>物理出力先に依存せず、全 ZIP の安全性・仮想構造を検査する。入力順を保持する。</summary>
+        internal static ExtractionPlan BuildVirtual(List<ZipArchiveData> archives)
         {
             ExtractionPlan plan = new ExtractionPlan();
             foreach (ZipArchiveData archive in archives)
-                foreach (ZipEntry entry in archive.Entries) plan.Entries.Add(entry);
-            foreach (ZipEntry entry in plan.Entries)
+                foreach (ZipEntry entry in archive.Entries)
+                {
+                    Program.CheckCancel();
+                    if (entry.SpecialObject != null) throw new SafetyException("危険な ZIP オブジェクト: " + entry.SpecialObject + " / " + entry.Label);
+                    // 採用名だけでなく、Unicode extra に隠された旧式名・ローカル名の遡りも拒否する。
+                    entry.Relative = WindowsPaths.Relative(entry.Name, entry.IsDirectory);
+                    WindowsPaths.Relative(entry.RawDecodedName, entry.IsDirectory);
+                    WindowsPaths.Relative(entry.LocalDecodedName, entry.IsDirectory);
+                    plan.AddPlannedEntry(entry);
+                }
+            plan.CheckVirtualConflicts();
+            return plan;
+        }
+
+        /// <summary>検査済みの入力または写像済みコピーを登録する。群間上書きは呼出元が事前解決する。</summary>
+        internal void AddPlannedEntry(ZipEntry entry)
+        {
+            Entries.Add(entry);
+            if (entry.IsDirectory)
             {
-                Program.CheckCancel();
-                if (entry.SpecialObject != null) throw new SafetyException("危険な ZIP オブジェクト: " + entry.SpecialObject + " / " + entry.Label);
-                // 採用名だけでなく、Unicode extra に隠された旧式名・ローカル名の遡りも拒否する。
-                entry.Relative = WindowsPaths.Relative(entry.Name, entry.IsDirectory);
-                WindowsPaths.Relative(entry.RawDecodedName, entry.IsDirectory);
-                WindowsPaths.Relative(entry.LocalDecodedName, entry.IsDirectory);
-                if (entry.IsDirectory)
-                {
-                    DirectoryPlan directory = plan.GetDirectory(entry.Relative);
-                    if (directory != null && (directory.ExplicitTimes == null || !directory.ExplicitTimes.ModifiedUtc.HasValue))
-                        directory.ExplicitTimes = entry.Times;
-                    plan.AddParents(entry.Relative);
-                }
-                else
-                {
-                    List<ZipEntry> group;
-                    if (!plan.groups.TryGetValue(entry.Relative, out group))
-                    {
-                        group = new List<ZipEntry>(); plan.groups.Add(entry.Relative, group); plan.groupOrder.Add(group);
-                    }
-                    group.Add(entry);
-                    plan.AddParents(entry.Relative);
-                }
-                try
-                {
-                    FileStamp existing = root.Probe(entry.Relative);
-                    if (existing != null && entry.IsDirectory != existing.IsDirectory)
-                        entry.PlanError = "展開先のファイル / ディレクトリ種別が衝突しています: " + root.Destination(entry.Relative);
-                    if (existing != null && !entry.IsDirectory && inputs.ContainsIdentity(existing.Identity))
-                        entry.PlanError = "入力元 ZIP 自身への上書きは許可しません: " + root.Destination(entry.Relative);
-                }
-                catch (Exception ex)
-                {
-                    if (!Program.Recoverable(ex)) throw;
-                    entry.PlanError = "展開先の事前検査失敗: " + ex.Message;
-                }
+                DirectoryPlan directory = GetDirectory(entry.Relative);
+                if (directory != null && (directory.ExplicitTimes == null || !directory.ExplicitTimes.ModifiedUtc.HasValue))
+                    directory.ExplicitTimes = entry.Times;
             }
-            foreach (KeyValuePair<string, List<ZipEntry>> pair in plan.groups)
-                if (plan.Directories.ContainsKey(pair.Key))
+            else
+            {
+                List<ZipEntry> group;
+                if (!groups.TryGetValue(entry.Relative, out group))
+                {
+                    group = new List<ZipEntry>(); groups.Add(entry.Relative, group); groupOrder.Add(group);
+                }
+                group.Add(entry);
+            }
+            AddParents(entry.Relative);
+        }
+
+        /// <summary>明示・暗黙ディレクトリと同名ファイルの衝突を検査する。ディスクには触れない。</summary>
+        internal void CheckVirtualConflicts()
+        {
+            foreach (KeyValuePair<string, List<ZipEntry>> pair in groups)
+                if (Directories.ContainsKey(pair.Key))
                     throw new InvalidDataException("ZIP 内でファイルとディレクトリ（または親ディレクトリ）が衝突します: " + pair.Key
                         + " / " + pair.Value[0].Label);
-            return plan;
+        }
+
+        /// <summary>最終的な写像先を物理検査する。差分・ベースライン双方の入力 ZIP を保護する。</summary>
+        internal void CheckDestination(SafeRoot root, IList<SourceSet> inputs)
+        {
+            foreach (ZipEntry entry in Entries)
+            {
+                Program.CheckCancel();
+                CheckDestinationEntry(entry, root, inputs);
+                ZipEntry fallback;
+                if (Fallbacks.TryGetValue(entry, out fallback)) CheckDestinationEntry(fallback, root, inputs);
+            }
+        }
+
+        /// <summary>一つの出力エントリの種別・入力上書き・通常パス長を事前検査する。</summary>
+        private static void CheckDestinationEntry(ZipEntry entry, SafeRoot root, IList<SourceSet> inputs)
+        {
+            try
+            {
+                FileStamp existing = root.Probe(entry.Relative);
+                if (existing != null && entry.IsDirectory != existing.IsDirectory)
+                    entry.PlanError = "展開先のファイル / ディレクトリ種別が衝突しています: " + root.Destination(entry.Relative);
+                if (existing != null && !entry.IsDirectory)
+                {
+                    foreach (SourceSet input in inputs)
+                    {
+                        if (input.ContainsIdentity(existing.Identity))
+                        {
+                            entry.PlanError = "入力元 ZIP 自身への上書きは許可しません: " + root.Destination(entry.Relative);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!Program.Recoverable(ex)) throw;
+                entry.PlanError = "展開先の事前検査失敗: " + ex.Message;
+            }
         }
         private DirectoryPlan GetDirectory(string relative)
         {
@@ -1897,6 +2330,816 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 }
             }
         }
+    }
+
+    /// <summary>重複解決後の ZIP エントリから作る仮想木。物理ファイルを作成せず、元のエントリも変更しない。</summary>
+    internal sealed class DiffTree
+    {
+        internal readonly DiffNode Root;
+        internal readonly List<DiffNode> Nodes = new List<DiffNode>();
+
+        private DiffTree()
+        {
+            Root = new DiffNode("", null, true);
+            Nodes.Add(Root);
+        }
+
+        /// <summary>正規化済み Relative を持つ有効エントリを取り込み、明示・暗黙ディレクトリを一意に数える。</summary>
+        internal static DiffTree Build(IEnumerable<ZipEntry> entries)
+        {
+            DiffTree result = new DiffTree();
+            foreach (ZipEntry entry in entries)
+            {
+                Program.CheckCancel();
+                if (!entry.Keep || entry.PlanError != null) continue;
+                if (entry.Relative == null) throw new InvalidOperationException("差分計算の前に ZIP 内の相対パスを正規化する必要があります。");
+                if (entry.Relative.Length == 0)
+                {
+                    if (!entry.IsDirectory) throw new InvalidDataException("差分計算対象に空のファイルパスがあります。");
+                    continue; // 仮想ルート自身は ZIP 内のディレクトリ個数に含めない。
+                }
+                string[] elements = entry.Relative.Split('\\');
+                DiffNode parent = result.Root;
+                for (int index = 0; index < elements.Length; index++)
+                {
+                    bool directory = index != elements.Length - 1 || entry.IsDirectory;
+                    if (elements[index].Length == 0 || elements[index] == "." || elements[index] == "..")
+                        throw new InvalidDataException("差分計算対象に未正規化のパスがあります: " + Text.Safe(entry.Relative));
+                    DiffNode node;
+                    if (!parent.Children.TryGetValue(elements[index], out node))
+                    {
+                        node = new DiffNode(elements[index], parent, directory);
+                        parent.Children.Add(node.Name, node);
+                        result.Nodes.Add(node);
+                    }
+                    else if (node.IsDirectory != directory)
+                        throw new InvalidDataException("ZIP の仮想木でファイルとディレクトリが衝突しています: " + Text.Safe(entry.Relative));
+                    else if (!directory)
+                        throw new InvalidDataException("差分計算の前に解決されていないファイル重複があります: " + Text.Safe(entry.Relative));
+                    if (!directory)
+                    {
+                        if (entry.Size < 0) throw new InvalidDataException("差分計算対象のファイルサイズが負です: " + Text.Safe(entry.Relative));
+                        node.Files = 1;
+                        node.Bytes = entry.Size;
+                    }
+                    parent = node;
+                }
+            }
+            // 親は子より先に登録されるので、逆順一走査で全配下の集計が確定する。
+            for (int index = result.Nodes.Count - 1; index > 0; index--)
+            {
+                DiffNode node = result.Nodes[index];
+                DiffNode parent = node.Parent;
+                parent.Files = checked(parent.Files + node.Files);
+                parent.Directories = checked(parent.Directories + node.Directories + (node.IsDirectory ? 1L : 0L));
+                parent.Bytes = checked(parent.Bytes + node.Bytes);
+                if ((index & 1023) == 0) Program.CheckCancel();
+            }
+            return result;
+        }
+    }
+
+    /// <summary>仮想木の一要素。Files/Directories/Bytes は配下の集計であり、ディレクトリ自身を含めない。</summary>
+    internal sealed class DiffNode
+    {
+        internal readonly string Name;
+        internal readonly DiffNode Parent;
+        internal readonly bool IsDirectory;
+        internal readonly int Depth;
+        internal readonly Dictionary<string, DiffNode> Children;
+        internal long Files, Directories;
+        internal decimal Bytes;
+        internal int Token;
+        internal DiffShape Shape;
+
+        internal DiffNode(string name, DiffNode parent, bool directory)
+        {
+            Name = name; Parent = parent; IsDirectory = directory;
+            Depth = parent == null ? 0 : checked(parent.Depth + 1);
+            if (directory) Children = new Dictionary<string, DiffNode>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>表示・最終マッピング時だけ相対パスを復元し、暗黙の全親パスを重複保持する費用を避ける。</summary>
+        internal string Relative
+        {
+            get
+            {
+                if (Parent == null) return "";
+                string[] elements = new string[Depth];
+                DiffNode node = this;
+                for (int index = elements.Length - 1; index >= 0; index--) { elements[index] = node.Name; node = node.Parent; }
+                return String.Join("\\", elements);
+            }
+        }
+    }
+
+    /// <summary>確定した双方の基準パス、元の木の配下集計、および同一相対パスの一致個数。</summary>
+    internal sealed class DiffMatch
+    {
+        internal string BaselineRelative, DifferentialRelative;
+        internal long BaselineFiles, BaselineDirectories, DifferentialFiles, DifferentialDirectories;
+        internal decimal BaselineBytes, DifferentialBytes;
+        internal long MatchedFiles, MatchedDirectories;
+        internal long ComparedPairs;
+    }
+
+    /// <summary>比較用部分木の完全同値クラス。名前・種別・子の構造を照合し、ハッシュ値だけで同一視しない。</summary>
+    internal sealed class DiffShape
+    {
+        internal int Id;
+        internal DiffEdge[] Edges;
+        internal long Files, Directories;
+        internal DiffRepresentatives Baseline, Differential;
+        internal int[] Features;
+        internal long Count { get { return Files + Directories; } }
+    }
+
+    /// <summary>比較用部分木の一辺。Token の最下位ビットはディレクトリ種別、それ以外は名前の識別子。</summary>
+    internal struct DiffEdge
+    {
+        internal int Token;
+        internal DiffShape Child;
+        internal bool IsDirectory { get { return (Token & 1) != 0; } }
+    }
+
+    /// <summary>同じ一致集合を持つ基準候補のうち最小深さの実在ディレクトリ。曖昧さを落とさず少数例を保持する。</summary>
+    internal sealed class DiffRepresentatives
+    {
+        internal DiffNode First;
+        internal long Count;
+        internal readonly List<DiffNode> Examples = new List<DiffNode>();
+
+        internal void Add(DiffNode node)
+        {
+            if (First == null || node.Depth < First.Depth)
+            {
+                First = node; Count = 0; Examples.Clear();
+            }
+            if (node.Depth != First.Depth) return;
+            Count++;
+            if (Examples.Count < 3) Examples.Add(node);
+        }
+
+        /// <summary>互いに重ならない構造クラスを統合し、最小深さにある候補総数と代表例を引き継ぐ。</summary>
+        internal void Merge(DiffRepresentatives other)
+        {
+            if (other == null) return;
+            if (First == null || other.First.Depth < First.Depth)
+            {
+                First = other.First; Count = 0; Examples.Clear();
+            }
+            if (other.First.Depth != First.Depth) return;
+            Count = checked(Count + other.Count);
+            foreach (DiffNode node in other.Examples) if (Examples.Count < 3) Examples.Add(node);
+        }
+    }
+
+    /// <summary>全候補対を無条件に列挙せず、完全同値圧縮と逆引き prefix filter で最大の一致数を厳密に求める。</summary>
+    internal sealed class DiffMatcher
+    {
+        private readonly DiffTree baseline, differential;
+        private readonly Dictionary<string, int> names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<int, int> tokenSides = new Dictionary<int, int>();
+        private readonly Dictionary<ulong, List<DiffShape>> shapeBuckets = new Dictionary<ulong, List<DiffShape>>();
+        private readonly List<DiffShape> shapes = new List<DiffShape>();
+        private readonly Dictionary<long, int> pathIds = new Dictionary<long, int>();
+        private readonly List<bool> pathDirectories = new List<bool>();
+        private readonly List<DiffSet> sets = new List<DiffSet>();
+        private bool[] directoryByRank;
+        private long best, bestDepth = Int64.MaxValue, ties, compared;
+        private DiffRepresentatives chosenBaseline, chosenDifferential;
+        private long chosenFiles, chosenDirectories;
+        private readonly List<string> tieExamples = new List<string>();
+        private int ticks;
+
+        private sealed class DiffSet
+        {
+            internal int[] Features;
+            internal DiffRepresentatives Baseline, Differential;
+        }
+
+        private sealed class Anchor
+        {
+            internal long BaselineCount, DifferentialCount;
+            internal readonly List<DiffNode> Baseline = new List<DiffNode>();
+            internal readonly List<DiffNode> Differential = new List<DiffNode>();
+        }
+
+        private struct ShapePair { internal DiffShape Left, Right; }
+        private struct FeatureWalk { internal DiffShape Shape; internal int Prefix; }
+
+        private DiffMatcher(DiffTree baseTree, DiffTree diffTree)
+        {
+            baseline = baseTree; differential = diffTree;
+            pathDirectories.Add(false); // 相対パス ID=0 は名前を持たない仮想ルート。
+        }
+
+        /// <summary>最大 c、次に最小の深さ和で基準を選び、同順位の複数解・一致なし・半数未満を詳細例外にする。</summary>
+        internal static DiffMatch Find(DiffTree baseline, DiffTree differential)
+        {
+            if (baseline == null || differential == null) throw new ArgumentNullException("差分計算対象の仮想木");
+            return new DiffMatcher(baseline, differential).Run();
+        }
+
+        private DiffMatch Run()
+        {
+            RegisterTokens(baseline, 1);
+            RegisterTokens(differential, 2);
+            BuildShapes(baseline, true);
+            BuildShapes(differential, false);
+
+            // 安全な下限を先に得る。ここで調べる候補数は固定上限で、後続の厳密探索を省略しない。
+            foreach (DiffShape shape in shapes)
+                if (shape.Baseline != null && shape.Differential != null && shape.Count > best) best = shape.Count;
+            Seed(baseline.Root.Shape, differential.Root.Shape);
+            SeedAnchors();
+            BuildSets();
+            SearchSets();
+            if (chosenBaseline == null)
+                throw new InvalidDataException("差分 ZIP の基準ディレクトリを確定できません。同一の正規化相対パス・種別を持つファイル／ディレクトリの一致がありません。\n"
+                    + "ベースライン全体: ファイル " + baseline.Root.Files + " 個、ディレクトリ " + baseline.Root.Directories + " 個。\n"
+                    + "差分全体: ファイル " + differential.Root.Files + " 個、ディレクトリ " + differential.Root.Directories + " 個。");
+            if (ties != 1)
+                throw new InvalidDataException("差分 ZIP の基準ディレクトリが曖昧です。最大一致数 c=" + best
+                    + "、最小深さ和=" + bestDepth + " となる基準の組が " + ties + " 組あります。\n"
+                    + String.Join("\n", tieExamples.ToArray())
+                    + "\n相対パスの対応を一意に決められないため、自動で一つを選んで展開することはしません。");
+
+            DiffNode baseNode = chosenBaseline.First, diffNode = chosenDifferential.First;
+            // 種別ごとに半数以上を要求する。総数 0 の種別には制限を掛けず、基準自身・仮想ルートは数えない。
+            bool tooFewFiles = baseline.Root.Files > 0 && baseNode.Files < (baseline.Root.Files + 1) / 2;
+            bool tooFewDirectories = baseline.Root.Directories > 0 && baseNode.Directories < (baseline.Root.Directories + 1) / 2;
+            if (tooFewFiles || tooFewDirectories)
+                throw new InvalidDataException("差分 ZIP の基準ディレクトリの自動解決に失敗している可能性があります。\n"
+                    + "ベースライン基準: " + Display(baseNode) + "、差分基準: " + Display(diffNode) + "。\n"
+                    + "基準配下／ベースライン全体: ファイル " + baseNode.Files + " / " + baseline.Root.Files
+                    + "、ディレクトリ " + baseNode.Directories + " / " + baseline.Root.Directories + "。\n"
+                    + "ファイル数・ディレクトリ数の各々に半数以上を要求します。半数未満: "
+                    + (tooFewFiles ? "ファイル " : "") + (tooFewDirectories ? "ディレクトリ" : "")
+                    + "。基準自身と仮想ルートは配下ディレクトリ数に含めません。\n"
+                    + "最大一致: ファイル " + chosenFiles + " 個、ディレクトリ " + chosenDirectories + " 個。");
+            DiffMatch result = new DiffMatch();
+            result.BaselineRelative = baseNode.Relative; result.DifferentialRelative = diffNode.Relative;
+            result.BaselineFiles = baseNode.Files; result.BaselineDirectories = baseNode.Directories; result.BaselineBytes = baseNode.Bytes;
+            result.DifferentialFiles = diffNode.Files; result.DifferentialDirectories = diffNode.Directories; result.DifferentialBytes = diffNode.Bytes;
+            result.MatchedFiles = chosenFiles; result.MatchedDirectories = chosenDirectories; result.ComparedPairs = compared;
+            return result;
+        }
+
+        /// <summary>同じ Windows 名を同一整数にし、ファイルとディレクトリは別トークンにする。</summary>
+        private void RegisterTokens(DiffTree tree, int side)
+        {
+            foreach (DiffNode node in tree.Nodes)
+            {
+                Poll();
+                if (node.Parent == null) continue;
+                int name;
+                if (!names.TryGetValue(node.Name, out name)) { name = checked(names.Count + 1); names.Add(node.Name, name); }
+                node.Token = checked(name * 2 + (node.IsDirectory ? 1 : 0));
+                int flags;
+                tokenSides.TryGetValue(node.Token, out flags);
+                tokenSides[node.Token] = flags | side;
+            }
+        }
+
+        /// <summary>候補根はすべて残す。一致相手の存在しない辺だけを除去し、下から完全同値の部分木を共有する。</summary>
+        private void BuildShapes(DiffTree tree, bool isBaseline)
+        {
+            for (int index = tree.Nodes.Count - 1; index >= 0; index--)
+            {
+                Poll();
+                DiffNode node = tree.Nodes[index];
+                if (!node.IsDirectory) continue;
+                List<DiffEdge> edges = new List<DiffEdge>();
+                foreach (DiffNode child in node.Children.Values)
+                {
+                    if (tokenSides[child.Token] != 3) continue;
+                    DiffEdge edge = new DiffEdge(); edge.Token = child.Token;
+                    if (child.IsDirectory) edge.Child = child.Shape;
+                    edges.Add(edge);
+                }
+                edges.Sort(delegate(DiffEdge first, DiffEdge second) { return first.Token.CompareTo(second.Token); });
+                ulong hash = 14695981039346656037UL;
+                foreach (DiffEdge edge in edges)
+                {
+                    hash = Mix(hash, edge.Token);
+                    hash = Mix(hash, edge.Child == null ? -1 : edge.Child.Id);
+                }
+                List<DiffShape> bucket;
+                DiffShape shape = null;
+                if (shapeBuckets.TryGetValue(hash, out bucket))
+                    foreach (DiffShape candidate in bucket) if (EqualEdges(candidate.Edges, edges)) { shape = candidate; break; }
+                if (shape == null)
+                {
+                    shape = new DiffShape(); shape.Id = shapes.Count; shape.Edges = edges.ToArray();
+                    foreach (DiffEdge edge in shape.Edges)
+                    {
+                        if (edge.IsDirectory) { shape.Files += edge.Child.Files; shape.Directories += edge.Child.Directories + 1; }
+                        else shape.Files++;
+                    }
+                    if (bucket == null) { bucket = new List<DiffShape>(); shapeBuckets.Add(hash, bucket); }
+                    bucket.Add(shape); shapes.Add(shape);
+                }
+                node.Shape = shape;
+                DiffRepresentatives representatives = isBaseline ? shape.Baseline : shape.Differential;
+                if (representatives == null)
+                {
+                    representatives = new DiffRepresentatives();
+                    if (isBaseline) shape.Baseline = representatives; else shape.Differential = representatives;
+                }
+                representatives.Add(node);
+            }
+        }
+
+        private static bool EqualEdges(DiffEdge[] first, List<DiffEdge> second)
+        {
+            if (first.Length != second.Count) return false;
+            for (int index = 0; index < first.Length; index++)
+                if (first[index].Token != second[index].Token || first[index].Child != second[index].Child) return false;
+            return true;
+        }
+
+        private static ulong Mix(ulong hash, int value)
+        {
+            return unchecked((hash ^ (uint)value) * 1099511628211UL);
+        }
+
+        /// <summary>少数の希少な同名ファイルから、相対パスが一致する最も浅い祖先対を初期下限として調べる。</summary>
+        private void SeedAnchors()
+        {
+            Dictionary<int, Anchor> anchors = new Dictionary<int, Anchor>();
+            AddAnchors(baseline, true, anchors); AddAnchors(differential, false, anchors);
+            List<Anchor> usable = new List<Anchor>();
+            foreach (Anchor anchor in anchors.Values)
+                if (anchor.BaselineCount > 0 && anchor.DifferentialCount > 0 && anchor.BaselineCount <= 8 && anchor.DifferentialCount <= 8)
+                    usable.Add(anchor);
+            usable.Sort(delegate(Anchor first, Anchor second)
+            {
+                return (first.BaselineCount * first.DifferentialCount).CompareTo(second.BaselineCount * second.DifferentialCount);
+            });
+            int remaining = 64;
+            HashSet<long> seen = new HashSet<long>();
+            foreach (Anchor anchor in usable)
+                foreach (DiffNode first in anchor.Baseline)
+                    foreach (DiffNode second in anchor.Differential)
+                    {
+                        if (remaining-- == 0) return;
+                        DiffNode left = first.Parent, right = second.Parent;
+                        while (left.Parent != null && right.Parent != null && left.Token == right.Token)
+                        {
+                            left = left.Parent; right = right.Parent; Poll();
+                        }
+                        long pair = ((long)left.Shape.Id << 32) | (uint)right.Shape.Id;
+                        if (seen.Add(pair)) Seed(left.Shape, right.Shape);
+                    }
+        }
+
+        private void AddAnchors(DiffTree tree, bool isBaseline, Dictionary<int, Anchor> anchors)
+        {
+            foreach (DiffNode node in tree.Nodes)
+            {
+                Poll();
+                if (node.IsDirectory || tokenSides[node.Token] != 3) continue;
+                Anchor anchor;
+                if (!anchors.TryGetValue(node.Token, out anchor)) { anchor = new Anchor(); anchors.Add(node.Token, anchor); }
+                if (isBaseline) { anchor.BaselineCount++; if (anchor.Baseline.Count < 8) anchor.Baseline.Add(node); }
+                else { anchor.DifferentialCount++; if (anchor.Differential.Count < 8) anchor.Differential.Add(node); }
+            }
+        }
+
+        /// <summary>初期候補の一致数を木の同名辺に沿って厳密に計算する。再帰呼出しと全候補対の列挙は行わない。</summary>
+        private void Seed(DiffShape left, DiffShape right)
+        {
+            if (Math.Min(left.Count, right.Count) <= best) return;
+            Stack<ShapePair> work = new Stack<ShapePair>();
+            ShapePair initial = new ShapePair(); initial.Left = left; initial.Right = right; work.Push(initial);
+            long count = 0;
+            while (work.Count != 0)
+            {
+                Poll();
+                ShapePair pair = work.Pop();
+                if (pair.Left == pair.Right) { count += pair.Left.Count; continue; }
+                int first = 0, second = 0;
+                while (first < pair.Left.Edges.Length && second < pair.Right.Edges.Length)
+                {
+                    Poll();
+                    DiffEdge a = pair.Left.Edges[first], b = pair.Right.Edges[second];
+                    if (a.Token < b.Token) { first++; continue; }
+                    if (a.Token > b.Token) { second++; continue; }
+                    count++;
+                    if (a.IsDirectory && a.Child.Count != 0 && b.Child.Count != 0)
+                    {
+                        ShapePair child = new ShapePair(); child.Left = a.Child; child.Right = b.Child; work.Push(child);
+                    }
+                    first++; second++;
+                }
+            }
+            if (count > best) best = count;
+        }
+
+        /// <summary>比較対象の各相対パスを共有整数 ID にする。候補数ではなく、実際に保持する相対パス総数に比例する前処理。</summary>
+        private void BuildFeatures(DiffShape shape)
+        {
+            if (shape.Features != null) return;
+            int[] features = new int[checked((int)shape.Count)];
+            int offset = 0;
+            Stack<FeatureWalk> work = new Stack<FeatureWalk>();
+            FeatureWalk initial = new FeatureWalk(); initial.Shape = shape; initial.Prefix = 0; work.Push(initial);
+            while (work.Count != 0)
+            {
+                FeatureWalk item = work.Pop();
+                foreach (DiffEdge edge in item.Shape.Edges)
+                {
+                    Poll();
+                    long key = ((long)item.Prefix << 32) | (uint)edge.Token;
+                    int id;
+                    if (!pathIds.TryGetValue(key, out id))
+                    {
+                        id = pathDirectories.Count; pathIds.Add(key, id); pathDirectories.Add(edge.IsDirectory);
+                    }
+                    features[offset++] = id;
+                    if (edge.IsDirectory && edge.Child.Count != 0)
+                    {
+                        FeatureWalk child = new FeatureWalk(); child.Shape = edge.Child; child.Prefix = id; work.Push(child);
+                    }
+                }
+            }
+            if (offset != features.Length) throw new InvalidOperationException("比較用仮想木の相対パス集計に不整合があります。");
+            Array.Sort(features);
+            shape.Features = features;
+        }
+
+        /// <summary>片側にしか存在しない相対パスを除き、完全に同じ一致集合をもう一段共有する。</summary>
+        private void BuildSets()
+        {
+            long required = Math.Max(1L, best);
+            foreach (DiffShape shape in shapes) if (shape.Count >= required) BuildFeatures(shape);
+            int[] sides = new int[pathDirectories.Count];
+            foreach (DiffShape shape in shapes)
+            {
+                if (shape.Features == null) continue;
+                int side = (shape.Baseline == null ? 0 : 1) | (shape.Differential == null ? 0 : 2);
+                foreach (int feature in shape.Features) { sides[feature] |= side; Poll(); }
+            }
+            Dictionary<ulong, List<DiffSet>> buckets = new Dictionary<ulong, List<DiffSet>>();
+            foreach (DiffShape shape in shapes)
+            {
+                Poll();
+                if (shape.Features == null) continue;
+                int count = 0;
+                foreach (int feature in shape.Features) if (sides[feature] == 3) count++;
+                if (count < required) { shape.Features = null; continue; }
+                int[] features = new int[count];
+                int offset = 0;
+                ulong hash = 14695981039346656037UL;
+                foreach (int feature in shape.Features)
+                    if (sides[feature] == 3) { features[offset++] = feature; hash = Mix(hash, feature); }
+                shape.Features = null;
+                List<DiffSet> bucket;
+                DiffSet set = null;
+                if (buckets.TryGetValue(hash, out bucket))
+                    foreach (DiffSet candidate in bucket) if (EqualFeatures(candidate.Features, features)) { set = candidate; break; }
+                if (set == null)
+                {
+                    set = new DiffSet(); set.Features = features; sets.Add(set);
+                    if (bucket == null) { bucket = new List<DiffSet>(); buckets.Add(hash, bucket); }
+                    bucket.Add(set);
+                }
+                if (shape.Baseline != null)
+                {
+                    if (set.Baseline == null) set.Baseline = new DiffRepresentatives();
+                    set.Baseline.Merge(shape.Baseline);
+                }
+                if (shape.Differential != null)
+                {
+                    if (set.Differential == null) set.Differential = new DiffRepresentatives();
+                    set.Differential.Merge(shape.Differential);
+                }
+            }
+            foreach (DiffSet set in sets)
+                if (set.Baseline != null && set.Differential != null && set.Features.Length > best) best = set.Features.Length;
+            // これ以降は整数集合だけで計算できるので索引の登録要素を消去する。
+            // Dictionaryの確保済み容量そのものはClearでは解放されない。
+            shapeBuckets.Clear(); pathIds.Clear();
+        }
+
+        private static bool EqualFeatures(int[] first, int[] second)
+        {
+            if (first.Length != second.Length) return false;
+            for (int index = 0; index < first.Length; index++) if (first[index] != second[index]) return false;
+            return true;
+        }
+
+        /// <summary>希少順の先頭 m-k+1 要素から逆引きする。一致数 k 以上の組は必ずこの範囲の一要素を共有する。</summary>
+        private void SearchSets()
+        {
+            int[] baseFrequency = new int[pathDirectories.Count], diffFrequency = new int[pathDirectories.Count];
+            List<DiffSet> baseSets = new List<DiffSet>(), diffSets = new List<DiffSet>();
+            long required = Math.Max(1L, best);
+            foreach (DiffSet set in sets)
+            {
+                if (set.Features.Length < required) continue;
+                if (set.Baseline != null) { baseSets.Add(set); foreach (int feature in set.Features) baseFrequency[feature]++; }
+                if (set.Differential != null) { diffSets.Add(set); foreach (int feature in set.Features) diffFrequency[feature]++; }
+            }
+            List<int> order = new List<int>();
+            for (int feature = 1; feature < pathDirectories.Count; feature++)
+                if (baseFrequency[feature] != 0 || diffFrequency[feature] != 0) order.Add(feature);
+            order.Sort(delegate(int first, int second)
+            {
+                int comparedFrequency = diffFrequency[first].CompareTo(diffFrequency[second]);
+                if (comparedFrequency != 0) return comparedFrequency;
+                comparedFrequency = baseFrequency[first].CompareTo(baseFrequency[second]);
+                return comparedFrequency != 0 ? comparedFrequency : first.CompareTo(second);
+            });
+            int[] rank = new int[pathDirectories.Count];
+            directoryByRank = new bool[order.Count];
+            for (int index = 0; index < order.Count; index++) { rank[order[index]] = index; directoryByRank[index] = pathDirectories[order[index]]; }
+            foreach (DiffSet set in sets)
+            {
+                if (set.Features.Length < required) continue;
+                for (int index = 0; index < set.Features.Length; index++) set.Features[index] = rank[set.Features[index]];
+                Array.Sort(set.Features); Poll();
+            }
+            baseSets.Sort(delegate(DiffSet first, DiffSet second)
+            {
+                int orderBySize = second.Features.Length.CompareTo(first.Features.Length);
+                return orderBySize != 0 ? orderBySize : first.Baseline.First.Depth.CompareTo(second.Baseline.First.Depth);
+            });
+            diffSets.Sort(delegate(DiffSet first, DiffSet second)
+            {
+                int orderBySize = second.Features.Length.CompareTo(first.Features.Length);
+                return orderBySize != 0 ? orderBySize : first.Differential.First.Depth.CompareTo(second.Differential.First.Depth);
+            });
+            List<int>[] postings = new List<int>[order.Count];
+            for (int index = 0; index < diffSets.Count; index++)
+                foreach (int feature in diffSets[index].Features)
+                {
+                    if (postings[feature] == null) postings[feature] = new List<int>();
+                    postings[feature].Add(index); Poll();
+                }
+            int[] seen = new int[diffSets.Count];
+            for (int row = 0; row < baseSets.Count; row++)
+            {
+                Poll();
+                DiffSet first = baseSets[row];
+                long target = Math.Max(1L, best);
+                if (first.Features.Length < target) break;
+                // 行内で best が増えても、この開始時の prefix は必要な候補の上位集合である。
+                int prefixLength = checked(first.Features.Length - (int)target + 1);
+                for (int prefix = 0; prefix < prefixLength; prefix++)
+                {
+                    List<int> posting = postings[first.Features[prefix]];
+                    if (posting == null) continue;
+                    foreach (int column in posting)
+                    {
+                        Poll();
+                        DiffSet second = diffSets[column];
+                        if (second.Features.Length < Math.Max(1L, best)) break;
+                        if (seen[column] == row + 1) continue;
+                        seen[column] = row + 1;
+                        long upper = Math.Min(first.Features.Length, second.Features.Length);
+                        long depth = (long)first.Baseline.First.Depth + second.Differential.First.Depth;
+                        if (upper < best || (upper == best && depth > bestDepth)) continue;
+                        long files, directories;
+                        compared++;
+                        if (Intersect(first.Features, second.Features, out files, out directories))
+                            Consider(first.Baseline, second.Differential, files, directories);
+                    }
+                }
+            }
+        }
+
+        /// <summary>整数集合の共通要素を厳密に数える。大きさの差が大きい組は小集合側から二分探索する。</summary>
+        private bool Intersect(int[] first, int[] second, out long files, out long directories)
+        {
+            files = directories = 0;
+            long required = Math.Max(1L, best);
+            int[] smaller = first.Length <= second.Length ? first : second;
+            int[] larger = first.Length <= second.Length ? second : first;
+            if ((long)smaller.Length * 8 < larger.Length)
+            {
+                for (int index = 0; index < smaller.Length; index++)
+                {
+                    Poll();
+                    if (files + directories + smaller.Length - index < required) return false;
+                    int feature = smaller[index];
+                    if (Array.BinarySearch(larger, feature) >= 0)
+                    {
+                        if (directoryByRank[feature]) directories++; else files++;
+                    }
+                }
+            }
+            else
+            {
+                int left = 0, right = 0;
+                while (left < first.Length && right < second.Length)
+                {
+                    Poll();
+                    if (files + directories + Math.Min(first.Length - left, second.Length - right) < required) return false;
+                    int a = first[left], b = second[right];
+                    if (a < b) { left++; continue; }
+                    if (a > b) { right++; continue; }
+                    if (directoryByRank[a]) directories++; else files++;
+                    left++; right++;
+                }
+            }
+            return files + directories >= required;
+        }
+
+        /// <summary>候補根名やファイル内容は採点せず、共通パス数、深さ和の順に比較する。最後の同点を保持する。</summary>
+        private void Consider(DiffRepresentatives first, DiffRepresentatives second, long files, long directories)
+        {
+            long score = files + directories, depth = (long)first.First.Depth + second.First.Depth;
+            if (score < best || (score == best && depth > bestDepth)) return;
+            if (chosenBaseline == null || score > best || depth < bestDepth)
+            {
+                best = score; bestDepth = depth; ties = 0; tieExamples.Clear();
+                chosenBaseline = first; chosenDifferential = second; chosenFiles = files; chosenDirectories = directories;
+            }
+            ties = checked(ties + checked(first.Count * second.Count));
+            foreach (DiffNode a in first.Examples)
+                foreach (DiffNode b in second.Examples)
+                    if (tieExamples.Count < 8)
+                        tieExamples.Add("  ベースライン " + Display(a) + " ↔ 差分 " + Display(b)
+                            + "（ファイル " + files + "、ディレクトリ " + directories + "）");
+        }
+
+        private void Poll() { if ((++ticks & 1023) == 0) Program.CheckCancel(); }
+        private static string Display(DiffNode node) { string path = node.Relative; return path.Length == 0 ? "/" : "'" + Text.Safe(path.Replace('\\', '/')) + "/'"; }
+    }
+
+    /// <summary>独立した二群を差分側のルートへ写像し、差分優先の最終出力計画を作る。</summary>
+    internal sealed class DifferentialPlan
+    {
+        internal readonly ExtractionPlan Output = new ExtractionPlan();
+        internal DiffMatch Match;
+        internal string MiscRelative;
+        internal long OverwrittenCount;
+        internal decimal OverwrittenBytes;
+
+        /// <summary>
+        /// ベースライン基準配下は差分基準へ、それ以外は日時付き保管先へ写す。
+        /// 引数の仮想計画を変更せず、元 ZIP メタデータを共有する出力用コピーを作る。
+        /// </summary>
+        internal static DifferentialPlan Build(ExtractionPlan baseline, ExtractionPlan differential, DiffMatch match, string timestamp)
+        {
+            DifferentialPlan result = new DifferentialPlan();
+            result.Match = match;
+            result.MiscRelative = "_base_misc_files\\" + timestamp;
+            result.Output.DuplicateCount = checked(baseline.DuplicateCount + differential.DuplicateCount);
+            Dictionary<string, ZipEntry> deltaFiles = new Dictionary<string, ZipEntry>(StringComparer.OrdinalIgnoreCase);
+            List<ZipEntry> deltaEntries = new List<ZipEntry>();
+            foreach (ZipEntry entry in differential.Entries)
+            {
+                Program.CheckCancel();
+                if (!entry.Keep) continue;
+                ZipEntry copy = entry.AtOutput(entry.Relative);
+                copy.InputGroupLabel = "差分 ZIP 群";
+                deltaEntries.Add(copy);
+                if (!copy.IsDirectory) deltaFiles.Add(copy.Relative, copy);
+            }
+
+            bool hasMisc = false;
+            List<ZipEntry> mappedInside = new List<ZipEntry>();
+            Dictionary<string, ZipEntry> mappedFiles = new Dictionary<string, ZipEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (ZipEntry entry in baseline.Entries)
+            {
+                Program.CheckCancel();
+                if (!entry.Keep) continue;
+                bool inside = IsWithin(entry.Relative, match.BaselineRelative);
+                string destination;
+                if (inside)
+                {
+                    string suffix = Below(entry.Relative, match.BaselineRelative);
+                    destination = Combine(match.DifferentialRelative, suffix);
+                }
+                else
+                {
+                    hasMisc = true;
+                    destination = Combine(result.MiscRelative, entry.Relative);
+                }
+                ZipEntry copy = entry.AtOutput(destination);
+                copy.InputGroupLabel = "ベースライン ZIP 群";
+                if (inside) mappedInside.Add(copy);
+                if (!copy.IsDirectory)
+                {
+                    ZipEntry previous;
+                    if (mappedFiles.TryGetValue(copy.Relative, out previous))
+                        throw new InvalidDataException("ベースラインの写像先が重複します: " + copy.Relative
+                            + "\n  " + previous.Label + "\n  " + copy.Label);
+                    mappedFiles.Add(copy.Relative, copy);
+                    ZipEntry delta;
+                    if (inside && deltaFiles.TryGetValue(copy.Relative, out delta))
+                    {
+                        // 差分成功時にはベースラインの展開・CRC読取そのものを省く。
+                        // 差分が個別失敗/ignoreになった場合だけ Extractor がベースラインを救済する。
+                        result.Output.Fallbacks.Add(delta, copy);
+                        result.OverwrittenCount++;
+                        result.OverwrittenBytes += copy.Size;
+                        continue;
+                    }
+                }
+                result.Output.AddPlannedEntry(copy);
+            }
+
+            if (hasMisc)
+            {
+                // 保存用の当該日時の領域だけを予約する。別の日時の既存構造は排除しない。
+                foreach (ZipEntry entry in deltaEntries) CheckReserved(entry, result.MiscRelative);
+                foreach (ZipEntry entry in mappedInside) CheckReserved(entry, result.MiscRelative);
+            }
+            foreach (ZipEntry entry in deltaEntries) result.Output.AddPlannedEntry(entry);
+            result.Output.CheckVirtualConflicts();
+
+            // 明示ディレクトリ日時も差分側を優先する。群内では既存どおり最初の有効値。
+            foreach (KeyValuePair<string, DirectoryPlan> pair in differential.Directories)
+            {
+                DirectoryPlan destination;
+                if (pair.Value.ExplicitTimes != null && pair.Value.ExplicitTimes.ModifiedUtc.HasValue
+                    && result.Output.Directories.TryGetValue(pair.Key, out destination))
+                    destination.ExplicitTimes = pair.Value.ExplicitTimes;
+            }
+            return result;
+        }
+
+        /// <summary>保管領域への混入、および保管領域の祖先をファイルにする衝突を拒否する。</summary>
+        private static void CheckReserved(ZipEntry entry, string reserved)
+        {
+            if (IsWithin(entry.Relative, reserved) || (!entry.IsDirectory && IsWithin(reserved, entry.Relative)))
+                throw new InvalidDataException("ベースライン外側ファイルの保管先が元の内容物と衝突します: " + reserved
+                    + "\n  写像先: " + entry.Relative + "\n  元エントリ: " + entry.Label);
+        }
+
+        /// <summary>baseRelative 自身または区切り境界を含む配下か。空文字は ZIP の仮想ルート。</summary>
+        internal static bool IsWithin(string relative, string baseRelative)
+        {
+            return baseRelative.Length == 0 || String.Equals(relative, baseRelative, StringComparison.OrdinalIgnoreCase)
+                || relative.StartsWith(baseRelative + "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>既に配下と確認済みのパスを基準からの相対値にする。</summary>
+        private static string Below(string relative, string baseRelative)
+        {
+            if (baseRelative.Length == 0) return relative;
+            return relative.Length == baseRelative.Length ? "" : relative.Substring(baseRelative.Length + 1);
+        }
+
+        /// <summary>正規化済み相対パスを、空のルートも許容して結合する。</summary>
+        private static string Combine(string parent, string child)
+        {
+            if (parent.Length == 0) return child;
+            return child.Length == 0 ? parent : parent + "\\" + child;
+        }
+
+        /// <summary>
+        /// 最初の物理入力名にある最後の有効な yyMMdd_HHmmss を使用する。
+        /// 2桁年の暦検証は2000～2099年と定義し、仕様どおり名前の全位置を走査する。
+        /// 見つからない場合は同じ物理入力のローカル更新日時を使用する。
+        /// </summary>
+        internal static string GetBaselineTimestamp(string firstSource)
+        {
+            string found = TimestampInName(Path.GetFileName(firstSource));
+            return found ?? File.GetLastWriteTime(firstSource).ToString("yyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>名前だけから日時を抽出する。妥当な候補がなければ null。読み書きはしない。</summary>
+        internal static string TimestampInName(string name)
+        {
+            string answer = null;
+            for (int offset = 0; offset <= name.Length - 13; offset++)
+            {
+                if (name[offset + 6] != '_') continue;
+                bool valid = true;
+                for (int index = 0; index < 13; index++)
+                    if (index != 6 && !IsDigit(name[offset + index])) { valid = false; break; }
+                if (!valid) continue;
+                try
+                {
+                    // OSのCalendar.TwoDigitYearMax設定による世紀の変動を避ける。
+                    new DateTime(2000 + TwoDigits(name, offset), TwoDigits(name, offset + 2), TwoDigits(name, offset + 4),
+                        TwoDigits(name, offset + 7), TwoDigits(name, offset + 9), TwoDigits(name, offset + 11));
+                    answer = name.Substring(offset, 13);
+                }
+                catch (ArgumentOutOfRangeException) { }
+            }
+            return answer;
+        }
+        private static bool IsDigit(char value) { return value >= '0' && value <= '9'; }
+        private static int TwoDigits(string value, int offset) { return (value[offset] - '0') * 10 + value[offset + 1] - '0'; }
+
+        /// <summary>基準・一致件数・ベースライン省略予定量を、計算時と展開終了時に同じ内容で表示する。</summary>
+        internal void PrintSummary()
+        {
+            Console.WriteLine("ベースライン ZIP 群の基準ディレクトリ: {0} ({1:N0} 個のファイル (合計 {2:N0} bytes)、{3:N0} 個のディレクトリが存在)",
+                DisplayDirectory(Match.BaselineRelative), Match.BaselineFiles, Match.BaselineBytes, Match.BaselineDirectories);
+            Console.WriteLine("差分 ZIP 群の基準ディレクトリ: {0} ({1:N0} 個のファイル (合計 {2:N0} bytes)、{3:N0} 個のディレクトリが存在)",
+                DisplayDirectory(Match.DifferentialRelative), Match.DifferentialFiles, Match.DifferentialBytes, Match.DifferentialDirectories);
+            Console.WriteLine("一致したファイル: {0:N0} 個、一致したディレクトリ: {1:N0} 個", Match.MatchedFiles, Match.MatchedDirectories);
+            Console.WriteLine("差分 ZIP によりベースライン ZIP が上書きされることとなるファイル個数: {0:N0} 個 (合計 {1:N0} bytes)",
+                OverwrittenCount, OverwrittenBytes);
+        }
+        private static string DisplayDirectory(string relative) { return relative.Length == 0 ? "/" : Text.Safe(relative.Replace('\\', '/') + "/"); }
     }
 
     /// <summary>事前確認と展開時確認を分離し、確認した実体と異なる場合は再確認する。</summary>
@@ -2071,12 +3314,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     /// <summary>展開順、確定保存、個別警告、および成功サイズを管理する。</summary>
     internal sealed class Extractor
     {
+        private enum FileOutcome { Unavailable, Saved, OverwriteSkipped }
         private readonly ExtractionPlan plan;
         private readonly SafeRoot root;
         private readonly PasswordManager passwords;
         private readonly OverwritePolicy overwrite;
         private readonly WarningBook warnings;
         internal long SuccessCount, SkippedCount;
+        internal long SupersededCount, FallbackSuccessCount;
         internal decimal SuccessBytes;
         internal Extractor(ExtractionPlan value, SafeRoot target, PasswordManager candidates, OverwritePolicy policy, WarningBook book)
         {
@@ -2094,18 +3339,44 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     number++;
                     Console.WriteLine("({0:N0} 個目 / {1:N0} 個中: {2:N0} bytes) '{3}' を展開...", number, total, entry.Size, Text.Safe(entry.Name));
                 }
+                FileOutcome outcome = FileOutcome.Unavailable;
                 try
                 {
                     if (entry.PlanError != null) throw new IOException(entry.PlanError);
                     EntryCodec.CheckSupported(entry);
                     if (entry.IsDirectory) ExtractDirectory(entry);
-                    else ExtractFile(entry);
+                    else outcome = ExtractFile(entry, entry);
                 }
                 catch (Exception ex)
                 {
                     if (!Program.Recoverable(ex)) throw;
                     warnings.Add(entry, ex.Message);
                     Console.WriteLine("  警告: " + Text.Safe(ex.Message));
+                }
+                ZipEntry fallback;
+                if (!entry.IsDirectory && plan.Fallbacks.TryGetValue(entry, out fallback))
+                {
+                    if (outcome == FileOutcome.Saved) SupersededCount++;
+                    else if (outcome == FileOutcome.Unavailable)
+                    {
+                        // 単なる名前一致だけで旧版を捨てない。差分が失敗した時だけ旧版を読み、
+                        // CRC等を通常どおり検証して救済する。明示的な物理上書きnには介入しない。
+                        Program.CheckCancel();
+                        Console.WriteLine("  差分を保存できなかったためベースラインを救済展開: '{0}' ({1:N0} bytes)",
+                            Text.Safe(fallback.Name), fallback.Size);
+                        try
+                        {
+                            if (fallback.PlanError != null) throw new IOException(fallback.PlanError);
+                            EntryCodec.CheckSupported(fallback);
+                            if (ExtractFile(fallback, entry) == FileOutcome.Saved) FallbackSuccessCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            if (!Program.Recoverable(ex)) throw;
+                            warnings.Add(fallback, "差分失敗後のベースライン救済も失敗: " + ex.Message);
+                            Console.WriteLine("  警告: " + Text.Safe(ex.Message));
+                        }
+                    }
                 }
             }
         }
@@ -2129,14 +3400,15 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             }
             finally { if (password != null) Array.Clear(password, 0, password.Length); }
         }
-        private void ExtractFile(ZipEntry entry)
+        /// <summary>policyEntry は同一出力先の上書き判断キー。差分と遅延ベースラインで共有する。</summary>
+        private FileOutcome ExtractFile(ZipEntry entry, ZipEntry policyEntry)
         {
             using (PathLease check = root.DirectoryLease(WindowsPaths.Parent(entry.Relative), false, null, false))
             {
-                if (!overwrite.Allow(entry, root.ProbeLeaf(entry.Relative, check))) { Skip(entry); return; }
+                if (!overwrite.Allow(policyEntry, root.ProbeLeaf(entry.Relative, check))) { Skip(entry); return FileOutcome.OverwriteSkipped; }
             }
             byte[] password;
-            if (!PasswordFor(entry, out password)) return;
+            if (!PasswordFor(entry, out password)) return FileOutcome.Unavailable;
             try
             {
                 using (PathLease parents = root.DirectoryLease(WindowsPaths.Parent(entry.Relative), true, plan.Directories, false))
@@ -2150,7 +3422,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     {
                         Program.CheckCancel();
                         FileStamp current = root.ProbeLeaf(entry.Relative, parents);
-                        if (!overwrite.Allow(entry, current)) { Skip(entry); return; }
+                        if (!overwrite.Allow(policyEntry, current)) { Skip(entry); return FileOutcome.OverwriteSkipped; }
                         try { temporary.Commit(root.Destination(entry.Relative), current != null); break; }
                         catch (Win32Exception ex)
                         {
@@ -2165,6 +3437,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 }
             }
             finally { if (password != null) Array.Clear(password, 0, password.Length); }
+            return FileOutcome.Saved;
         }
         private void SetTimes(ZipEntry entry, SafeFileHandle handle)
         {
