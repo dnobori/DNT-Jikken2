@@ -1,5 +1,10 @@
 ﻿/*
-DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
+DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
+
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r02_261007_tfdxe5.cs
+今回バージョン: R02 (入力ソースの指定バージョン: R01)
+内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
+前回標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
 
 目的: 同一ディレクトリの ZIP / UNIX split 相当の ZIP 断片を認識し、安全に展開する。
 対象: Windows Vista 以降 / .NET Framework 4.0 API / C# 4 / AnyCPU / WinExe。
@@ -7,7 +12,7 @@ DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
       data descriptor の範囲と一致を検証する。連結中間ファイルは作らない。
       ZIP 解釈、CRC、ZipCrypto、厳密な Deflate 解釈は本ファイルで実装する。
       AES/PBKDF2/HMAC は .NET 標準の暗号プリミティブのみを使用する。
-      保存は同じディレクトリの一時ファイルを検証後にハンドルで改名する。
+      保存は同じディレクトリの一時ファイルを検証後に閉じ、MoveFileExW で確定する。
       危険な ZIP パス・リンクは全体中断、個別の破損・保存失敗は警告して継続する。
 注意: SFX/先頭・末尾ごみ、ZIP 自身のマルチディスク、Store/Deflate 以外は対象外。
       パス上限は通常の MAX_PATH。8.3 短縮名と紛らわしい名前は安全側に拒否する。
@@ -16,10 +21,30 @@ DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
       新規ディレクトリだけに日時を設定する。既存ディレクトリは設定しない。
       自作コードであること自体は無脆弱性を保証しない。README の制約・検証範囲参照。
 
-改修 [T261005_EL_SKCJM_04]: 展開先選択のダミー名は、入力物理ファイル名を
+入力 R01 に含まれる既存改修 [T261005_EL_SKCJM_04]: 展開先選択のダミー名は、入力物理ファイル名を
       大文字小文字を無視して比較した先頭名に、先頭 _ と末尾 .txt を付ける。
       比較のために入力リストを並べ替えず、ZIP の認識・結合・展開順は維持する。
 
+改修 R02 / DNNT 261007_TFDXE5 / 2026/10/07 18:42:17 (JST):
+      bit 3 (data descriptor 使用) 時、ローカルの暫定 CRC・両サイズと
+      中央情報の一致を要求していた比較だけを除去する。Info-ZIP の非シーク
+      暗号化出力で残る DOS 時刻由来の暫定 CRC に対応する互換性修正。
+      中央サイズによるデータ境界、descriptor の長さ・署名・CRC・両サイズ、
+      実データの復号・展開・CRC / AES 認証は従来どおり検証する。
+      ローカル ZIP64 extra の構造・数値範囲検査も維持する。
+      現行の保存処理と古い説明の相違、既存の競合制約は readme の R02 追記参照。
+
+今回の生成情報 (R02):
+      本プログラムは生成 AI により生成され、今回の修正も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: 公開された設定値は取得不可のため記載しない。
+      セッション開始日時(JST): 正確な値は取得不可。
+      今回作業の最初の環境時計記録(JST): 2026/10/07 18:26:18。
+      応答生成日時(JST): 2026/10/07 18:42:17 (JST)
+      この環境に C# コンパイラ / Windows はなく、実 C# ビルド・Windows 動作は未検証。
+      実サンプルの独立解凍器による全件検証と、対応ロジックの回帰検証を実施。
+
+前回の生成情報 (入力ソースの記録を保持):
 本プログラムは生成 AI により生成され、本改修も生成 AI により実施されました。
 AI バージョン・モデル: GPT-6 Astra Pro（内部ビルド識別子は取得不可）
 思考レベル: このセッションの公開設定値は取得不可のため不明。
@@ -983,6 +1008,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
 
         /// <summary>ローカルヘッダ・データサイズ・descriptor を中央情報と照合する。</summary>
+        /// <param name="source">検証対象 ZIP のシーク可能な入力ストリーム。</param>
+        /// <param name="entry">中央情報を持つエントリ。データ位置と補助メタデータも設定する。</param>
+        /// <param name="limit">次のローカルヘッダまたは中央ディレクトリの開始位置（専有範囲の終端）。</param>
         private static void ReadLocal(Stream source, ZipEntry entry, long limit)
         {
             long first = entry.LocalOffset;
@@ -1024,9 +1052,11 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (compressed != entry.CompressedSize || size != entry.Size || crc != entry.Crc)
                     throw new InvalidDataException("中央とローカルのサイズまたは CRC が不一致: " + entry.Label);
             }
-            else if ((compressed != 0 && compressed != entry.CompressedSize) || (size != 0 && size != entry.Size)
-                || (crc != 0 && crc != entry.Crc))
-                throw new InvalidDataException("descriptor 使用時のローカル暫定値が中央情報と矛盾: " + entry.Label);
+            // R02: bit 3 が立つ場合、ローカルの CRC・両サイズは確定値として照合しない。
+            // 非シーク先へ出す暗号化 ZIP では、例えば DOS 時刻 << 16 が CRC 欄に残る。
+            // これは任意値を認める ZIP 書込み規定ではなく、既存 ZIP との読取り互換性対応。
+            // 上記の ZIP64 extra 検査は維持し、下記では中央サイズから求めた境界と
+            // descriptor の署名・CRC・両サイズを照合する。実データの CRC / 認証も別途検証する。
             long dataEnd = Bytes.Add(entry.DataOffset, entry.CompressedSize);
             if (dataEnd > limit) throw new InvalidDataException("圧縮データが次のレコードに重複しています: " + entry.Label);
             if (!descriptor)
