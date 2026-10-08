@@ -1,5 +1,21 @@
 ﻿/*
-DNNT 261006_VQYBR5 31.5 MBytes ごとに分割する zip ファイル圧縮プログラム 改造 1
+DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
+
+ソース: dnnt_261003_zwces4_zip_split_merge_r03_261008_wfg4dj.cs
+生成 AI: OpenAI ChatGPT / GPT-6 Astra Pro。生成 AI により改修。
+  モデルの詳細ビルド番号・思考レベル設定値は、このセッションから確認できない。
+セッション開始日時 (JST): 2026/10/08 20:17:17 (本依頼の受信時刻を基準)
+応答生成日時 (JST): 2026/10/08 20:33:29
+
+変更履歴:
+  R03 / 2026/10/08 / DNNT 261008_WFG4DJ:
+    .NET Framework 4.8 の長いパス対応を起動直後に有効化し、列挙・属性取得・
+    CreateFileW の I/O 境界だけを拡張長表記へ変換。入力リンクの実体追跡を維持。
+    表示・比較・ZIP 相対名は従来のまま。出力パスの 260 文字未満制限は維持。
+    本改修前の R02 ヘッダ標題:
+      DNNT 261006_VQYBR5 31.5 MBytes ごとに分割する zip ファイル圧縮プログラム 改造 1
+    R02 の命名規則・既定上限 18 個と対話変更・圧縮/暗号/削除処理を引き継ぐ。
+    過去の作業日時・生成 AI は未提供のため推定しない。詳細は同梱 history を参照。
 
 目的:
   ファイル、フォルダ、および明示的に指定された ZIP の内容を、相対パスを保った
@@ -12,11 +28,11 @@ DNNT 261006_VQYBR5 31.5 MBytes ごとに分割する zip ファイル圧縮プ�
   旧出力の削除・新規出力の作成前に例外とし、9999 個へ自動的に丸めない。
 
 環境:
-  C# 4.0 / .NET Framework 4.0 / AnyCPU。実行時の外部 DLL・NuGet ライブラリ不要。
-  WinExe としてビルドし、必要に応じて Win32 コンソールを確保する。/target:exe も可。
-  Windows 7 以降のデスクトップ環境を想定。管理者権限は不要。
-  Visual Studio 2026 の通常の IDE では .NET Framework 4.0 はサポート外。
-  VS 2026 付属コンパイラと v4.0 参照アセンブリを使う手順は同梱 README 参照。
+  C# 4.0 互換の構文 / .NET Framework 4.8 / AnyCPU。外部 DLL・NuGet は不要。
+  同梱 csproj は従来どおりコンソール Exe。WinExe でも必要なコンソールを確保する。
+  .NET Framework 4.8 を導入した Windows デスクトップ環境用。
+  Visual Studio 2026 と .NET Framework 4.8 の開発用参照アセンブリでビルドする。
+  長い入力パスのための管理者権限・LongPathsEnabled レジストリ変更は不要。
 
 動作原理:
   DeflateStream は圧縮・展開にだけ使用する。ZIP 構造、CRC、ZipCrypto、ZIP64、
@@ -59,7 +75,11 @@ DNNT 261006_VQYBR5 31.5 MBytes ごとに分割する zip ファイル圧縮プ�
   UTF-8 フラグを偽っている不正名は旧コードページへ逃がさず、エラーにする。
   空の末端ディレクトリも保存する。ファイル名衝突およびファイル/フォルダ衝突は
   全 ZIP を合わせた名前空間で、大文字小文字を無視して検出する。
-  長いパス・循環リンク・ZIP 内特殊ファイル等の制約、検証状況は README に記載。
+  入力は通常表記のドライブ絶対パス/UNC。長いパスでも利用者が接頭辞を付ける必要はない。
+  デバイス/拡張長表記の直接入力は従来どおり拒否し、検査・正規化後の I/O だけに
+  \\?\ または \\?\UNC\ を付ける。接頭辞を ZIP 内パスや実体比較へ混入させない。
+  Windows/ファイルシステム固有の長さ上限、ZIP 名の UTF-8 65,535 bytes 上限は残る。
+  制約・変更点・実機検証が必要な事項は同梱 history に記載。
 
 参考仕様（仕様文書の転載ではなく、このソースは独自の実装）:
   https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
@@ -100,6 +120,10 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
     [STAThread]
     private static int Main(string[] args)
     {
+        // R03: 最初の Path/File/Directory 操作より前に設定する。自己テストにも適用。
+        // CLR の互換スイッチが古いターゲット既定値でも、.NET Framework 4.8 の処理を使う。
+        AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", false);
+        AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
 #if DNNT_SELF_TEST
         return SelfTests.Run();
 #else
@@ -275,7 +299,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         }
     }
 
-    /// <summary>本圧縮と事前圧縮で共用する Deflate 設定。.NET 4.0 の既定レベルを両方に使う。</summary>
+    /// <summary>本圧縮と事前圧縮で共用する Deflate 設定。標準の既定レベルを両方に使う。</summary>
     private static DeflateStream CreateCompressor(Stream destination)
     {
         return new DeflateStream(destination, CompressionMode.Compress, true);
@@ -475,14 +499,14 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         internal static InputRoot Read(string text)
         {
             string path = PathRules.FullPath(text);
-            FileAttributes attributes = File.GetAttributes(path);
+            FileAttributes attributes = Native.GetAttributes(path);
             InputRoot root = new InputRoot();
             root.Path = path;
             root.IsDirectory = (attributes & FileAttributes.Directory) != 0;
             if (root.IsDirectory)
             {
                 DirectorySnapshot snapshot = DirectorySnapshot.Capture(path);
-                Directory.GetFileSystemEntries(path); // リンク先を含め、その場で列挙権限を検査。
+                Native.GetFileSystemEntries(path); // 長いパス/リンク先を含め、その場で列挙権限を検査。
                 root.CanonicalPath = snapshot.CanonicalPath;
                 root.Identity = snapshot.Identity;
             }
@@ -499,7 +523,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
     /// <summary>安全な Windows パスと ZIP 内相対パスの検査を集約する。</summary>
     private static class PathRules
     {
-        /// <summary>通常のドライブ絶対パスまたは UNC のみ受理。デバイス・ADS パスを拒否する。</summary>
+        /// <summary>長い通常ドライブ絶対パス/UNC も受理。デバイス・ADS の直接入力は拒否。</summary>
         internal static string FullPath(string text)
         {
             if (text == null) throw new AppError(87, "パスが null です。");
@@ -516,6 +540,8 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             if (!drive && !unc) throw new AppError(87, "フルパスを指定してください: " + path);
             if (path.IndexOf(':', drive ? 2 : 0) >= 0)
                 throw new AppError(87, "代替データストリームを含むパスは受け付けません: " + path);
+            // R03: 起動時に旧パス処理/260 文字制限を無効化済み。接頭辞はまだ付けず、
+            // . や .. を標準 API で正規化する。拡張長表記への変換は I/O 直前だけ行う。
             string full = System.IO.Path.GetFullPath(path);
             string root = System.IO.Path.GetPathRoot(full);
             if (String.IsNullOrEmpty(root)) throw new AppError(87, "ルートのないパスです: " + path);
@@ -531,6 +557,34 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             if (suffix.Length > 0)
                 foreach (string component in suffix.Split('\\')) ValidateComponent(component, true);
             return full;
+        }
+
+        /// <summary>正規化済みの通常絶対パスを、I/O 専用の拡張長表記へ変換する。</summary>
+        /// <param name="path">検査済みのドライブ絶対パス、UNC、または列挙/実体解決で得た通常表記。</param>
+        /// <returns>\\?\C:\... または \\?\UNC\server\share\...。表示や ZIP 名には使わない。</returns>
+        internal static string ToExtendedPath(string path)
+        {
+            if (String.IsNullOrEmpty(path) || path.IndexOf('\0') >= 0 || path.IndexOf('/') >= 0 ||
+                path.StartsWith(@"\\?\", StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal))
+                throw new AppError(87, "I/O 用の通常絶対パスではありません: " + path);
+            bool drive = path.Length >= 3 && IsAsciiLetter(path[0]) && path[1] == ':' && path[2] == '\\';
+            bool unc = path.StartsWith(@"\\", StringComparison.Ordinal);
+            if (!drive && !unc) throw new AppError(87, "I/O には正規化済みの絶対パスが必要です: " + path);
+            string extended = drive ? @"\\?\" + path : @"\\?\UNC\" + path.Substring(2);
+            // 32,767 WCHAR の境界には終端 NUL の余地も残す。OS/FS の追加制約は I/O で検出。
+            if (extended.Length >= 32767)
+                throw new AppError(206, "入力/出力パスが Windows の拡張長上限を超えます: " + path);
+            return extended;
+        }
+
+        /// <summary>API から返った拡張長表記を、従来の表示・実体比較用の通常表記へ戻す。</summary>
+        /// <param name="path">列挙 API または GetFinalPathNameByHandleW が返したパス。</param>
+        /// <returns>UNC は \\server\share\...、ドライブは C:\...。接頭辞なしならそのまま。</returns>
+        internal static string FromExtendedPath(string path)
+        {
+            if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
+            if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path.Substring(4);
+            return path;
         }
 
         /// <summary>出力先の解決後の実体パスを保護する前に再解析の残留/差替えを検査。入力には使わない。</summary>
@@ -550,7 +604,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         /// <summary>再解析ポイントを拒否する。属性取得自体の失敗も例外として伝播する。</summary>
         private static void CheckOrdinaryPath(string path)
         {
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            if ((Native.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
                 throw new AppError(50, "出力先の解決後パスに再解析ポイントがあります。差し替えの可能性があるため中止します: " + path);
         }
 
@@ -1471,13 +1525,13 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                         work.RelativePath, work.PhysicalPath, work.Snapshot.CanonicalPath, ancestor.RelativePath);
                     continue;
                 }
-                string[] entries = Directory.GetFileSystemEntries(work.PhysicalPath);
+                string[] entries = Native.GetFileSystemEntries(work.PhysicalPath);
                 Array.Sort(entries, StringComparer.Ordinal);
                 List<DirectoryWork> subdirectories = new List<DirectoryWork>();
                 foreach (string entry in entries)
                 {
                     CheckCancellation();
-                    FileAttributes attributes = File.GetAttributes(entry);
+                    FileAttributes attributes = Native.GetAttributes(entry);
                     string relative = work.RelativePath + "/" + System.IO.Path.GetFileName(entry);
                     if ((attributes & FileAttributes.Directory) != 0)
                         subdirectories.Add(new DirectoryWork(entry, relative, work));
@@ -1767,14 +1821,14 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             List<string> oldPaths = new List<string>();
             try
             {
-                string[] entries = Directory.GetFileSystemEntries(names.DirectoryPath);
+                string[] entries = Native.GetFileSystemEntries(names.DirectoryPath);
                 Array.Sort(entries, StringComparer.Ordinal);
                 foreach (string path in entries)
                 {
                     CheckCancellation();
                     string name = System.IO.Path.GetFileName(path);
                     if (!names.IsOldName(name)) continue;
-                    FileAttributes attributes = File.GetAttributes(path);
+                    FileAttributes attributes = Native.GetAttributes(path);
                     if ((attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
                         throw new AppError(50, "削除候補の名前に一致するフォルダまたはリンクがあります。削除しません: " + path);
                     SafeFileHandle handle = Native.OpenDeleteFile(path);
@@ -2091,10 +2145,30 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             }
         }
 
-        /// <summary>作成/オープンを共通化し、失敗時はパス付き Win32 例外を返す。</summary>
+        /// <summary>長いパスでも属性を取得する。入力リンクの再解析属性は除外条件にしない。</summary>
+        /// <param name="path">正規化済みの通常絶対パス。</param>
+        /// <returns>リンク自身を含む属性。内容/サイズ/日時は後続の実体ハンドルから得る。</returns>
+        internal static FileAttributes GetAttributes(string path)
+        {
+            return File.GetAttributes(PathRules.ToExtendedPath(path));
+        }
+
+        /// <summary>長いディレクトリの直下を列挙し、結果だけ通常表記へ戻す。再帰は呼出側が行う。</summary>
+        /// <param name="path">正規化済みの通常絶対パス。シンボリックリンク/ジャンクションも可。</param>
+        /// <returns>直下の全ファイル/フォルダ。リンクを除外しない。読取エラーは呼出側へ伝播。</returns>
+        internal static string[] GetFileSystemEntries(string path)
+        {
+            string[] entries = Directory.GetFileSystemEntries(PathRules.ToExtendedPath(path));
+            for (int i = 0; i < entries.Length; i++) entries[i] = PathRules.FromExtendedPath(entries[i]);
+            return entries;
+        }
+
+        /// <summary>拡張長表記で作成/オープンし、失敗時は通常表記付き Win32 例外を返す。</summary>
         private static SafeFileHandle OpenHandle(string path, uint access, uint sharing, uint disposition, uint flags)
         {
-            SafeFileHandle handle = CreateFileW(path, access, sharing, IntPtr.Zero, disposition, flags, IntPtr.Zero);
+            // CONIN$ だけは終了待機用のコンソールデバイス。ファイルパスへ変換してはいけない。
+            string nativePath = String.Equals(path, "CONIN$", StringComparison.Ordinal) ? path : PathRules.ToExtendedPath(path);
+            SafeFileHandle handle = CreateFileW(nativePath, access, sharing, IntPtr.Zero, disposition, flags, IntPtr.Zero);
             if (handle.IsInvalid)
             {
                 int error = Marshal.GetLastWin32Error();
@@ -2202,10 +2276,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
                 if (length == 0 || length >= buffer.Capacity) throw LastError("実体パスを取得できません。");
             }
-            string path = buffer.ToString();
-            if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
-            if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path.Substring(4);
-            return path;
+            return PathRules.FromExtendedPath(buffer.ToString());
         }
 
         /// <summary>保持中の同一実体に削除保留を設定/解除する。パス文字列はエラー表示専用。</summary>
@@ -3413,6 +3484,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 Check(Crc32.Compute(Encoding.ASCII.GetBytes("123456789")) == 0xCBF43926U, "CRC-32 既知値");
                 TestClassicVector();
                 TestNames();
+                TestLongInputPaths();
                 TestOutputNumbering();
                 TestOutputCountLimits();
                 TestInputZipRootNames();
@@ -3428,7 +3500,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 TestPlannedLayouts();
                 TestPrecompressionCache();
                 Console.WriteLine("PASS: " + assertions.ToString(NumberCulture) + " assertions");
-                Console.WriteLine("保存ダイアログ・Win32 リンク解決・削除保留・実ファイル権限の試験は別途必要です。");
+                Console.WriteLine("長い実パス/UNC の列挙・読取、保存ダイアログ・Win32 リンク解決・削除保留・権限の試験は別途必要です。");
                 return 0;
             }
             catch (Exception ex)
@@ -3505,6 +3577,86 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             Manifest second = new Manifest();
             second.AddFile("x", MakeSource("unused", new byte[0]));
             ExpectFailure(delegate { second.AddFile("X/y", MakeSource("other", new byte[0])); }, "親が既存ファイル");
+        }
+
+        /// <summary>各成分を短く保った、指定長の仮想ドライブ絶対パスを作る。実ファイルは作らない。</summary>
+        /// <param name="length">戻り値の UTF-16 文字数。最小 8。</param>
+        /// <returns>C:\ で始まり .txt で終わる、各成分 104 文字以下のパス。</returns>
+        private static string MakeSyntheticInputPath(int length)
+        {
+            if (length < 8) throw new ArgumentOutOfRangeException("length");
+            StringBuilder path = new StringBuilder(@"C:\");
+            int remaining = length - path.Length - 4;
+            while (remaining > 100)
+            {
+                path.Append(new string('a', 100));
+                path.Append('\\');
+                remaining -= 101;
+            }
+            path.Append(new string('f', remaining));
+            path.Append(".txt");
+            return path.ToString();
+        }
+
+        /// <summary>入力長パス/UNC の正規化・I/O 表記・相対名・安全境界を、実ファイルなしで検査。</summary>
+        private static void TestLongInputPaths()
+        {
+            bool value;
+            Check(AppContext.TryGetSwitch("Switch.System.IO.UseLegacyPathHandling", out value) && !value,
+                "新しいパス正規化を起動時に有効化");
+            Check(AppContext.TryGetSwitch("Switch.System.IO.BlockLongPaths", out value) && !value,
+                "管理 API の MAX_PATH 制限を起動時に解除");
+            int[] lengths = { 259, 260, 261, 1024, 4096 };
+            foreach (int length in lengths)
+            {
+                string path = MakeSyntheticInputPath(length);
+                Check(path.Length == length, "長パステストの文字数: " + length);
+                Check(PathRules.FullPath(path) == path, "長いドライブ絶対パスの受付: " + length);
+                Check(PathRules.FullPath("\"" + path + "\"") == path, "長い引用符付き入力: " + length);
+                Check(PathRules.FullPath(path.Replace('\\', '/')) == path, "長い入力の区切り正規化: " + length);
+                string extended = PathRules.ToExtendedPath(path);
+                Check(extended == @"\\?\" + path, "ドライブ I/O にだけ接頭辞を追加: " + length);
+                Check(PathRules.FromExtendedPath(extended) == path, "表示/比較用パスへの復元: " + length);
+                Check(PathRules.FromExtendedPath(path) == path, "通常表記は変更しない: " + length);
+                string unc = @"\\server\share" + path.Substring(2);
+                Check(PathRules.FullPath(unc) == unc, "長い UNC 入力: " + length);
+                Check(PathRules.ToExtendedPath(unc) == @"\\?\UNC\server\share" + path.Substring(2),
+                    "UNC の I/O 表記を正しく構成: " + length);
+                Check(PathRules.FromExtendedPath(PathRules.ToExtendedPath(unc)) == unc, "UNC 比較用表記への復元: " + length);
+            }
+            string deep = MakeSyntheticInputPath(1024);
+            Check(PathRules.FullPath(deep + @"\.\child\..\leaf.txt") == deep + @"\leaf.txt",
+                "接頭辞追加より前に長い通常パスの . と .. を解決");
+            Check(PathRules.RootName(deep) == System.IO.Path.GetFileName(deep), "深い単独入力のルート名");
+            string deepZip = deep.Substring(0, deep.Length - 4) + ".ZIP";
+            Check(PathRules.ZipRootName(deepZip) == System.IO.Path.GetFileNameWithoutExtension(deepZip),
+                "長い物理パスにある明示 ZIP の仮想ルート名");
+            Check(PathRules.ToExtendedPath(MakeSyntheticInputPath(32762)).Length == 32766,
+                "拡張長表記にも終端 NUL の余地を確保");
+            ExpectAppError(delegate { PathRules.ToExtendedPath(MakeSyntheticInputPath(32763)); }, 206,
+                "ドライブの拡張長表記で上限超過を拒否");
+            string uncRoot = @"\\server\share";
+            string uncLimit = uncRoot + MakeSyntheticInputPath(32760 - uncRoot.Length + 2).Substring(2);
+            Check(PathRules.ToExtendedPath(uncLimit).Length == 32766, "UNC の追加接頭辞長も計算");
+            ExpectAppError(delegate { PathRules.ToExtendedPath(uncLimit + "x"); }, 206, "UNC の拡張長上限超過を拒否");
+            ExpectAppError(delegate { PathRules.FullPath(@"\\?\C:\data"); }, 87, "拡張長表記の直接入力は従来どおり拒否");
+            ExpectAppError(delegate { PathRules.FullPath(@"\\.\PhysicalDrive0"); }, 87, "デバイスの直接入力を拒否");
+            ExpectAppError(delegate { PathRules.FullPath(deep + ":stream"); }, 87, "長い ADS 入力も拒否");
+            ExpectAppError(delegate { PathRules.ToExtendedPath(@"C:relative.txt"); }, 87, "I/O のドライブ相対パスを拒否");
+            ExpectAppError(delegate { PathRules.ToExtendedPath(@"\\?\C:\data"); }, 87, "接頭辞を二重付加しない");
+
+            DirectoryWork root = new DirectoryWork(deep, "input", null);
+            root.Snapshot = MakeDirectorySnapshot("long:1", deep);
+            DirectoryWork child = new DirectoryWork(deep + @"\child", "input/child", root);
+            Check(child.FindAncestor(MakeDirectorySnapshot(null,
+                PathRules.FromExtendedPath(PathRules.ToExtendedPath(deep)))) == root,
+                "長い実体パスの表記を戻して祖先循環を検出");
+            DirectorySnapshot target = MakeDirectorySnapshot("long:2", @"\\server\share" + deep.Substring(2));
+            Check(child.FindAncestor(target) == null, "長い外部リンク先を省略しない");
+            DirectoryWork alias = new DirectoryWork(deep + @"\alias", "input/alias", root);
+            Check(alias.FindAncestor(target) == null, "長い同一実体への別枝リンクも省略しない");
+            ExpectAppError(delegate { Manifest.RequireSeparateOutput(root.Snapshot,
+                MakeDirectorySnapshot("long:3", deep + @"\out"), deep); }, 87, "長い入力配下への出力も拒否");
         }
 
         /// <summary>アプリケーション例外の種類と終了コードを確認する。ファイル操作は行わない。</summary>
@@ -3850,7 +4002,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             return source;
         }
 
-        /// <summary>UTF-8・圧縮しにくいデータ・空ファイル・空フォルダを出力し、本番の読取経路で検査。</summary>
+        /// <summary>UTF-8・長い相対名・圧縮しにくいデータ・空ファイル/フォルダを本番の読取経路で検査。</summary>
         private static void TestRoundTrip()
         {
             byte[] randomBytes = new byte[131073];
@@ -3859,7 +4011,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 MakeSource("日本語/長文.txt", Utf8.GetBytes(new string('文', 50000))),
                 MakeSource("random.bin", randomBytes),
                 MakeSource("empty.bin", new byte[0]),
-                MakeSource("empty-folder", new byte[0])
+                MakeSource("empty-folder", new byte[0]),
+                MakeSource("リンク名/" + MakeSyntheticInputPath(1500).Substring(3).Replace('\\', '/'),
+                    Utf8.GetBytes("MAX_PATH を超える相対パスの内容"))
             };
             sources[3].IsDirectory = true;
             sources[3].ZipPath += "/";
