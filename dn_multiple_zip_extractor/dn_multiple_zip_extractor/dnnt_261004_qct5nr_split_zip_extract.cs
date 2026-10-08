@@ -1,10 +1,11 @@
 ﻿/*
-DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
+DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r04_261008_flvs83.cs
-今回バージョン: R04 (入力ソースの指定バージョン: R03)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r05_261008_usw6su.cs
+今回バージョン: R05 (入力ソースの指定バージョン: R04)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
+前回標題: DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
+R03 標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
 R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
 初版標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
 
@@ -22,7 +23,11 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       回復可能と判定される保存等の失敗は警告して継続する。CRC 等の InvalidDataException は
       既存 Recoverable に含まれず全体中断となる点も維持する（README の R04 新規指摘参照）。
 注意: SFX/先頭・末尾ごみ、ZIP 自身のマルチディスク、Store/Deflate 以外は対象外。
-      パス上限は通常の MAX_PATH。8.3 短縮名と紛らわしい名前は安全側に拒否する。
+      MAX_PATH を超える通常ドライブ/UNC パスに対応する。各要素と OS/ファイルシステムの上限は残る。
+      ZIP 内の 8.3 短縮名と紛らわしい名前は安全側に拒否する。指定ルート/祖先のリンクは許容し、
+      配下の reparse point は従来どおり拒否する。入力 ZIP の経路のリンクは許容する。
+      /out:絶対ディレクトリ で保存ダイアログを介さず既存の展開先を指定できる。未指定時は従来の対話。
+      シェル UI と実ファイル I/O の長いパス対応は別である。README の使用例と実機未検証範囲参照。
       ZIP の符号化情報がない名前は既定 CP932、復号不能時 CP437。
       環境変数 DNNT_ZIP_CODEPAGE により未指定名のコードページを変更できる。
       新規ディレクトリだけに日時を設定する。既存ディレクトリは設定しない。
@@ -62,7 +67,25 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       旧方式用の大きな出力配列は必要時だけ確保する。プロジェクトと App.config に対象環境と互換設定を反映。
       R03 の入力認識、差分照合・再配置、暗号形式、CRC、Win32 保存、例外の回復可否は維持する。
 
-今回の生成情報 (R04):
+改修 R05 / DNNT 261008_USW6SU / 2026/10/08 19:13:05 (JST):
+      .NET 4.8 の長いパス処理を有効化し、物理絶対パスの旧末尾空白/ピリオド正規化は互換処理で維持する。
+      ZIP 相対パスの検査・正規化は変更しない。検査済み通常パスを I/O 境界でのみ拡張長形式へ変換する。
+      248 文字以上のディレクトリ作成を含め、属性・no-follow 検査・一時保存・確定・削除を一貫して対応する。
+      8.3 名展開のバッファを必要長へ拡張し、一時名は拡張形式の残量から決める。
+      指定ルート/祖先のリンク許容、配下のリンク拒否、入力元リンクの追跡、ID 照合は維持する。
+      /out: または -out: で既存の展開先を明示できる。未指定時のダイアログと既存モードは維持する。
+      ZIP/codec/暗号/差分照合/並列制御/保存順/上書き確認/例外分類は変更しない。
+
+今回の生成情報 (R05):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: 公開された設定値は取得不可のため推測しない。
+      セッション開始日時(JST): 正確な値は取得不可。
+      今回依頼の受信時刻(JST): 2026/10/08 18:47:09 (会話に供給された時刻情報)。
+      応答生成日時(JST): 2026/10/08 19:13:05 (JST)
+      実コンパイル・純粋 C# 回帰と Windows 実機未検証の区別は README の R05 追記参照。
+
+前回の生成情報 (R04、過去の検証状況を保持):
       本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: このセッションで公開された設定値は取得不可のため推測しない。
@@ -149,15 +172,17 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             {
                 if (Environment.OSVersion.Platform != PlatformID.Win32NT || Environment.OSVersion.Version.Major < 6)
                     throw new PlatformNotSupportedException(".NET Framework 4.8 が利用できる Windows 環境が必要です。");
-                // ターゲット更新で Path の正規化・MAX_PATH の既定まで変えない。最初の Path 利用前に設定する。
-                AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", true);
-                AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", true);
+                // 長いパスを .NET と Win32 の両方で扱う。旧物理名の正規化は WindowsPaths.Full が補う。
+                // App.config にも同じ設定を置き、Main より前の Framework 内部の初期化にも適用する。
+                AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", false);
+                AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
                 // native 展開の選択は、最初の DeflateStream とその共有実装が初期化される前に確定する。
                 AppContext.SetSwitch("Switch.System.IO.Compression.DoNotUseNativeZipLibraryForDecompression", false);
                 Native.EnsureConsole();
                 consoleReady = true;
                 bool differential;
-                string[] fileArguments = GetFileArguments(args, out differential);
+                string specifiedDestination;
+                string[] fileArguments = GetFileArguments(args, out differential, out specifiedDestination);
                 Console.WriteLine(differential ? "【差分 ZIP モード】" : "【通常 ZIP モード】");
                 Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
                 {
@@ -189,11 +214,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                         Console.WriteLine("基準ディレクトリを計算中...");
                         ReferenceMatch match = DirectoryMatcher.Find(baseline.Plan, primary.Plan);
                         overlay = DifferenceOverlay.Build(baseline.Plan, primary.Plan, match,
-                            baseline.Sources[0], File.GetLastWriteTime(baseline.Sources[0]));
+                            baseline.Sources[0], File.GetLastWriteTime(WindowsPaths.NativeName(baseline.Sources[0])));
                         plan = overlay.Plan;
                         overlay.Print();
                     }
-                    string root = SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, differential);
+                    string root = specifiedDestination == null
+                        ? SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, differential)
+                        : WindowsPaths.TrimSlash(WindowsPaths.Full(specifiedDestination));
+                    if (specifiedDestination != null) Console.WriteLine("指定された展開先: " + Text.Safe(root));
                     using (SafeRoot safeRoot = new SafeRoot(root, warnings))
                     {
                         SourceSet[] inputs = differential
@@ -272,18 +300,27 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             return result;
         }
 
-        /// <summary>引数中のモードスイッチを除き、入力ファイル引数だけを元の順序で返す。</summary>
+        /// <summary>モード/展開先オプションを除き、入力ファイル引数だけを元の順序で返す。</summary>
         /// <param name="args">コマンドライン引数。スイッチはどの位置でも指定可能。</param>
         /// <param name="differential">/d または -d（大文字も許容）があれば true。</param>
+        /// <param name="destination">/out: または -out: の値。未指定なら null、従来の保存ダイアログを使う。</param>
         /// <returns>後続の既存フルパス検査へ渡すファイル引数。</returns>
-        internal static string[] GetFileArguments(string[] args, out bool differential)
+        internal static string[] GetFileArguments(string[] args, out bool differential, out string destination)
         {
             differential = false;
+            destination = null;
             List<string> files = new List<string>();
             foreach (string value in args)
             {
                 if (String.Equals(value, "/d", StringComparison.OrdinalIgnoreCase)
                     || String.Equals(value, "-d", StringComparison.OrdinalIgnoreCase)) differential = true;
+                else if (value != null && (value.StartsWith("/out:", StringComparison.OrdinalIgnoreCase)
+                    || value.StartsWith("-out:", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (destination != null) throw new ArgumentException("展開先の /out: または -out: は一つだけ指定してください。");
+                    destination = value.Substring(5);
+                    if (destination.Length == 0) throw new ArgumentException("/out: の後に既存の展開先の絶対ディレクトリを指定してください。");
+                }
                 else files.Add(value);
             }
             return files.ToArray();
@@ -364,7 +401,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     try
                     {
                         string full = WindowsPaths.TrimSlash(WindowsPaths.Full(value));
-                        return Directory.Exists(full) ? full : null;
+                        return Directory.Exists(WindowsPaths.NativeName(full)) ? full : null;
                     }
                     catch (ArgumentException) { return null; }
                     catch (NotSupportedException) { return null; }
@@ -454,14 +491,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             {
                 CheckCancel();
                 string full = WindowsPaths.Full(path);
-                if (!File.Exists(full)) throw new FileNotFoundException("入力ファイルが実在しないか、読み取れません: " + full, full);
+                if (!File.Exists(WindowsPaths.NativeName(full))) throw new FileNotFoundException("入力ファイルが実在しないか、読み取れません: " + full, full);
                 full = Native.LongName(full);
                 string parent = Path.GetDirectoryName(full);
                 if (directory == null) directory = parent;
                 else if (!String.Equals(directory, parent, StringComparison.OrdinalIgnoreCase))
                     throw new ArgumentException("入力ファイルはすべて同一ディレクトリ上に必要です: " + full + " / 基準: " + directory);
                 if (!unique.Add(full)) continue;
-                using (FileStream file = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (FileStream file = new FileStream(WindowsPaths.NativeName(full), FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     FileStamp stamp = Native.Stamp(file.SafeFileHandle);
                     if (stamp.Identity != null && !identities.Add(stamp.Identity)) continue;
@@ -681,7 +718,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal SourcePart(string path)
         {
             PathName = path;
-            File = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.RandomAccess);
+            File = new FileStream(WindowsPaths.NativeName(path), FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.RandomAccess);
             try { Length = File.Length; Identity = Native.Stamp(File.SafeFileHandle).Identity; }
             catch { File.Dispose(); throw; }
         }
@@ -1738,23 +1775,136 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             while (path.Length > root.Length && path.EndsWith("\\", StringComparison.Ordinal)) path = path.Substring(0, path.Length - 1);
             return path;
         }
-        internal static string Full(string path)
+        // Win32 の概算上限。拡張プレフィックスと終端 NUL をこの枠内へ収める。
+        // OS による名前の展開やファイルシステムの要素長制限は別途適用される。
+        internal const int MaxNativePath = 32767;
+        // 物理パス全体の末尾にだけ適用する旧式の空白集合。ZIP 名の規則とは分離する。
+        private static readonly char[] LegacyTrailingWhiteSpace = new char[]
+            { '\u0009', '\u000a', '\u000b', '\u000c', '\u000d', '\u0020', '\u0085', '\u00a0' };
+
+        /// <summary>通常ドライブ/UNC の完全修飾形式だけを許可する。リンク実体は問い合わせない。</summary>
+        /// <param name="path">通常表記の絶対パス候補。不正なら ArgumentException を送出する。</param>
+        private static void CheckAbsolute(string path)
         {
             if (String.IsNullOrEmpty(path)) throw new ArgumentException("空のパスです。");
-            path = path.Replace('/', '\\');
             if (path.StartsWith("\\\\?\\", StringComparison.Ordinal) || path.StartsWith("\\\\.\\", StringComparison.Ordinal))
-                throw new ArgumentException("デバイス名前空間・拡張長パスは使用できません: " + path);
+                throw new ArgumentException("入力にデバイス名前空間・拡張長表記は使用できません。通常の絶対パスを指定してください: " + path);
             bool drive = path.Length >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
                 && path[1] == ':' && path[2] == '\\';
             bool unc = path.StartsWith("\\\\", StringComparison.Ordinal);
             if (!drive && !unc) throw new ArgumentException("相対パスは不可です。完全修飾パスが必要です: " + path);
             if (unc)
             {
-                string[] elements = path.Substring(2).Split('\\');
-                if (elements.Length < 2 || elements[0].Length == 0 || elements[1].Length == 0)
+                int separator = path.IndexOf('\\', 2);
+                if (separator <= 2 || separator == path.Length - 1 || path[separator + 1] == '\\')
                     throw new ArgumentException("UNC パスには server と share が必要です: " + path);
             }
-            return Path.GetFullPath(path);
+        }
+
+        /// <summary>
+        /// 物理絶対パスの旧正規化を補う純粋な前処理。ZIP 相対パスの検査には使用しない。
+        /// 新しい .NET の Path は要素末尾を旧方式と同じには削らないため、先にその部分だけ整理する。
+        /// </summary>
+        /// <param name="path">ユーザー等が指定した通常ドライブ/UNC の絶対パス。</param>
+        /// <returns>旧式の末尾空白/ピリオドを整理した絶対パス。'.'/'..' の解決はまだ行わない。</returns>
+        internal static string PrepareAbsolute(string path)
+        {
+            if (path == null) throw new ArgumentException("空のパスです。");
+            path = path.Replace('/', '\\');
+            CheckAbsolute(path);
+            // R04 の legacy full-check と同じ順序: 全体の末尾空白を落としてから禁止文字を検査する。
+            path = path.TrimEnd(LegacyTrailingWhiteSpace);
+            foreach (char value in path)
+                if (value < 32 || value == '"' || value == '<' || value == '>' || value == '|')
+                    throw new ArgumentException("物理パスに禁止文字があります: " + path);
+            bool unc = path.StartsWith("\\\\", StringComparison.Ordinal);
+            int start = unc ? 2 : 3;
+            StringBuilder result = new StringBuilder(path.Length);
+            result.Append(path.Substring(0, start));
+            string[] parts = path.Substring(start).Split('\\');
+            for (int index = 0; index < parts.Length; index++)
+            {
+                string original = parts[index];
+                string part = original.TrimEnd(' ', '.');
+                if (part.Length == 0 && original.IndexOf('.') >= 0)
+                {
+                    // 旧式は [dot]+[space]* だけを '.'/'..' と解釈する（'...' も '..'）。
+                    // '. .'、' .' 等を空要素に変えると別の場所になるため、従来どおり拒否する。
+                    int dots = 0;
+                    while (dots < original.Length && original[dots] == '.') dots++;
+                    if (dots == 0) throw new ArgumentException("物理パスのドット/空白要素が不正です: " + path);
+                    for (int tail = dots; tail < original.Length; tail++)
+                        if (original[tail] != ' ') throw new ArgumentException("物理パスのドット/空白要素が不正です: " + path);
+                    part = dots == 1 ? "." : "..";
+                }
+                if (part.Length != 0)
+                {
+                    if (result[result.Length - 1] != '\\') result.Append('\\');
+                    result.Append(part);
+                }
+                if (index < parts.Length - 1 && result[result.Length - 1] != '\\') result.Append('\\');
+            }
+            string prepared = result.ToString();
+            // 空要素を落とした結果が device 構文や不完全な UNC に化けていないことも検査する。
+            CheckAbsolute(prepared);
+            return prepared;
+        }
+
+        /// <summary>物理パスを正規化する。現在のドライブを使う相対入力や、実体 UNC への変換は許可しない。</summary>
+        /// <param name="path">ユーザー等から受けた通常ドライブ/UNC の絶対パス。</param>
+        /// <returns>正規化と最終形式検査を完了した通常表記。指定経路のリンクを置き換えない。</returns>
+        internal static string Full(string path)
+        {
+            string full = Path.GetFullPath(PrepareAbsolute(path));
+            CheckAbsolute(full);
+            CheckLength(full, false);
+            return full;
+        }
+
+        /// <summary>検査済み通常絶対パスの拡張表記。ZIP 名やユーザー入力を直接渡してはならない。</summary>
+        /// <param name="full">Full または検査済みの ZIP 相対名との結合で得た通常形式。</param>
+        /// <returns>ドライブ/UNC の種類と指定経路を保った拡張長表記。</returns>
+        internal static string ExtendedName(string full)
+        {
+            CheckAbsolute(full);
+            CheckLength(full, false);
+            if (full.IndexOf('\0') >= 0 || full.IndexOf('/') >= 0)
+                throw new ArgumentException("I/O パスは正規化済みの絶対パスである必要があります: " + full);
+            return full.StartsWith("\\\\", StringComparison.Ordinal) ? "\\\\?\\UNC\\" + full.Substring(2) : "\\\\?\\" + full;
+        }
+
+        /// <summary>248 文字未満は従来の Win32 表記、以降はディレクトリ作成も可能な拡張長表記を返す。</summary>
+        /// <param name="full">検査・正規化済みの通常絶対パス。表示用の文字列そのものは変更しない。</param>
+        /// <returns>その I/O 呼出しに使う通常表記または拡張長表記。</returns>
+        internal static string NativeName(string full)
+        {
+            CheckAbsolute(full);
+            CheckLength(full, false);
+            return full.Length < 248 ? full : ExtendedName(full);
+        }
+
+        /// <summary>GetLongPathNameW の結果だけを表示/比較用の通常形式へ戻す。ユーザー入力の入口ではない。</summary>
+        /// <param name="path">通常ドライブ/UNC または対応する拡張表記で返された API の成功結果。</param>
+        /// <returns>再検査済みの通常絶対パス。その他の device 名前空間は拒否する。</returns>
+        internal static string FromNativeName(string path)
+        {
+            string full = path.StartsWith("\\\\?\\UNC\\", StringComparison.OrdinalIgnoreCase) ? "\\\\" + path.Substring(8)
+                : path.StartsWith("\\\\?\\", StringComparison.Ordinal) ? path.Substring(4) : path;
+            CheckAbsolute(full);
+            CheckLength(full, false);
+            return full;
+        }
+
+        /// <summary>同じ親に一時名を付ける余地。プレフィックス・区切り・NUL を含めて計算する。</summary>
+        /// <param name="directory">正規化済みの通常形式の親ディレクトリ。</param>
+        /// <returns>利用可能なファイル名文字数（0～255）。GUID 名はこの範囲内へ収める。</returns>
+        internal static int TemporaryNameCapacity(string directory)
+        {
+            CheckAbsolute(directory);
+            CheckLength(directory, true);
+            string prefix = WithSlash(directory);
+            int extra = prefix.StartsWith("\\\\", StringComparison.Ordinal) ? 6 : 4;
+            return Math.Max(0, Math.Min(255, MaxNativePath - 1 - extra - prefix.Length));
         }
         /// <summary>ZIP 相対パスを正規化する。遡り、ADS、予約名、曖昧な 8.3 名等は全体中断。</summary>
         internal static string Relative(string name, bool directory)
@@ -1813,8 +1963,10 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
         internal static void CheckLength(string full, bool creatingDirectory)
         {
-            if (full.Length >= 260 || (creatingDirectory && full.Length >= 248))
-                throw new PathTooLongException(".NET Framework 4.0 の通常パス長制限を超えています: " + full);
+            // creatingDirectory でも 248 の旧制限を使わない。NativeName が早めに拡張表記へ切り替える。
+            int extra = full.StartsWith("\\\\", StringComparison.Ordinal) ? 6 : 4;
+            if (full.Length >= MaxNativePath - extra)
+                throw new PathTooLongException("拡張長パスの概算上限を超えています（プレフィックスと終端を含め 32,767 文字以内）: " + full);
         }
     }
 
@@ -1907,11 +2059,22 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// <summary>8.3 名の展開のみ。シンボリックリンクやドライブのリアルパス解決は行わない。</summary>
         internal static string LongName(string full)
         {
-            StringBuilder result = new StringBuilder(260);
-            uint got = GetLongPathNameW(full, result, (uint)result.Capacity);
-            if (got == 0) return full; // 親の一覧権限がない場合でも、直接読取可能なら処理を継続する。
-            if (got >= result.Capacity) throw new PathTooLongException("入力ファイルの長い名前が通常パス制限を超えています。");
-            return result.ToString();
+            // 短い 8.3 表記から 260 文字以上へ展開される場合もあるので、この API は常に拡張表記を使う。
+            string input = WindowsPaths.ExtendedName(full);
+            int capacity = Math.Max(260, input.Length + 1);
+            while (true)
+            {
+                Program.CheckCancel();
+                StringBuilder result = new StringBuilder(capacity);
+                uint got = GetLongPathNameW(input, result, (uint)result.Capacity);
+                if (got == 0) return full; // 親の一覧権限がなくても、直接読取可能なら従来どおり継続する。
+                if (got < result.Capacity) return WindowsPaths.FromNativeName(result.ToString());
+                // 不足時の返値には終端 NUL が含まれる。同値でも容量を増やして再試行する。
+                long required = Math.Max((long)got, (long)capacity + 1);
+                if (required > WindowsPaths.MaxNativePath)
+                    throw new PathTooLongException("8.3 名を展開したパスが拡張長パスの概算上限を超えています: " + full);
+                capacity = (int)required;
+            }
         }
         internal static FileStamp Stamp(SafeFileHandle handle)
         {
@@ -1929,7 +2092,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal static bool Attributes(string path, out uint attributes)
         {
             WindowsPaths.CheckLength(path, false);
-            attributes = GetFileAttributesW(path);
+            attributes = GetFileAttributesW(WindowsPaths.NativeName(path));
             if (attributes != UInt32.MaxValue) return true;
             int error = Marshal.GetLastWin32Error();
             if (error == 2 || error == 3) return false;
@@ -1939,7 +2102,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal static bool MakeDirectory(string path)
         {
             WindowsPaths.CheckLength(path, true);
-            if (CreateDirectoryW(path, IntPtr.Zero)) return true;
+            if (CreateDirectoryW(WindowsPaths.NativeName(path), IntPtr.Zero)) return true;
             if (Marshal.GetLastWin32Error() == 183) return false;
             throw Error("ディレクトリ作成失敗", path);
         }
@@ -1951,7 +2114,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             // MoveFileExW による一時ファイル確定処理と自己競合し ERROR_SHARING_VIOLATION (32) になる。
             // そのため共有は読取・書込・削除を許可する。境界安全性は共有拒否ではなく、各操作時の
             // reparse-point 検査と、作成済みディレクトリのファイル ID 照合によって確認する。
-            SafeFileHandle handle = CreateFileW(path, ListDirectory | ReadAttributes | (writeTimes ? WriteAttributes : 0),
+            SafeFileHandle handle = CreateFileW(WindowsPaths.NativeName(path), ListDirectory | ReadAttributes | (writeTimes ? WriteAttributes : 0),
                 ShareRead | ShareWrite | ShareDelete,
                 IntPtr.Zero, OpenExisting, BackupSemantics | (follow ? 0 : OpenReparsePoint), IntPtr.Zero);
             if (handle.IsInvalid) { Win32Exception error = Error("ディレクトリを安全に固定できません", path); handle.Dispose(); throw error; }
@@ -1983,7 +2146,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             WindowsPaths.CheckLength(destination, false);
             const uint MoveFileReplaceExisting = 0x00000001;
             uint flags = replace ? MoveFileReplaceExisting : 0U;
-            if (!MoveFileExW(source, destination, flags))
+            if (!MoveFileExW(WindowsPaths.NativeName(source), WindowsPaths.NativeName(destination), flags))
                 throw Error("検証済みファイルの確定失敗", destination);
         }
         /// <summary>パス名ではなく、保持している一時ファイルそのものを削除予定にする。</summary>
@@ -2116,7 +2279,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             uint attributes;
             if (!Native.Attributes(full, out attributes)) return null;
             if ((attributes & 0x400) != 0) throw new SafetyException("展開対象が symlink / junction / reparse point です: " + full);
-            SafeFileHandle handle = Native.CreateFileW(full, Native.ReadAttributes,
+            SafeFileHandle handle = Native.CreateFileW(WindowsPaths.NativeName(full), Native.ReadAttributes,
                 Native.ShareRead | Native.ShareWrite | Native.ShareDelete, IntPtr.Zero, Native.OpenExisting,
                 Native.OpenReparsePoint | Native.BackupSemantics, IntPtr.Zero);
             if (handle.IsInvalid)
@@ -2184,7 +2347,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         {
             entry = item; warnings = book;
             string prefix = WindowsPaths.WithSlash(directory);
-            int available = 259 - prefix.Length;
+            int available = WindowsPaths.TemporaryNameCapacity(directory);
             if (available < 1) throw new PathTooLongException("一時保存先を作成できるパス長がありません。");
             SafeFileHandle handle = null;
             for (int attempt = 0; attempt < 32; attempt++)
@@ -2193,7 +2356,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (name.Length > available) name = name.Substring(0, available);
                 if (String.Equals(name, Path.GetFileName(entry.Relative), StringComparison.OrdinalIgnoreCase)) continue;
                 TemporaryPath = prefix + name;
-                handle = Native.CreateFileW(TemporaryPath,
+                handle = Native.CreateFileW(WindowsPaths.NativeName(TemporaryPath),
                     Native.GenericRead | Native.GenericWrite | Native.DeleteAccess, 0, IntPtr.Zero, Native.CreateNew, 0x80, IntPtr.Zero);
                 if (!handle.IsInvalid) break;
                 int code = Marshal.GetLastWin32Error();
@@ -2265,7 +2428,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             // Commit 途中で失敗した場合は既にハンドルを閉じているため、パスで一時ファイルを掃除する。
             if (!committed)
             {
-                try { File.Delete(TemporaryPath); }
+                try { File.Delete(WindowsPaths.NativeName(TemporaryPath)); }
                 catch (Exception ex)
                 {
                     if (!Program.Recoverable(ex)) throw;
@@ -3921,7 +4084,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             if (!Native.Attributes(path, out attributes)) return;
             if ((attributes & 0x10) != 0) throw new IOException("password_list.txt がファイルではなくディレクトリです: " + path);
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
-            using (FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (FileStream file = new FileStream(WindowsPaths.NativeName(path), FileMode.Open, FileAccess.Read, FileShare.Read))
             using (StreamReader reader = new StreamReader(file, new UTF8Encoding(false, true), false))
             {
                 bool first = true;
