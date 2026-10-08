@@ -1302,3 +1302,296 @@ set "DNNT_REF4=C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.
 
 配布 R03 ソースの SHA-256: `266ad239890e856f78c2be0c00871a846b9f7e0f214dddf21502e71c68de9ac2`。
 
+
+
+###### ============================================================
+
+## 2026/10/08 06:00:19 (JST) — 今回の R04 — DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04 — 標準 Deflate 化・CPU コア数に応じた並列展開
+
+### 1. 今回の依頼と結論
+
+R03 の ZIP 構造認識、通常・ハイブリッド・差分展開、保存先検査と対話を引き継ぎ、CPU を多く使う圧縮ストリームの展開を高速化した。通常の Deflate は .NET Framework 標準の `DeflateStream` を使用し、独立したエントリの復号・展開・完全性検証を、`Math.Max(Environment.ProcessorCount - 1, 1)` を上限とするワーカーへ渡す。
+
+対象フレームワークは **.NET Framework 4.8** とした。ZIP のヘッダ解釈を `ZipArchive` 等へ置き換えたものではない。ZIP 構造、暗号、CRC、差分対応、出力先保護は本体の既存処理を用いる。追加の NuGet パッケージ、外部 ZIP DLL、外部解凍コマンドはアプリケーションの実行に不要である。
+
+#### 1-2. 【警告: 曖昧な仕様】今回の具体化
+
+- **CPU コア数**は、.NET Framework の `Environment.ProcessorCount` が返す論理プロセッサ数として扱った。物理コア数を WMI 等で調査する処理は加えていない。並行度は採用ファイル数も上限とし、一件または一ワーカー相当の場合は主スレッドで直接展開する。
+- **並列化できる範囲**は、復号・展開・CRC/AES 認証と入力読取りである。パスワード対話、上書き選択、保存先ディレクトリ作成、最終名への確定、警告、集計、差分失敗後の復元は、結果や判断が先後に依存するため元順で行う。後続ファイルの準備だけを理由として保存先を先行作成しない。
+- **標準展開器への変更と従来の正常入力の維持**を両立するため、通常は標準の native inflater を使い、標準 inflater が入力形式を拒否した場合だけ旧 `StrictDeflate` で完全再検証する。従来成功する `HDIST=31/32` の一部を標準 zlib が拒否する具体例を確認したためである。通常成功時に旧 inflater を重ねて実行する構成ではない。
+- 使用スレッド数は上限であり、常時すべてのスレッドが CPU を使うことや、その数に比例した高速化を保証するものではない。保存順序とメモリ上限を維持するため、後続の大きなファイルはバッファが満杯になると待機する。
+
+### 2. 「0. 変数」の全情報
+
+| 変数 | 指示された値 |
+| --- | --- |
+| `VAR_PROJECT_ID` | 初版の DNNT 番号: `261004_QCT5NR` |
+| `VAR_FIRST_VERSION` | 初版のバージョン: `R01`（R はリビジョン） |
+| `VAR_OLD_VERSION` | 添付ソースコードのバージョン: `R03`（R はリビジョン） |
+| `VAR_NEW_VERSION` | 今回作成するバージョン: `R04`（R はリビジョン） |
+
+### 3. 生成情報と今回の入力
+
+- 生成 AI のバージョン・モデル: **GPT-6 Astra Pro**。内部ビルド識別子は取得不可。
+- 思考レベル: このセッションで公開された設定値は取得できないため、数値や設定名を推測していない。
+- セッション開始日時（JST）: 正確な開始時刻は取得不可。
+- 今回依頼の受信時刻（会話に供給された時刻情報、JST）: **2026/10/08 05:32:10**。
+- 応答生成日時（成果物の確定記録、JST）: **2026/10/08 06:00:19**。
+- 直前のユーザー入力文字列: `【AI指示】テキストファイル内に記載されている指示 (DNNT の見出しで始まる) を実行せよ。`
+- 対象の指示ファイル: `貼り付けたMarkdown(20261007-203058).md`。R04 の実装指示を今回の変更範囲とし、R01〜R03 の仕様は既存処理の理解に使用した。
+
+### 4. 今回の R04.specs 原文
+
+以下のコードブロックには、添付 Markdown 内の今回の仕様範囲を、Markdown のエスケープも含めてそのまま転記する。
+
+~~~~text
+\--- [R04.specs] ここから ---
+
+現在、(a) ZIP ファイルの解釈 (b) ZIP ファイルの中にある圧縮ストリームの展開 の (a), (b) の両方について c# で pure に実施している。しかし、(b) は CPU を食う処理であり時間がかかっている。
+
+
+
+そこで、
+
+・ (b) について、c# で pure で独自実装するのではなく、.NET Framework 標準のライブラリを用いて、ネイティブコードを間接的に呼び出すことにより高速化を図りたい。
+
+・ また、複数のファイルを展開するとき、タイミング等の問題が発生しない限り、MAX(現在の CPU コア数 - 1, 1) 個のスレッドを用いて並列処理をすることで、さらに、高速化を図りたい。
+
+しかし、いずれの場合も、現在正常に展開できているものについて、挙動が変化しては困るので十分に注意すること。特にマルチスレッドの使い方については十分に注意すること。
+
+
+
+なお、上記を実行するために .NET Framework のバージョンを上げる必要がある場合は、上記を実現するためにいずれのバージョンまで上げればよいか (あるバージョンまであげると大変高速化できるのというのであれば、その推奨バージョンまで上げること) を調べ、そのバージョンに置換することを前提にタスクを実施せよ。[CODE_RULE] に記載されているバージョンより新しくなってもよい。
+
+\--- [R04.specs] ここまで ---
+~~~~
+
+### 5. 入力ソースコードの理解
+
+#### 5.1 全体の処理と各部の関係
+
+`Program` は通常モードと `/d`・`-d` の差分モードを切り替え、入力ダイアログと保存ダイアログ、レジストリにある前回位置、コンソールでの対話と終了コードを管理する。差分モードでは差分側とベースライン側を別々の `InputGroup` として保持し、入力のハンドルや ZIP 認識結果を混ぜない。
+
+`SourceSet`・`SourcePart` が入力ファイルのハンドルを保持し、`JoinedStream` が断片を一つのシーク可能な論理ストリームとして見せる。`Detector` は各ファイル単独、全断片の連結、`Q.zip.P` で推定した群ごとの連結を構造検証し、一意な解釈を採用する。`ZipReader` は EOCD・ZIP64・中央ヘッダ・ローカルヘッダ・data descriptor の位置と値を照合する。物理的な ZIP 結合ファイルは作らない。
+
+`ExtractionPlan` は ZIP 内の仮想パスを Windows の規則で正規化し、危険パスやリンク属性、ファイルとディレクトリの衝突、重複、入力自身への上書き、出力先の状態を検査する。重複確認後は最初のエントリだけを `Keep=true` として採用する。暗黙の親ディレクトリも含めて日時計画を作る。
+
+差分モードの `DirectoryMatcher` は、相対的に一致するファイル数とディレクトリ数の合計が最大、次に基準の深さ合計が最小となる一意な対応を求める。共通名への投影、同一部分木の共有、直下要素の転置索引、上界による枝刈りを使う既存の厳密照合である。`DifferenceOverlay` はベースラインの基準配下を差分の基準へ移し、基準外を日時別の退避領域へ配置する。差分により置換するベースラインは通常省略し、既存コードが復元へ進む条件に該当した場合だけ読み出す。この照合・配置アルゴリズムは今回変更していない。
+
+`Extractor` は元順でファイルを処理し、`OverwritePolicy` が初回と確定直前の上書き判断を行う。`PasswordManager` は既知候補を順に完全検証し、必要なときだけユーザーへ質問する。`ignore` 後も既知候補で成功する暗号化ファイルは展開する。候補判定で出力エラーをパスワードエラーと混同しないよう、候補は `Stream.Null` に全展開して検証した後、保存時にもう一度展開する。今回この二段階の意味は保持した。
+
+`EntryCodec` は Store/Deflate と無暗号/ZipCrypto/WinZip AES を組み合わせ、宣言サイズ、CRC、AES 認証を検証する。`SafeRoot` は出力ルートと配下を検査し、`StagedFile` は同じディレクトリの未確定ファイルに保存した後で最終名へ移す。ディレクトリ日時は作成時に設定し、処理終了後に深い順で戻す。R04 のワーカーにはこれらの出力先操作を渡していない。
+
+#### 5.2 【重要】今回初めて確認した、既存コードと説明・仕様の不一致
+
+**R03 は、一部の ZIP 破損を個別警告として処理せず、処理全体を中断する。今回この既存挙動は変更していない。**
+
+原因は `Program.Recoverable` の例外分類である。同関数は `IOException` 等を回復可能としているが、`System.IO.InvalidDataException` は `IOException` の派生ではなく `SystemException` の派生であり、この条件に含まれない。[資料6](https://learn.microsoft.com/en-us/dotnet/api/system.io.invaliddataexception?view=netframework-4.8) CRC 不一致や多くの Deflate 構造不正は `InvalidDataException` で通知されるので、`Extractor.Run` の catch から再送出され、通常は終了コード 13 で全体が終わる。その場合、後続のベースライン復元条件へも到達しない。
+
+これに対し、既存 README の一般的な破損時の説明、ソース上部の「個別の破損・保存失敗は警告して継続」という説明、および過去仕様には、個別警告・継続・復元を期待する記述がある。暗号の候補判定だけは `PasswordManager.TryPassword` が `InvalidDataException` を明示的に捕捉するため、すべての暗号化ファイルが同じ経路になるわけでもない。
+
+過去の履歴にこの型階層を原因とする指摘は見つからなかった。意図的に説明と実装を変えた証拠はなく、例外型の理解または説明の誤りと考えるのが自然である。ただし、今回の指示は既存コードと過去仕様が相違した場合にはコードを優先し、明示されていない修正を行わないというものなので、`Recoverable` はそのまま保持した。並列側も `ExceptionDispatchInfo` により元の例外型とスタックを主スレッドへ伝え、この分類を変えない。
+
+既存履歴で既に説明された相違は、この節に再列挙していない。入力メインソースの SHA-256 は `266ad239890e856f78c2be0c00871a846b9f7e0f214dddf21502e71c68de9ac2` であり、R03 履歴の配布値と一致した。
+
+### 6. R04 の実装内容と判断理由
+
+#### 6.1 .NET Framework 4.8 を選んだ理由
+
+Microsoft の説明で、**DeflateStream の「展開」側が native 実装を標準使用するのは .NET Framework 4.7.2 以降**と確認した。4.5 からの zlib の説明を、そのまま今回の展開側の変更時期と解釈してはいけない。4.7.2 が必要な変更の境目であり、今回は Visual Studio 2026 の対応対象でもある 4.8 を採用した。4.8.1 への更新による本処理固有の追加高速化を示す根拠は確認しておらず、その版まで実行環境を引き上げる必要はないと判断した。[資料1](https://learn.microsoft.com/en-us/dotnet/framework/whats-new/)[資料2](https://learn.microsoft.com/en-us/visualstudio/releases/2026/compatibility)
+
+`App.config` で 4.8 の実行環境を指定し、native 展開の互換スイッチを false にする。同時に、ターゲット変更によってパスの正規化や MAX_PATH の既定が変わらないよう、`Switch.System.IO.UseLegacyPathHandling=true` と `Switch.System.IO.BlockLongPaths=true` を起動時から設定した。`Main` でも同じ設定を最初のファイル処理より前に行う。設定ファイルは、Main より前のランタイム初期化にも設定を適用する役割を持つ。[資料3](https://learn.microsoft.com/en-us/dotnet/framework/migration-guide/mitigation-path-normalization)[資料4](https://github.com/microsoft/dotnet/blob/main/Documentation/compatibility/long-path-support.md)
+
+#### 6.2 標準展開でも、切断と余分な圧縮データを見逃さない仕組み
+
+単に `DeflateStream` の出力サイズと CRC が合うだけでは十分ではない。本文の全バイトが既に出力されていても、最終ブロックの終端が切れているケースがある。また、標準 stream は先読みするため、単純な基底 stream の `Position == Length` だけでは終端後の余分なデータを見分けられない。対象 Framework の参照実装は、inflater の終端を確認した後で次の入力を要求し、基底 stream が 0 を返すと終端未確認のまま Read を終える経路も持つ。[資料5](https://github.com/microsoft/referencesource/blob/main/System/sys/system/IO/compression/DeflateStream.cs)
+
+そこで `NativeDeflateInput` は、暗号ヘッダや AES タグを除いた圧縮ペイロードを次の規則で渡す。
+
+1. 最後の一バイトを、それ以前の Read に混ぜず、必ず独立した Read で渡す。
+2. 宣言された圧縮バイトを全部渡した後で、まだ標準 inflater が入力を要求した場合は、EOF の 0 を返さず切断として拒否する。
+3. 出力サイズに到達しただけでは読み終わらず、非ゼロのバッファで `DeflateStream.Read` が 0 になるまで読む。
+4. その時点で圧縮ペイロードが一バイトも残っていないことを確認する。
+
+もし ZIP の圧縮領域に終端後の余分な一バイト以上があれば、正しい終端は留保した最終バイトより前にある。標準 inflater がそこで終了すると最終バイトが未提供のまま残るため、余分なデータを検出できる。逆に終端が未完成なら、最後のバイトを渡しても追加入力が必要になり、切断として拒否される。最終バイト内の未使用パディングビットの値は、従来と同じく制限しない。
+
+出力は `OutputWindow.Stored` に大きなブロックで渡し、従来のサイズ上限と CRC 計算を使用する。AES の認証タグは従来どおり全ペイロードの処理後に照合する。`DeflateStream` の破棄で復号 stream を先に閉じないよう、`leaveOpen=true` を使う。
+
+#### 6.3 従来成功する特殊な Deflate の互換再試行
+
+旧実装は、dynamic ブロックで距離コード長が 31 個または 32 個宣言され、予約済み距離コードが実際には使われない一部の入力を受理できる。標準 zlib はこの宣言を拒否する場合がある。実際にこの相違を示す自己作成データを用意し、旧方式の成功と標準方式の拒否を検証した。
+
+`NativeDeflate.Inflate` は **標準 Read が投げた入力形式の `InvalidDataException` だけ**を内部の `NativeDeflateException` として識別する。`EntryCodec.WriteVerified` はこれを受けると未確定出力を開始位置へ戻し、同じ固定済み入力ハンドルから新しい論理 stream・復号器・CRC 状態を作って、旧 `StrictDeflate` による全検証を一度だけ行う。途中まで出た native の平文に、旧方式の平文を追記してしまうことはない。
+
+シーク可能な一時ファイルは位置と長さを戻す。ワーカーの非シーク出力では `IRestartableOutput.Restart` を使い、データの順序の中に Reset 命令を送り、主スレッドが先行データを書き終えた後で一時ファイルを戻す。`Stream.Null` は出力破棄なので巻戻し操作が不要である。旧方式でも失敗する入力は成功にならない。
+
+書出しエラー、CRC 不一致、出力サイズの不一致、AES 認証の失敗を native の形式互換エラーと混同しないよう、出力処理とそれらの検証は標準 Read の catch の外に置いた。通常の native 経路で不要な旧 inflater の 32 KiB 履歴と 128 KiB 出力配列は、旧方式の最初の Literal 呼出しまで確保を遅らせた。
+
+#### 6.4 入力読取りの競合を防ぐ
+
+R03 の各 `JoinedStream` は論理位置を別々に持つが、その内部で参照する `SourcePart.File` は共有されている。単純に展開ループを並列化すると、一方が位置を設定した直後に他方が位置を変え、異なるデータを読む競合が起きる。
+
+R04 は `SourcePart` ごとの `ReadLock` で、**位置の確認・設定と一回の FileStream.Read の組**を保護する。圧縮データの復号・展開・CRC 計算はこのロックの外で並列に進む。入力をパスで何度も開き直さず、既存のハンドルによる入力実体の固定を維持する。全ワーカーが終わるまで入力の所有者を破棄しない。
+
+#### 6.5 並列計算と、元順で行う操作
+
+`ParallelExtraction` は必要に応じてワーカーを開始し、同じスレッドを次のファイルに再利用する。保持する未採用ジョブも最大 N 件とし、数十万ファイルを一度に Task 化しない。`EntryWork` が一つのエントリを担当し、ワーカーからは出力先、上書きポリシー、警告一覧、成功数、コンソールへアクセスしない。
+
+`EntryPipe` の平文バッファは一ジョブにつき最大 128 KiB × 8 個、すなわち最大 1 MiB である。小さいファイルは宣言サイズに応じた小さいバッファを使う。バッファは再利用し、未採用の平文は解放時に消去する。この上限は受渡し用平文バッファの値であり、native inflater、復号器、入力バッファ、スレッド等のメモリは別途必要である。
+
+主スレッドは従来のエントリ順で、進捗表示、初回上書き検査、必要なパスワード判断、親作成、一時保存先作成、データ転送、完全性検証の成功確認、日時、確定直前の上書き検査、Commit、警告と集計を行う。後続ワーカーが先に失敗しても、その場では表示しない。後で初回上書き確認が拒否されたファイルは従来どおり省略し、不要になった先読み結果の破損エラーを追加報告しない。
+
+新たに入力されたパスワードの候補順を守るため、ワーカーには候補配列と版番号の不変な `PasswordSnapshot` を渡す。ワーカーは既知候補を従来の完全検証で調べるだけで、候補追加、順序変更、`ignore` の判断、質問はしない。結果を使う段階で候補版を照合し、古い候補に基づく結果は採用しない。
+
+未知パスワードへの質問、明示ディレクトリの処理、ベースライン復元の前では、先読みジョブを停止して終了を待つ。質問で選択されたパスワードを使う再投入や、その後の候補更新も主スレッドの元順に沿う。これにより、ユーザーの入力で後続の判断が変わる意味と CPU 計算数の上限を保つ。復元では従来と同じ差分エントリを上書き許可のキーとし、上書き拒否を復元で迂回しない。
+
+#### 6.6 中断・例外・後片付け
+
+既存の全体中断に加えて、`Program.CheckCancel` が ThreadStatic のワーカー固有停止要求も確認する。キューが空または満杯で待っている場合にも停止を検査し、個別停止時に待機を起こす。全体終了時は全ジョブへ先に停止を通知してから全終了を待ち、常駐ワーカーも Join する。
+
+主スレッドへ戻す例外は `AggregateException` 等に置き換えず、元の型とスタックを保持する。成功したジョブも結果転送の後で回収し、失敗・省略・全体中断時にもワーカーが入力を読んだまま所有者を破棄しない。呼出元が既存ディレクトリ日時の復元に進むのは、この後である。OS の実 I/O 自体が停止している状況に対する新しい強制中断機構は追加していない。
+
+### 7. R03 からの具体的変更位置
+
+行番号は今回配布するメインソースのもの。過去ソースは添付 R03 を基準とする。
+
+| 包含クラス・関数 | R03 開始行 | R04 開始行 | 具体的変更 |
+| --- | ---: | ---: | --- |
+| `Program.Main` | 114 | 143 | native 展開と従来パス動作の互換スイッチを、最初のファイル処理前に設定。 |
+| `Program.CheckCancel` | 505 | 539 | 全体中断と別に、ThreadStatic のワーカー固有停止要求を検査。 |
+| `Program.Recoverable` | 511 | 548 | 変更なし。今回判明した既存の InvalidDataException の分類も保持。 |
+| `SourcePart` | 636 | 673 | 共有する物理 FileStream ごとの読取りロックを追加。 |
+| `JoinedStream.Read` | 716 | 755 | 同じ入力 part の Position 確認・設定と Read を同じ lock 内へ移動。 |
+| `PasswordSnapshot` | 新設 | 3363 | 候補の防御的コピーと版番号を保持する不変のスナップショット。 |
+| `EntryPipePacket` / `EntryPipe` | 新設 | 3381 | 上限付きバッファ、順序付き Reset、失敗と完了、停止通知を実装。EntryPipe は 3392 行から。 |
+| `EntryWork` | 新設 | 3600 | 既知候補の完全検証・展開を一件ずつ担当し、例外を元型で保持。採用時の転送と確実な終了待ちを提供。 |
+| `ParallelExtraction` | 新設 | 3751 | N 以下の保持ジョブ・再利用ワーカー、投入・回収・全停止と Join を管理。 |
+| `PasswordManager` | 3318 | 3884 | 既存候補順と対話を維持し、スナップショットと版管理、ワーカー用の既知候補照合を追加。 |
+| `Extractor.Run` / `RunEntries` | 3432 | 4042 | CPU 数とファイル数から上限を決定。元順の制御本体を RunEntries（4061 行）へ移し、ディレクトリ・復元境界で停止。 |
+| `Extractor.FillAhead` | 新設 | 4119 | 明示ディレクトリを越えずに最大 N 件を準備し、保存先と対話へ触れない。 |
+| `Extractor.ExtractPreparedFile` | 新設 | 4137 | 初回上書き確認、候補版照合、必要なパスワード対話、結果の保存を元順で実行。 |
+| `Extractor.SaveFile` | 3519 | 4248 | 旧 ExtractFile の親作成・一時保存・日時・上書き再確認・Commit を共有化。直接 codec と worker 転送を同じ保存処理へ接続。 |
+| `EntryCodec.WriteVerified` | 3583 | 4309 | native の入力形式拒否だけを識別し、出力を巻き戻して旧方式で一度だけ完全再検証。 |
+| `EntryCodec.WriteVerifiedCore` / `Decode` | 3612 | 4343 | 入力と暗号状態を毎回新規構築。Decode（4372 行）が通常 native / 再試行 legacy を選ぶ。サイズ・CRC・AES 認証を維持。 |
+| `IRestartableOutput` | 新設 | 4395 | 非シーク出力でも、既出データの取消しを転送順に通知できる内部契約。 |
+| `NativeDeflateException` / `NativeDeflateInput` | 新設 | 4403 | 形式互換再試行の内部識別と、最終一バイトを留保する入力ラッパー。NativeDeflateInput は 4417 行から。 |
+| `NativeDeflate.Inflate` | 新設 | 4479 | 標準 DeflateStream のブロック出力を既存のサイズ・CRC 検証へ渡し、終端・余分データを検査。 |
+| `OutputWindow.Literal` | 3813 | 4693 | 旧方式でのみ必要な履歴・pending 配列を、最初の Literal まで遅延確保。 |
+
+ソースを字句単位で区切って比較し、既存 55 型のうち **48 型の本体がそのまま**であることを確認した。変更した既存型は `Program`、`SourcePart`、`JoinedStream`、`PasswordManager`、`Extractor`、`EntryCodec`、`OutputWindow` の 7 型、新設は 9 型である。とくに `Detector`、`ZipReader`、差分照合・再配置、`SafeRoot`、`StagedFile`、`OverwritePolicy`、`Crc32`、`ZipCryptoStream`、`AesReadStream`、`StrictDeflate`、`DeflateBits`、`Huffman` は変更していない。
+
+`Lib.cs` は **一バイトも変更していない**。既存ソリューションもファイル名の添付用重複接尾辞を外した以外、内容は元と一致する。新たに生成・改修した C# ソースは、指定されたメインファイル一個である。ZIP に含まれるもう一個の C# は既存 `Lib.cs` のそのままの同梱である。
+
+プロジェクトは `TargetFrameworkVersion=v4.8` と今回のメインファイル名へ変更した。既存 `Lib.cs` の構文をビルドできるよう `LangVersion=7.3`、従来の AnyCPU 実行を明確にするため `Prefer32Bit=false` を指定した。添付に存在しない `app.ico` は、存在する場合だけ参照する条件にしたため、提供された一式だけでもアイコン欠落を理由にビルドを止めない。存在するアイコンは従来どおり使用する。既存の Exe、名前空間、アセンブリ名、参照ライブラリは維持した。`App.config` をプロジェクトへ登録し、ビルド時に EXE に対応する設定ファイルが出力される構成とした。
+
+#### 7.1 検証結果
+
+##### 7.1.1 配布ソースの実コンパイル
+
+コンパイラは Mono mcs 6.8.0.105、参照アセンブリは Microsoft 正規配布の `Microsoft.NETFramework.ReferenceAssemblies.net48` 1.0.3 を使用した。コンパイラそのものを Microsoft 正規配布の .NET 8.0.15 browser-WASM 上で実行しており、C# の意味を別言語へ移植した構文検査ではない。既定参照を無効にし、4.8 の参照を明示した。
+
+| 配布対象と指定 | 結果 |
+| --- | --- |
+| 統合済み本体単独 / C# 4 / AnyCPU / WinExe / 最適化あり | コンパイル成功、警告なし。 |
+| 統合済み本体 + 添付と同一の Lib.cs / C# 7.2 / 全プロジェクト参照 / AnyCPU / Exe / 最適化あり | コンパイル成功、警告なし。 |
+
+後者は、プロジェクトの C# 7.3 設定で使えるソースが、検証用コンパイラの対応する 7.2 構文の範囲でもビルドできることを確認したもの。Visual Studio 2026、MSBuild、C# 7.3 コンパイラ自体を実行した検証ではない。ヘッダの生成日時を確定した後の配布ソースでも、上記の両ビルドを再実行した。
+
+##### 7.1.2 実 C# codec と境界の検証
+
+| 検証 | 実施結果と確認した範囲 |
+| --- | --- |
+| 標準 Deflate 境界 | **162 入力、1,941 アサーション合格**。平文 0～262,144 bytes、出力バッファ境界、1 / 7 / 4,096 / 8,192 bytes 等の細切れ読取り、最終一バイト切断、余分な 1 / 2 / 8,193 bytes、サイズ不一致、空圧縮入力。統合 R04 の codec でも実行。 |
+| 統合 codec 回帰 | **1,012 アサーション合格**。raw 23 ケース、エントリ 31 ケース、切断位置 379 個。Store、fixed / dynamic / stored Deflate、ZipCrypto、CRC・サイズ不一致、BFINAL・Huffman・逆参照等の不正構造、非ゼロ padding を検証。 |
+| 互換再試行 | HDIST=31/32 の従来成功入力を確認。途中で **196,605 bytes** の平文が出た後の標準 inflater 失敗についても、seek 巻戻し、非 seek の Reset、Stream.Null で旧方式の出力と一致。出力側の IOException / InvalidDataException が形式再試行と誤認されないことも確認。 |
+| 変形入力の新旧比較 | **5,000 ケース**。両方成功 881、両方拒否 4,116、旧方式のみ成功 3、新方式のみ成功 0、双方成功時の平文差 0。旧方式のみの 3 件は HDIST=31 と未使用 padding の既知互換範囲で、再試行の対象。 |
+
+変形入力は 21 個の種からビット反転、バイトの挿入・削除・切断・追記・連結、ブロック境界変更等で作った。最大圧縮サイズは 1,092 bytes、出力上限は 1 MiB、入力の Read 上限は 1 / 7 / 4,096 bytes とした。全 Deflate ビット列の完全列挙ではない。
+
+統合 codec 試験では、本物の JoinedStream / SliceStream / EntryCodec と実 DeflateStream を使い、Windows の Native.Stamp を呼ぶ入力初期化だけを検証用に置き換えた。暗号は ZipCrypto の Store / Deflate、bit 3 の有無、誤パスワード、HDIST 互換再試行を実行した。**AES の AE-1 / AE-2 × 128 / 192 / 256 bit × Store / Deflate の 12 ケースは用意したが、このランタイムでは AesCryptoServiceProvider の暗号器を作成できず、すべてスキップした。AES の回帰合格とは数えていない。**
+
+##### 7.1.3 並列部品と既存の制御順
+
+| 検証 | 結果 | 限界 |
+| --- | --- | --- |
+| pipe / worker の部品境界 | **13 ケース合格**。Reset 順序、既存出力の巻戻し、例外の同一性、停止後の出力拒否、候補の防御的コピーと版、パスワード byte の消去、局所キャンセル状態の復元等。 | 単一スレッド WASM 上の実クラス試験。関連サービスには検証用 double を含み、実 Thread 群は走らせていない。 |
+| Extractor の制御順比較 | **10 シナリオ × 3 経路 = 30 ケースで一致**。R03 逐次 / R04 逐次 / R04 準備済み worker 経路を比較。 | 実際の Extractor 制御本体に、保存・上書き判断・応答・worker 等の検証用 double を組み合わせたもの。Win32 保存と実並列の試験ではない。 |
+
+制御順は、上書き照会、意味のあるパスワード質問、親・一時保存作成、展開、日時、確定、保存 bytes、警告・進捗、集計、外へ出る例外型まで比較した。先読みした破損ファイルを上書き拒否した際の非報告、CRC 不一致による既存の全体中断、回復可能な IO 失敗や保存失敗からの復元、ignore 後の復元、確定直前の上書き拒否、計画エラー、非対応方式、ディレクトリ境界を含む。比較した R04 Extractor の本体は配布版と一致する。
+
+##### 7.1.4 展開単体の参考時間
+
+自己生成した各 **2 MiB** の平文を用意し、旧方式と標準方式で全平文 bytes と CRC が一致することを計時外で確認した後、各方式を 3 回交互に計時した。計時内はストリーム・出力窓・inflater の生成、展開、CRC、Dispose、自然に発生する GC を含み、出力は Stream.Null とした。fixture のディスク読取りとウォームアップは計時外である。
+
+**以下は .NET 8.0.15 browser-WASM 上の展開単体の参考値であり、Windows .NET Framework 4.8 での性能測定ではない。managed C# と native WASM の実行方式の差も含むため、倍率を Windows に当てはめることはできない。**
+
+| データ | 圧縮 bytes | 旧 StrictDeflate の 3 標本 ms | 標準 NativeDeflate の 3 標本 ms | 旧中央値 ms | 標準中央値 ms |
+| --- | ---: | --- | --- | ---: | ---: |
+| 高圧縮の反復 | 5,125 | 368.861 / 365.713 / 361.596 | 32.151 / 26.924 / 32.372 | 365.713 | 32.151 |
+| 通常テキスト | 442,672 | 569.541 / 573.880 / 582.416 | 38.067 / 43.452 / 38.296 | 573.880 | 38.296 |
+| 低圧縮の疑似乱数 | 2,097,792 | 725.634 / 733.844 / 799.121 | 34.727 / 35.465 / 108.089 | 733.844 | 35.465 |
+
+この限定環境の全標本では標準方式の所要時間が短かった。低圧縮データでは標準側に 108.089 ms の遅い標本もあるため、生値を省略せず記録した。ZIP 全体の認識、暗号、ディスク IO、対話、並列出力を含むアプリケーション全体の測定ではない。
+
+##### 7.1.5 配布一式の整合性
+
+指定された DNNT ヘッダ、単一 Main、メインの UTF-8 BOM と CRLF、プロジェクトの参照先、Framework と App.config の設定、Lib.cs とソリューションの入力との一致を検査した。README は入力の全バイトを接頭辞として保持し、R04.specs の原文をそのまま含めた。ZIP 内の六ファイルが配布用の原本と一致し、全エントリの CRC 検査も通ることを確認した。
+
+### 8. 適用方法・制約・未検証範囲
+
+#### 8.1 同梱一式でビルドする
+
+1. ZIP を新しい作業フォルダへ展開する。
+2. Visual Studio 2026 で `dn_multiple_zip_extractor-VS2026.sln` を開く。.NET デスクトップ開発と .NET Framework 4.8 のターゲット環境が必要である。
+3. 実行速度を評価する場合は **Release / Any CPU** でビルドする。Debug の最適化なし設定を実行性能の比較に用いない。
+4. 生成された `dn_multiple_zip_extractor.exe` と対応する `.exe.config` を同じ場所に置く。実行先には .NET Framework 4.8 が必要である。
+5. 既存と同じ通常起動、ZIP ファイルのフルパス引数、または `/d`・`-d` を使用する。パスワード候補ファイルを使う場合の配置と UTF-8 の形式も従来どおりである。
+
+既存プロジェクトへ組み込む場合は、従来のメインファイルを今回の内容で置き換え、ターゲットを 4.8 に更新し、同梱 `App.config` の設定を既存の設定に反映する。今回のバージョン付きファイル名を採用する場合は `Compile Include` もその名前へ変え、メインソースを二重登録しない。`Lib.cs` の差替えは不要である。
+
+本体単独の C# 4 構文と .NET Framework 4.8 API を明示的に検査する場合の Windows **cmd.exe** 用の例は次のとおり。コンパイラと `DNNT_REF48` は、実際に導入された正規環境に合わせる。
+
+~~~bat
+set "DNNT_REF48=C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8"
+"%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe" ^
+  /nologo /noconfig /nostdlib+ /target:winexe /platform:anycpu /langversion:4 /checked- /optimize+ /codepage:65001 ^
+  /out:"dnnt_261004_qct5nr_split_zip_extract.exe" ^
+  /reference:"%DNNT_REF48%\mscorlib.dll" ^
+  /reference:"%DNNT_REF48%\System.dll" ^
+  /reference:"%DNNT_REF48%\System.Core.dll" ^
+  /reference:"%DNNT_REF48%\System.Windows.Forms.dll" ^
+  "dnnt_261004_qct5nr_split_zip_extract_r04_261008_flvs83.cs"
+copy /y "App.config" "dnnt_261004_qct5nr_split_zip_extract.exe.config"
+~~~
+
+#### 8.2 実行環境と性能についての限界
+
+- **Windows と .NET Framework 4.8 の実機では実行していない。** 実コンパイルと上記の C# 検証は行ったが、Windows の入出力ダイアログ、レジストリ、コンソールのキー入力、Explorer 起動、Native.Stamp、実出力の日時と MoveFileExW、UNC/NAS、実機の x86 / x64 を含む一連の操作は未検証である。
+- **実際の複数 Thread を同時に動かすストレス試験は未実施。** 利用可能な単一スレッド WASM では部品と制御を検証できたが、正規の native CLR とブラウザのスレッド対応ランタイムを試した経路は、この実行環境の制限により管理コードまたはブラウザの起動まで進まなかった。実スレッド用の試験コードはコンパイルしたが、成功した試験として計上していない。競合・停止の設計レビューと単一スレッドの検査が、実並列の完全な証明になるとは扱わない。
+- **AES の 12 ケースはランタイムの暗号器未対応で未実行。** 既存 AesReadStream はそのまま保持し、標準 inflater からの所有権と認証呼出しの順序を点検したが、今回の実行試験は AES 回帰の合格根拠にはならない。
+- R02 の履歴にある実サンプルは、今回の R04 では新たに取得・再実行していない。試験データは自己生成した。今回参照不要な過去サンプルの URL とパスワードは追記していない。
+- 検証用の Mono、net48 参照アセンブリ、.NET WASM、テスト fixture、試験用 double は配布物や実行時依存へ加えていない。新規の外部 ZIP ライブラリは不要である。
+
+標準 inflater の終端検査は対象 Framework の Read の実装順序に基づくため、別の .NET 系列へ移植する際には、切断・余分な圧縮データ・空の内容・出力バッファ境界の回帰試験を再実施する必要がある。旧方式への再試行は通常処理の追加パスではなく、形式解釈の失敗時に限定した互換経路である。
+
+処理時間は、ファイルの個数と大きさ、圧縮率、暗号方式、候補数、保存先の速度、入力の物理配置、確認待ち時間に影響される。特に複数の巨大ファイルでは、保存順序を守る有限の先読みバッファが並列度を制約する。基準照合や ZIP 構造検査、実ディスクへの保存が支配的な入力では、Deflate の高速化率と全体の高速化率は一致しない。Windows 上での実測なしに、このアプリが何倍速くなったと断定しない。
+
+第5.2節の既存 `InvalidDataException` の分類は今回維持した。保存の原子性、出力先リンク、UNC/NAS、既存の競合、MAX_PATH 等に関する過去の制約も継承する。既存の注意を今回の高速化で解消したとは扱わない。
+
+#### 8.3 参照した一次資料
+
+- [資料1: Microsoft — What's new in .NET Framework / DeflateStream の展開変更](https://learn.microsoft.com/en-us/dotnet/framework/whats-new/)
+- [資料2: Microsoft — Visual Studio 2026 Platform Targeting and Compatibility](https://learn.microsoft.com/en-us/visualstudio/releases/2026/compatibility)
+- [資料3: Microsoft — Mitigation: Path Normalization](https://learn.microsoft.com/en-us/dotnet/framework/migration-guide/mitigation-path-normalization)
+- [資料4: Microsoft — Long path support](https://github.com/microsoft/dotnet/blob/main/Documentation/compatibility/long-path-support.md)
+- [資料5: Microsoft Reference Source — DeflateStream.cs](https://github.com/microsoft/referencesource/blob/main/System/sys/system/IO/compression/DeflateStream.cs)
+- [資料6: Microsoft — InvalidDataException](https://learn.microsoft.com/en-us/dotnet/api/system.io.invaliddataexception?view=netframework-4.8)
+
+#### 8.4 配布内容の照合
+
+メインソース: `dnnt_261004_qct5nr_split_zip_extract_r04_261008_flvs83.cs`
+
+SHA-256: `b77ac96ce5aec7499b52ab6ec1b373ed45616896cd700820ec807eb4489e3bb5`
+
+今回の ZIP は同ソース名の末尾へ `.zip` を付けた名前とし、メインソース、既存 `Lib.cs`、プロジェクト、ソリューション、`App.config`、末尾追記済みのこの README を含む。入力 README の全バイトを接頭辞として保持し、R04 の記録だけを追記した。
+

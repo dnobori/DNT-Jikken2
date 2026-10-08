@@ -1,22 +1,26 @@
 ﻿/*
-DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
+DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r03_261007_vgd8la.cs
-今回バージョン: R03 (入力ソースの指定バージョン: R02)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r04_261008_flvs83.cs
+今回バージョン: R04 (入力ソースの指定バージョン: R03)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
+前回標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
+R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
 初版標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
 
 目的: ZIP / UNIX split 断片 / その混在群を認識し、通常展開またはベースラインへの差分展開を行う。
-対象: Windows Vista 以降の既存処理を継承 / .NET Framework 4.0 API / C# 4 / AnyCPU。
-      既存プロジェクトの Exe 設定を継承する。WinExe 設定でもコンソールを確保する。
-      Visual Studio 2026 の標準サポート対象に .NET Framework 4.0 はないため、参照環境の準備が必要。
+対象: .NET Framework 4.8 が動作する Windows / .NET Framework 4.8 API / AnyCPU。
+      Visual Studio 2026 と 4.8 targeting pack でビルドする。既存プロジェクトの Exe 設定を継承。
+      本体は C# 4 構文を保ち、既存 Lib.cs を含むプロジェクトでは C# 7.3 を指定する。
 原理: シーク可能な仮想連結ストリーム上で EOCD、ZIP64、中央・ローカルヘッダ、
       data descriptor の範囲と一致を検証する。連結中間ファイルは作らない。
-      ZIP 解釈、CRC、ZipCrypto、厳密な Deflate 解釈は本ファイルで実装する。
+      ZIP 解釈、CRC、ZipCrypto は本ファイルで実装し、通常の Deflate 展開は標準 DeflateStream に任せる。
+      標準 inflater が解釈を拒否した入力だけ、出力を巻き戻し従来の厳密 inflater で完全再検証する。
       AES/PBKDF2/HMAC は .NET 標準の暗号プリミティブのみを使用する。
       保存は同じディレクトリの一時ファイルを検証後に閉じ、MoveFileExW で確定する。
-      危険な ZIP パス・リンクは全体中断、個別の破損・保存失敗は警告して継続する。
+      危険な ZIP パス・リンク、および既存分類で回復不能な例外は全体中断する。
+      回復可能と判定される保存等の失敗は警告して継続する。CRC 等の InvalidDataException は
+      既存 Recoverable に含まれず全体中断となる点も維持する（README の R04 新規指摘参照）。
 注意: SFX/先頭・末尾ごみ、ZIP 自身のマルチディスク、Store/Deflate 以外は対象外。
       パス上限は通常の MAX_PATH。8.3 短縮名と紛らわしい名前は安全側に拒否する。
       ZIP の符号化情報がない名前は既定 CP932、復号不能時 CP437。
@@ -47,7 +51,27 @@ DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
       正常終了時に e/E/o/O で Explorer を起動する。入力履歴は通常/差分共通とベースライン別に保存する。
       ZIP/暗号/CRC/Deflate と Win32 の保存アルゴリズムは R02 を維持する。
 
-今回の生成情報 (R03):
+改修 R04 / DNNT 261008_FLVS83 / 2026/10/08 06:00:19 (JST):
+      .NET Framework 4.8 を対象とし、標準 DeflateStream の native 展開を使用する。
+      圧縮ペイロードの最終 1 byte を分離して終端不足と余分データを検出し、サイズ・CRC・AES 認証を維持。
+      標準 inflater が拒否する従来互換入力だけ、未確定出力を巻き戻し旧 StrictDeflate で全検証し直す。
+      MAX(論理プロセッサ数 - 1, 1) 以下の再利用 worker と上限付きメモリ pipe で複数ファイルを先読みする。
+      パスワードの質問、上書き判断、親作成、保存・時刻・確定、警告・集計・復元は主スレッドで元順を保持。
+      同じ SourcePart の物理 Position 設定と Read を一つの lock で保護し、入力の固定済みハンドルを継承。
+      候補パスワードは不変 snapshot、例外は元型を保持、停止後に全 worker の終了を待ってから後片付けする。
+      旧方式用の大きな出力配列は必要時だけ確保する。プロジェクトと App.config に対象環境と互換設定を反映。
+      R03 の入力認識、差分照合・再配置、暗号形式、CRC、Win32 保存、例外の回復可否は維持する。
+
+今回の生成情報 (R04):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: このセッションで公開された設定値は取得不可のため推測しない。
+      セッション開始日時(JST): 正確な値は取得不可。
+      今回依頼の受信時刻(JST): 2026/10/08 05:32:10 (会話に供給された時刻情報)。
+      応答生成日時(JST): 2026/10/08 06:00:19 (JST)
+      実 C# のビルド・回帰結果、および Windows / 実並列動作の未検証範囲は README の R04 追記参照。
+
+前回の生成情報 (R03、過去の検証状況を保持):
       本プログラムは生成 AI により生成され、今回の追加改修も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: 公開された設定値を取得できないため記載しない。
@@ -88,6 +112,8 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
+using System.Threading;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
@@ -100,6 +126,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     internal static class Program
     {
         internal static volatile bool CancelRequested;
+        // 主スレッドの対話状態へ触れずに、一つの不要な先読み処理だけを停止する。
+        [ThreadStatic]
+        internal static Func<bool> WorkerCancelRequested;
         internal static readonly CultureInfo NumberCulture = CultureInfo.InvariantCulture;
         internal static Encoding LegacyEncoding;
 
@@ -119,7 +148,12 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             try
             {
                 if (Environment.OSVersion.Platform != PlatformID.Win32NT || Environment.OSVersion.Version.Major < 6)
-                    throw new PlatformNotSupportedException("Windows Vista 以降が必要です。");
+                    throw new PlatformNotSupportedException(".NET Framework 4.8 が利用できる Windows 環境が必要です。");
+                // ターゲット更新で Path の正規化・MAX_PATH の既定まで変えない。最初の Path 利用前に設定する。
+                AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", true);
+                AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", true);
+                // native 展開の選択は、最初の DeflateStream とその共有実装が初期化される前に確定する。
+                AppContext.SetSwitch("Switch.System.IO.Compression.DoNotUseNativeZipLibraryForDecompression", false);
                 Native.EnsureConsole();
                 consoleReady = true;
                 bool differential;
@@ -505,6 +539,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal static void CheckCancel()
         {
             if (CancelRequested) throw new OperationCanceledException("ユーザーにより中断されました。");
+            Func<bool> localCancellation = WorkerCancelRequested;
+            if (localCancellation != null && localCancellation())
+                throw new OperationCanceledException("先読み展開が取り消されました。");
         }
 
         /// <summary>想定する回復可能な個別処理エラーかどうかを判定する。</summary>
@@ -637,6 +674,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     {
         internal readonly string PathName;
         internal readonly FileStream File;
+        // R04: 複数の論理ストリームが共有する物理 FileStream の位置設定と読取りを一体として保護する。
+        internal readonly object ReadLock = new object();
         internal readonly long Length;
         internal readonly string Identity;
         internal SourcePart(string path)
@@ -730,9 +769,15 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (low >= parts.Count) break;
                 long local = position - starts[low];
                 int amount = (int)Math.Min((long)count, parts[low].Length - local);
-                FileStream source = parts[low].File;
-                if (source.Position != local) source.Position = local;
-                int got = source.Read(buffer, offset, amount);
+                SourcePart part = parts[low];
+                int got;
+                // 入力の実体を固定した既存ハンドルを使い続ける。復号・展開・CRC はこの lock の外。
+                lock (part.ReadLock)
+                {
+                    FileStream source = part.File;
+                    if (source.Position != local) source.Position = local;
+                    got = source.Read(buffer, offset, amount);
+                }
                 if (got == 0) throw new EndOfStreamException("入力断片の途中で EOF: " + parts[low].PathName + " / offset=" + local);
                 position += got; offset += got; count -= got; total += got;
             }
@@ -3314,11 +3359,561 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
     }
 
+    /// <summary>主スレッドが取得した候補列の不変スナップショット。ワーカーは候補順を変更しない。</summary>
+    internal sealed class PasswordSnapshot
+    {
+        private readonly string[] candidates;
+        internal readonly long Version;
+
+        internal int Count { get { return candidates.Length; } }
+        internal string this[int index] { get { return candidates[index]; } }
+
+        /// <summary>候補配列を内部へ複製し、その候補順に対応する版番号とともに不変に保持する。</summary>
+        internal PasswordSnapshot(IList<string> candidates, long version)
+        {
+            this.candidates = new string[candidates.Count];
+            candidates.CopyTo(this.candidates, 0);
+            Version = version;
+        }
+    }
+
+    /// <summary>展開 producer から保存 consumer へ渡す一単位。Reset は圧縮互換再試行の巻戻し命令。</summary>
+    internal struct EntryPipePacket
+    {
+        internal byte[] Buffer;
+        internal int Count;
+        internal bool Reset;
+    }
+
+    /// <summary>
+    /// 一ジョブ専用の容量制限付き出力。最大 128 KiB × 8 個のバッファを再利用する。
+    /// worker はこの Stream にだけ書き、保存先のディレクトリや一時ファイルには触れない。
+    /// </summary>
+    internal sealed class EntryPipe : Stream, IRestartableOutput
+    {
+        private const int MaximumBufferSize = 131072;
+        private const int MaximumBuffers = 8;
+        private readonly object gate = new object();
+        private readonly Queue<EntryPipePacket> ready = new Queue<EntryPipePacket>(MaximumBuffers + 1);
+        private readonly Queue<byte[]> unused = new Queue<byte[]>(MaximumBuffers);
+        private readonly int bufferSize;
+        private int allocatedBuffers;
+        private bool completed;
+        private bool stopped;
+        private ExceptionDispatchInfo failure;
+
+        /// <summary>宣言サイズに応じた小さなバッファから始め、大きいファイルでも容量を固定する。</summary>
+        /// <param name="expectedSize">エントリの展開後宣言サイズ。</param>
+        internal EntryPipe(long expectedSize)
+        {
+            bufferSize = (int)Math.Min(MaximumBufferSize, Math.Max(1L, expectedSize));
+        }
+
+        /// <summary>個別中止を記録し、満杯／空のキューで待っているスレッドを起こす。</summary>
+        internal void Stop()
+        {
+            lock (gate)
+            {
+                stopped = true;
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        /// <summary>producer の終端と元例外を保存する。先に届いたデータは consumer が元順で処理する。</summary>
+        internal void Complete(ExceptionDispatchInfo error)
+        {
+            lock (gate)
+            {
+                failure = error;
+                completed = true;
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        /// <summary>停止済みなら個別キャンセルを通知する。gate を保持して呼ぶ。</summary>
+        private void CheckStopped()
+        {
+            if (stopped) throw new OperationCanceledException("先読み展開が取り消されました。");
+        }
+
+        /// <summary>空きバッファを借りる。上限に達した場合も個別／全体キャンセルを定期確認する。</summary>
+        private byte[] RentBuffer()
+        {
+            lock (gate)
+            {
+                while (true)
+                {
+                    Program.CheckCancel();
+                    CheckStopped();
+                    if (unused.Count != 0) return unused.Dequeue();
+                    if (allocatedBuffers < MaximumBuffers)
+                    {
+                        byte[] result = new byte[bufferSize];
+                        allocatedBuffers++;
+                        return result;
+                    }
+                    Monitor.Wait(gate, 100);
+                }
+            }
+        }
+
+        /// <summary>consumer が使い終えたバッファを戻す。書出し例外時にも必ず呼ぶ。</summary>
+        private void ReturnBuffer(byte[] buffer)
+        {
+            if (buffer == null) return;
+            lock (gate)
+            {
+                unused.Enqueue(buffer);
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        /// <summary>データまたは巻戻しを順序付きで公開する。制御 packet もキュー容量に含める。</summary>
+        private void Publish(EntryPipePacket packet)
+        {
+            lock (gate)
+            {
+                while (ready.Count >= MaximumBuffers)
+                {
+                    Program.CheckCancel();
+                    CheckStopped();
+                    Monitor.Wait(gate, 100);
+                }
+                Program.CheckCancel();
+                CheckStopped();
+                ready.Enqueue(packet);
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        /// <summary>codec が再利用する入力配列から専用バッファへ複写し、consumer へ受け渡す。</summary>
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Bytes.CheckBuffer(buffer, offset, count);
+            while (count != 0)
+            {
+                byte[] owned = RentBuffer();
+                bool published = false;
+                try
+                {
+                    int amount = Math.Min(count, owned.Length);
+                    Buffer.BlockCopy(buffer, offset, owned, 0, amount);
+                    Publish(new EntryPipePacket { Buffer = owned, Count = amount });
+                    published = true;
+                    offset += amount;
+                    count -= amount;
+                }
+                finally { if (!published) ReturnBuffer(owned); }
+            }
+        }
+
+        /// <summary>native Deflate の受理差による再試行を、先行データの後ろに巻戻し命令として渡す。</summary>
+        public void Restart()
+        {
+            Publish(new EntryPipePacket { Reset = true });
+        }
+
+        /// <summary>
+        /// 元順で選ばれた一つの保存先へ転送し、producer の全検証完了まで待つ。
+        /// Reset を受けた場合だけ、呼出し開始時点まで保存先を切り詰めて旧 inflater の再出力を受ける。
+        /// </summary>
+        /// <param name="destination">主スレッドが作成・所有する一時ファイル。</param>
+        internal void CopyVerifiedTo(Stream destination)
+        {
+            long start = destination.CanSeek ? destination.Position : 0;
+            while (true)
+            {
+                EntryPipePacket packet = new EntryPipePacket();
+                bool havePacket;
+                ExceptionDispatchInfo error;
+                lock (gate)
+                {
+                    while (ready.Count == 0 && !completed)
+                    {
+                        Program.CheckCancel();
+                        CheckStopped();
+                        Monitor.Wait(gate, 100);
+                    }
+                    Program.CheckCancel();
+                    CheckStopped();
+                    havePacket = ready.Count != 0;
+                    if (havePacket)
+                    {
+                        packet = ready.Dequeue();
+                        Monitor.PulseAll(gate);
+                    }
+                    error = failure;
+                }
+                if (!havePacket)
+                {
+                    if (error != null) error.Throw();
+                    return;
+                }
+                if (packet.Reset)
+                {
+                    if (!destination.CanSeek)
+                        throw new NotSupportedException("互換展開の再試行には、巻戻し可能な一時保存先が必要です。");
+                    destination.SetLength(start);
+                    destination.Position = start;
+                }
+                else
+                {
+                    try { destination.Write(packet.Buffer, 0, packet.Count); }
+                    finally { ReturnBuffer(packet.Buffer); }
+                }
+            }
+        }
+
+        /// <summary>producer と consumer の終了後だけ呼び、残った平文バッファを消去して解放する。</summary>
+        internal void ReleaseBuffers()
+        {
+            lock (gate)
+            {
+                while (ready.Count != 0)
+                {
+                    byte[] buffer = ready.Dequeue().Buffer;
+                    if (buffer != null) Array.Clear(buffer, 0, buffer.Length);
+                }
+                while (unused.Count != 0)
+                {
+                    byte[] buffer = unused.Dequeue();
+                    Array.Clear(buffer, 0, buffer.Length);
+                }
+            }
+        }
+
+        public override bool CanRead { get { return false; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return true; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override void Flush() { Program.CheckCancel(); }
+        public override int Read(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+        public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
+    }
+
+    /// <summary>
+    /// 一エントリの投機的計算結果。候補検証と実展開は worker、対話と結果の採用は主スレッドが担当する。
+    /// ExceptionDispatchInfo で元例外を保持し、順番が来るまで警告・失敗として外へ出さない。
+    /// </summary>
+    internal sealed class EntryWork : IDisposable
+    {
+        internal readonly ZipEntry Entry;
+        internal readonly long PasswordVersion;
+        private readonly PasswordSnapshot snapshot;
+        private readonly EntryPipe pipe;
+        private readonly object stateGate = new object();
+        private byte[] suppliedPassword;
+        private volatile bool canceled;
+        private bool scheduled;
+        private bool finished;
+        private bool selectionFinished;
+        private bool knownPassword;
+        private bool disposed;
+        private ExceptionDispatchInfo selectionFailure;
+
+        /// <summary>候補の不変写し、または主スレッドが完全検証済みのパスワードの複製を保持する。</summary>
+        /// <param name="entry">変更が完了した展開対象メタデータ。</param>
+        /// <param name="candidates">同時に投入するジョブ間で共有可能な候補 snapshot。</param>
+        /// <param name="verifiedPassword">対話後に既知となったバイト列。null なら snapshot の候補を調べる。</param>
+        internal EntryWork(ZipEntry entry, PasswordSnapshot candidates, byte[] verifiedPassword)
+        {
+            Entry = entry;
+            snapshot = candidates;
+            PasswordVersion = candidates.Version;
+            pipe = new EntryPipe(entry.Size);
+            if (verifiedPassword != null) suppliedPassword = (byte[])verifiedPassword.Clone();
+        }
+
+        /// <summary>pool への登録完了を記録する。queue のロック内で、worker を起こす前に呼ぶ。</summary>
+        internal void MarkScheduled() { scheduled = true; }
+
+        /// <summary>Program.CheckCancel が worker ごとの停止要求を検査するための hook。</summary>
+        private bool IsCanceled() { return canceled; }
+
+        /// <summary>候補結果を公開する。実際の出力失敗とは別に、親作成より前に採用可否を返す。</summary>
+        private void FinishSelection(bool found, ExceptionDispatchInfo error)
+        {
+            lock (stateGate)
+            {
+                if (selectionFinished) return;
+                knownPassword = found;
+                selectionFailure = error;
+                selectionFinished = true;
+                Monitor.PulseAll(stateGate);
+            }
+        }
+
+        /// <summary>pool worker が実行する唯一の本体。UI、保存先、警告一覧、成功数には触れない。</summary>
+        internal void Run()
+        {
+            byte[] password = null;
+            ExceptionDispatchInfo error = null;
+            Func<bool> previousCancellation = Program.WorkerCancelRequested;
+            Program.WorkerCancelRequested = IsCanceled;
+            try
+            {
+                Program.CheckCancel();
+                EntryCodec.CheckSupported(Entry);
+                bool found = true;
+                if (Entry.Encrypted)
+                {
+                    if (suppliedPassword != null)
+                    {
+                        password = suppliedPassword;
+                        suppliedPassword = null;
+                    }
+                    else found = PasswordManager.TryKnown(Entry, snapshot, out password);
+                }
+                FinishSelection(found, null);
+                if (found) EntryCodec.WriteVerified(Entry, password, pipe);
+            }
+            catch (Exception ex)
+            {
+                error = ExceptionDispatchInfo.Capture(ex);
+                FinishSelection(false, error);
+            }
+            finally
+            {
+                if (password != null) Array.Clear(password, 0, password.Length);
+                if (suppliedPassword != null)
+                {
+                    Array.Clear(suppliedPassword, 0, suppliedPassword.Length);
+                    suppliedPassword = null;
+                }
+                pipe.Complete(error);
+                Program.WorkerCancelRequested = previousCancellation;
+                lock (stateGate)
+                {
+                    finished = true;
+                    Monitor.PulseAll(stateGate);
+                }
+            }
+        }
+
+        /// <summary>既知候補の全検証を待つ。false は全候補失敗であり、ignore の判断は主スレッドで行う。</summary>
+        internal bool WaitForKnownPassword()
+        {
+            lock (stateGate)
+            {
+                while (!selectionFinished)
+                {
+                    Program.CheckCancel();
+                    Monitor.Wait(stateGate, 100);
+                }
+                Program.CheckCancel();
+                if (selectionFailure != null) selectionFailure.Throw();
+                return knownPassword;
+            }
+        }
+
+        /// <summary>順番が来た主スレッドだけが呼び、検証済み結果をその一時保存先へ転送する。</summary>
+        internal void CopyVerifiedTo(Stream destination) { pipe.CopyVerifiedTo(destination); }
+
+        /// <summary>個別停止を要求する。キュー待機と codec 内の CheckCancel の双方へ伝える。</summary>
+        internal void Cancel()
+        {
+            canceled = true;
+            pipe.Stop();
+        }
+
+        /// <summary>停止後の資源解放前に必ず worker の終了を確認する。全体キャンセル中でも途中で戻らない。</summary>
+        internal void Join()
+        {
+            if (!scheduled) return;
+            lock (stateGate)
+            {
+                while (!finished) Monitor.Wait(stateGate, 100);
+            }
+        }
+
+        /// <summary>未採用・失敗・成功を問わず producer を終了させ、残留データと秘密バイト列を消去する。</summary>
+        public void Dispose()
+        {
+            if (disposed) return;
+            Cancel();
+            Join();
+            pipe.ReleaseBuffers();
+            if (suppliedPassword != null)
+            {
+                Array.Clear(suppliedPassword, 0, suppliedPassword.Length);
+                suppliedPassword = null;
+            }
+            disposed = true;
+        }
+    }
+
+    /// <summary>
+    /// 主スレッドが最大 N 件だけ先読みする再利用 worker pool。ファイル数に比例した Task/ハンドルを作らない。
+    /// 各 worker は一件ずつ処理し、ディレクトリ・パスワード対話・復元の前には全件を停止／回収できる。
+    /// </summary>
+    internal sealed class ParallelExtraction : IDisposable
+    {
+        internal readonly int Limit;
+        private readonly object queueGate = new object();
+        private readonly Queue<EntryWork> queue;
+        private readonly Dictionary<ZipEntry, EntryWork> pending;
+        private readonly List<Thread> workers = new List<Thread>();
+        private bool stopping;
+        private bool disposed;
+
+        /// <summary>実際の保持ジョブ数も worker 数もこの上限以下にする。worker は必要になってから開始する。</summary>
+        internal ParallelExtraction(int limit)
+        {
+            if (limit < 1) throw new ArgumentOutOfRangeException("limit");
+            Limit = limit;
+            queue = new Queue<EntryWork>(limit);
+            pending = new Dictionary<ZipEntry, EntryWork>(limit);
+        }
+
+        /// <summary>主スレッドが現在保持している未採用ジョブ数。完了済みの先行データも上限に含める。</summary>
+        internal int Count { get { return pending.Count; } }
+
+        /// <summary>主スレッドから、指定エントリの保持中ジョブを取得する。</summary>
+        internal EntryWork Find(ZipEntry entry)
+        {
+            EntryWork work;
+            return pending.TryGetValue(entry, out work) ? work : null;
+        }
+
+        /// <summary>candidate または検証済み password を用いるジョブを一件だけ投入する。</summary>
+        /// <param name="entry">採用順が確定したファイル。</param>
+        /// <param name="snapshot">候補順と版番号。</param>
+        /// <param name="verifiedPassword">主スレッドで完全検証済みなら指定し、不要なら null。</param>
+        /// <returns>主スレッドが元順で採用する結果窓口。</returns>
+        internal EntryWork Schedule(ZipEntry entry, PasswordSnapshot snapshot, byte[] verifiedPassword)
+        {
+            if (disposed) throw new ObjectDisposedException("ParallelExtraction");
+            if (pending.Count >= Limit) throw new InvalidOperationException("先読み展開の保持上限を超えました。");
+            if (pending.ContainsKey(entry)) throw new InvalidOperationException("同じエントリを二重に投入できません。");
+            EntryWork work = new EntryWork(entry, snapshot, verifiedPassword);
+            try
+            {
+                // 開始失敗時も、まだ queue に載っていない work は待機せず安全に破棄できる。
+                EnsureWorkerCount(Math.Min(Limit, pending.Count + 1));
+                pending.Add(entry, work);
+                lock (queueGate)
+                {
+                    queue.Enqueue(work);
+                    work.MarkScheduled();
+                    Monitor.PulseAll(queueGate);
+                }
+                return work;
+            }
+            catch
+            {
+                pending.Remove(entry);
+                work.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>必要な上限まで常駐 worker を増やす。カルチャは主スレッドの候補文字コード判定と揃える。</summary>
+        private void EnsureWorkerCount(int wanted)
+        {
+            while (workers.Count < wanted)
+            {
+                CultureInfo culture = CultureInfo.CurrentCulture;
+                CultureInfo uiCulture = CultureInfo.CurrentUICulture;
+                Thread worker = new Thread(delegate()
+                {
+                    // 設定対象自身のスレッドで行い、別スレッドの CultureInfo 変更制約にも依存しない。
+                    Thread.CurrentThread.CurrentCulture = culture;
+                    Thread.CurrentThread.CurrentUICulture = uiCulture;
+                    WorkerLoop();
+                });
+                worker.IsBackground = true;
+                worker.Name = "DNNT ZIP worker " + (workers.Count + 1).ToString(CultureInfo.InvariantCulture);
+                workers.Add(worker);
+                try { worker.Start(); }
+                catch { workers.RemoveAt(workers.Count - 1); throw; }
+            }
+        }
+
+        /// <summary>一件の計算終了後は同じスレッドを次のジョブへ再利用する。実行例外は EntryWork が保持する。</summary>
+        private void WorkerLoop()
+        {
+            while (true)
+            {
+                EntryWork work;
+                lock (queueGate)
+                {
+                    while (queue.Count == 0 && !stopping) Monitor.Wait(queueGate);
+                    if (queue.Count == 0 && stopping) return;
+                    work = queue.Dequeue();
+                }
+                work.Run();
+            }
+        }
+
+        /// <summary>採用済み／省略済みの一件を停止・回収して次の先読み枠を空ける。</summary>
+        internal void Release(ZipEntry entry)
+        {
+            EntryWork work;
+            if (!pending.TryGetValue(entry, out work)) return;
+            work.Dispose();
+            pending.Remove(entry);
+        }
+
+        /// <summary>全件へ先に停止通知を送り、その後全終了を確認する。対話や逐次復元の前のバリアにも用いる。</summary>
+        internal void CancelAllAndJoin()
+        {
+            foreach (EntryWork work in pending.Values) work.Cancel();
+            foreach (EntryWork work in pending.Values) work.Dispose();
+            pending.Clear();
+        }
+
+        /// <summary>入力ハンドルや出力日時の後処理に入る前に、全 worker の終了と残留データの破棄を保証する。</summary>
+        public void Dispose()
+        {
+            if (disposed) return;
+            CancelAllAndJoin();
+            lock (queueGate)
+            {
+                stopping = true;
+                Monitor.PulseAll(queueGate);
+            }
+            foreach (Thread worker in workers) worker.Join();
+            disposed = true;
+        }
+    }
+
+
     /// <summary>候補パスワードの順序と ignore 状態を管理する。ディスクへパスワードを書かない。</summary>
     internal sealed class PasswordManager
     {
         private readonly List<string> passwords = new List<string>();
         private bool ignoreUnknown;
+        private long version;
+        private PasswordSnapshot cachedSnapshot;
+
+        /// <summary>主スレッドだけが変更する候補順の版。worker は snapshot の版と比較する。</summary>
+        internal long Version { get { return version; } }
+
+        /// <summary>候補配列を複製する。返した snapshot の内容は、その後の候補追加や順序変更の影響を受けない。</summary>
+        internal PasswordSnapshot Snapshot()
+        {
+            if (cachedSnapshot == null || cachedSnapshot.Version != version)
+                cachedSnapshot = new PasswordSnapshot(passwords, version);
+            return cachedSnapshot;
+        }
+
+        /// <summary>snapshot の既知候補だけを元順で完全検証する。対話・ignore 判断・候補更新は行わない。</summary>
+        /// <param name="entry">検証対象の暗号エントリ。</param>
+        /// <param name="snapshot">主スレッドが複製した不変候補列。</param>
+        /// <param name="password">成功時の専用バイト列。呼出元 worker が必ず消去する。</param>
+        /// <returns>完全検証に成功した候補がある場合だけ true。</returns>
+        internal static bool TryKnown(ZipEntry entry, PasswordSnapshot snapshot, out byte[] password)
+        {
+            password = null;
+            for (int i = 0; i < snapshot.Count; i++)
+            {
+                Program.CheckCancel();
+                if (TryPassword(entry, snapshot[i], out password)) return true;
+            }
+            return false;
+        }
         /// <summary>UTF-8（先頭 BOM 任意）の読取専用ファイルから、空行以外を原文のまま読み込む。</summary>
         internal void Load(string path)
         {
@@ -3335,7 +3930,11 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 {
                     if (first && line.Length != 0 && line[0] == '\ufeff') line = line.Substring(1);
                     first = false;
-                    if (line.Length != 0 && seen.Add(line)) passwords.Add(line);
+                    if (line.Length != 0 && seen.Add(line))
+                    {
+                        passwords.Add(line);
+                        unchecked { version++; }
+                    }
                 }
             }
         }
@@ -3359,6 +3958,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 {
                     passwords.Remove(candidate);
                     passwords.Insert(0, candidate);
+                    unchecked { version++; }
                     return true;
                 }
                 Console.WriteLine("エラー: そのパスワードでは展開できません。");
@@ -3415,7 +4015,12 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
     }
 
-    /// <summary>展開順、確定保存、個別警告、および成功サイズを管理する。</summary>
+
+
+    /// <summary>
+    /// 元エントリ順の対話・保存・復元を維持し、独立した展開計算だけを上限付き worker へ先読み投入する。
+    /// 出力パスの検査、親作成、一時ファイル、日時、確定、警告、集計は常にこの主スレッドが所有する。
+    /// </summary>
     internal sealed class Extractor
     {
         private readonly ExtractionPlan plan;
@@ -3423,47 +4028,137 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         private readonly PasswordManager passwords;
         private readonly OverwritePolicy overwrite;
         private readonly WarningBook warnings;
+        private ParallelExtraction parallel;
         internal long SuccessCount, SkippedCount, FallbackSuccessCount;
         internal decimal SuccessBytes;
+
+        /// <summary>変更済み展開計画と、主スレッドが所有する保存・対話・警告サービスを受け取る。</summary>
         internal Extractor(ExtractionPlan value, SafeRoot target, PasswordManager candidates, OverwritePolicy policy, WarningBook book)
         {
             plan = value; root = target; passwords = candidates; overwrite = policy; warnings = book;
         }
+
+        /// <summary>CPU 数 - 1（最低 1）、かつ対象ファイル数以下の並行度で処理する。1 件／1 worker 時は直接実行。</summary>
         internal void Run()
         {
+            int wanted = Math.Max(Environment.ProcessorCount - 1, 1);
+            int limit = (int)Math.Min((long)wanted, plan.FileCount);
+            if (limit < 2)
+            {
+                RunEntries();
+                return;
+            }
+            using (ParallelExtraction workers = new ParallelExtraction(limit))
+            {
+                parallel = workers;
+                try { RunEntries(); }
+                finally { parallel = null; }
+            }
+            // using の終了時点で全 worker を join 済み。呼出元のディレクトリ日時復元はその後に行われる。
+        }
+
+        /// <summary>R03 と同じ採用順・例外区分・差分復元条件で一件ずつ結果を確定する。</summary>
+        private void RunEntries()
+        {
             long number = 0, total = plan.FileCount;
-            foreach (ZipEntry entry in plan.Entries)
+            for (int index = 0; index < plan.Entries.Count; index++)
             {
                 Program.CheckCancel();
+                ZipEntry entry = plan.Entries[index];
                 if (!entry.Keep) continue;
                 if (!entry.IsDirectory)
                 {
                     number++;
                     Console.WriteLine("({0:N0} 個目 / {1:N0} 個中: {2:N0} bytes) '{3}' を展開...", number, total, entry.Size, Text.Safe(entry.Name));
                 }
+                else if (parallel != null) parallel.CancelAllAndJoin();
+
                 long successesBefore = SuccessCount, skipsBefore = SkippedCount;
                 try
                 {
                     if (entry.PlanError != null) throw new IOException(entry.PlanError);
                     EntryCodec.CheckSupported(entry);
                     if (entry.IsDirectory) ExtractDirectory(entry);
-                    else ExtractFile(entry, entry);
+                    else if (parallel == null) ExtractFile(entry, entry);
+                    else
+                    {
+                        FillAhead(index);
+                        ExtractPreparedFile(entry);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    if (!Program.Recoverable(ex)) throw;
+                    if (!Program.Recoverable(ex))
+                    {
+                        if (parallel != null) parallel.CancelAllAndJoin();
+                        throw;
+                    }
                     warnings.Add(entry, ex.Message);
                     Console.WriteLine("  警告: " + Text.Safe(ex.Message));
                 }
-                // 成功時はベースラインのデータを一切読まない。差分が失敗・ignore の場合だけ復元を試す。
-                // n/N などの意図的な上書き拒否では、同じ保存先への復元も行わない。
+                finally
+                {
+                    // 上書き拒否や保存先エラーでも producer を残さず、投機的な codec エラーを追加報告しない。
+                    if (parallel != null) parallel.Release(entry);
+                }
+
+                // 成功時はベースラインのデータを一切読まない。n/N による意図的な省略でも復元しない。
                 ZipEntry fallback;
                 if (!entry.IsDirectory && SuccessCount == successesBefore && SkippedCount == skipsBefore
-                    && plan.Fallbacks.TryGetValue(entry, out fallback)) RestoreBaseline(entry, fallback);
+                    && plan.Fallbacks.TryGetValue(entry, out fallback))
+                {
+                    // 復元側のパスワード入力は次エントリより先。主スレッドの候補検証と worker の CPU 使用を重ねない。
+                    if (parallel != null) parallel.CancelAllAndJoin();
+                    RestoreBaseline(entry, fallback);
+                }
             }
         }
 
-        /// <summary>省略したベースラインを、同じ差分ファイルに対する上書き許可の範囲内で復元する。</summary>
+        /// <summary>明示ディレクトリを越えず、採用ファイルを最大 N 件だけ先読みする。保存先には触れない。</summary>
+        /// <param name="start">現在処理する元計画のインデックス。</param>
+        private void FillAhead(int start)
+        {
+            PasswordSnapshot snapshot = passwords.Snapshot();
+            for (int index = start; index < plan.Entries.Count && parallel.Count < parallel.Limit; index++)
+            {
+                Program.CheckCancel();
+                ZipEntry entry = plan.Entries[index];
+                if (!entry.Keep) continue;
+                if (entry.IsDirectory) break;
+                if (entry.PlanError != null || parallel.Find(entry) != null) continue;
+                // 非対応方式の警告は当該エントリの順番で RunEntries が出す。先読み中には外へ出さない。
+                try { EntryCodec.CheckSupported(entry); }
+                catch (NotSupportedException) { continue; }
+                parallel.Schedule(entry, snapshot, null);
+            }
+        }
+
+        /// <summary>初回上書き確認の後で、候補版を照合し、当該ジョブだけの結果を元順で保存する。</summary>
+        private void ExtractPreparedFile(ZipEntry entry)
+        {
+            if (!InitialOverwriteAllowed(entry, entry)) return;
+            EntryWork work = parallel.Find(entry);
+            if (work == null) work = parallel.Schedule(entry, passwords.Snapshot(), null);
+            if (entry.Encrypted && work.PasswordVersion != passwords.Version)
+            {
+                // 先行対話で候補順が変わった場合、古い候補による結果・例外は採用せず現在順でやり直す。
+                parallel.Release(entry);
+                work = parallel.Schedule(entry, passwords.Snapshot(), null);
+            }
+            if (entry.Encrypted && !work.WaitForKnownPassword())
+            {
+                // 未知候補への質問と ignore 判断は従前どおり主スレッドだけで行う。
+                // 全 future を停止してから GetVerified を実行し、合計 CPU 処理数の上限も守る。
+                parallel.CancelAllAndJoin();
+                byte[] password;
+                if (!PasswordFor(entry, out password)) return;
+                try { work = parallel.Schedule(entry, passwords.Snapshot(), password); }
+                finally { if (password != null) Array.Clear(password, 0, password.Length); }
+            }
+            SaveFile(entry, entry, work, null);
+        }
+
+        /// <summary>省略したベースラインを、同じ差分ファイルに対する上書き許可の範囲内で逐次復元する。</summary>
         /// <param name="delta">採用に失敗した差分。事前確認・再確認の対象として用いる。</param>
         /// <param name="baseline">同じ出力先へ再配置済みのベースライン元エントリ。</param>
         private void RestoreBaseline(ZipEntry delta, ZipEntry baseline)
@@ -3493,6 +4188,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             }
         }
 
+        /// <summary>主スレッドで候補を検証・質問する。ignore 後も既知候補を試す従前の判断を保持する。</summary>
         private bool PasswordFor(ZipEntry entry, out byte[] password)
         {
             password = null;
@@ -3501,6 +4197,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             warnings.Add(entry, "ignore 指定: 既知の候補パスワードでは完全性検証まで成功しませんでした（不正パスワードと暗号データ破損は識別できない場合があります）。");
             return false;
         }
+
+        /// <summary>明示ディレクトリエントリを、先行 worker の停止後に従前どおり逐次処理する。</summary>
         private void ExtractDirectory(ZipEntry entry)
         {
             byte[] password;
@@ -3513,46 +4211,69 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             }
             finally { if (password != null) Array.Clear(password, 0, password.Length); }
         }
-        /// <summary>元エントリを検証保存し、上書き判断だけは有効な出力計画のエントリと共有する。</summary>
-        /// <param name="entry">復号・展開する通常、差分、または復元用ベースラインのエントリ。</param>
-        /// <param name="policyEntry">通常は entry 自身。ベースライン復元では対応する差分エントリ。</param>
-        private void ExtractFile(ZipEntry entry, ZipEntry policyEntry)
+
+        /// <summary>初回の上書き検査。先読み処理の成否を採用する前に、必ず元順で実行する。</summary>
+        /// <returns>保存を続けてよい場合 true。拒否時は従前どおり省略数を増やして false。</returns>
+        private bool InitialOverwriteAllowed(ZipEntry entry, ZipEntry policyEntry)
         {
             using (PathLease check = root.DirectoryLease(WindowsPaths.Parent(entry.Relative), false, null, false))
             {
-                if (!overwrite.Allow(policyEntry, root.ProbeLeaf(entry.Relative, check))) { Skip(entry); return; }
-            }
-            byte[] password;
-            if (!PasswordFor(entry, out password)) return;
-            try
-            {
-                using (PathLease parents = root.DirectoryLease(WindowsPaths.Parent(entry.Relative), true, plan.Directories, false))
-                using (StagedFile temporary = new StagedFile(root.Destination(WindowsPaths.Parent(entry.Relative)), entry, warnings))
+                if (!overwrite.Allow(policyEntry, root.ProbeLeaf(entry.Relative, check)))
                 {
-                    EntryCodec.WriteVerified(entry, password, temporary.Stream);
-                    temporary.Stream.Flush();
-                    SetTimes(entry, temporary.Stream.SafeFileHandle);
-                    int races = 0;
-                    while (true)
-                    {
-                        Program.CheckCancel();
-                        FileStamp current = root.ProbeLeaf(entry.Relative, parents);
-                        if (!overwrite.Allow(policyEntry, current)) { Skip(entry); return; }
-                        try { temporary.Commit(root.Destination(entry.Relative), current != null); break; }
-                        catch (Win32Exception ex)
-                        {
-                            // 新規保存の直前に対象が生じた場合、上書きへ勝手に切り替えず再確認する。
-                            if ((ex.NativeErrorCode != 80 && ex.NativeErrorCode != 183) || ++races > 16) throw;
-                        }
-                    }
-                    SuccessCount++;
-                    SuccessBytes += entry.Size;
-                    // 日時は Commit 前に一時ファイルへ設定済みで、同一ボリューム内の名前変更後も保持される。
-                    if (entry.TimestampWarning != null) warnings.Add(entry, entry.TimestampWarning);
+                    Skip(entry);
+                    return false;
                 }
             }
+            return true;
+        }
+
+        /// <summary>一 worker 時とベースライン復元用の直接実行。候補対話と書出しの順序を R03 から維持する。</summary>
+        private void ExtractFile(ZipEntry entry, ZipEntry policyEntry)
+        {
+            if (!InitialOverwriteAllowed(entry, policyEntry)) return;
+            byte[] password;
+            if (!PasswordFor(entry, out password)) return;
+            try { SaveFile(entry, policyEntry, null, password); }
             finally { if (password != null) Array.Clear(password, 0, password.Length); }
         }
+
+        /// <summary>
+        /// 当該エントリの順番で初めて親・一時保存先を作成し、完全検証後だけ最終名へ確定する。
+        /// worker がある場合も出力パス・上書き選択・日時・警告・成功数を worker へ渡さない。
+        /// </summary>
+        /// <param name="entry">復号・展開する通常、差分、または復元用ベースライン。</param>
+        /// <param name="policyEntry">通常は entry 自身。ベースライン復元では対応する差分。</param>
+        /// <param name="work">並列計算結果。null なら呼出元スレッドで直接展開する。</param>
+        /// <param name="password">直接実行時の検証済みパスワード。work 使用時は null。</param>
+        private void SaveFile(ZipEntry entry, ZipEntry policyEntry, EntryWork work, byte[] password)
+        {
+            using (PathLease parents = root.DirectoryLease(WindowsPaths.Parent(entry.Relative), true, plan.Directories, false))
+            using (StagedFile temporary = new StagedFile(root.Destination(WindowsPaths.Parent(entry.Relative)), entry, warnings))
+            {
+                if (work == null) EntryCodec.WriteVerified(entry, password, temporary.Stream);
+                else work.CopyVerifiedTo(temporary.Stream);
+                temporary.Stream.Flush();
+                SetTimes(entry, temporary.Stream.SafeFileHandle);
+                int races = 0;
+                while (true)
+                {
+                    Program.CheckCancel();
+                    FileStamp current = root.ProbeLeaf(entry.Relative, parents);
+                    if (!overwrite.Allow(policyEntry, current)) { Skip(entry); return; }
+                    try { temporary.Commit(root.Destination(entry.Relative), current != null); break; }
+                    catch (Win32Exception ex)
+                    {
+                        // 新規保存の直前に対象が生じた場合、上書きへ勝手に切り替えず再確認する。
+                        if ((ex.NativeErrorCode != 80 && ex.NativeErrorCode != 183) || ++races > 16) throw;
+                    }
+                }
+                SuccessCount++;
+                SuccessBytes += entry.Size;
+                if (entry.TimestampWarning != null) warnings.Add(entry, entry.TimestampWarning);
+            }
+        }
+
+        /// <summary>当該一時ファイルの日時を設定し、回復可能な日時エラーだけを元順の警告へ加える。</summary>
         private void SetTimes(ZipEntry entry, SafeFileHandle handle)
         {
             try { Native.Times(handle, entry.Times); }
@@ -3562,6 +4283,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 warnings.Add(entry, "ファイル日時の設定失敗: " + ex.Message);
             }
         }
+
+        /// <summary>意図的な上書き拒否を記録する。この増分がある場合はベースライン復元を行わない。</summary>
         private void Skip(ZipEntry entry)
         {
             SkippedCount++;
@@ -3579,8 +4302,45 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             if (entry.Compression != 0 && entry.Compression != 8)
                 throw new NotSupportedException("未対応の compression method: " + entry.Compression + "（対応: Store=0, Deflate=8）。");
         }
-        /// <summary>output へストリーミング展開する。検証失敗は InvalidDataException。出力は呼出元が隔離する。</summary>
+        /// <summary>標準展開を優先し、入力解釈差がある場合だけ出力を戻して従来方式で全検証し直す。</summary>
+        /// <param name="entry">構造検査済みの元エントリ。呼出し中は変更しない。</param>
+        /// <param name="password">この呼出しで所有・参照する復号用バイト列。無暗号なら null。</param>
+        /// <param name="output">隔離した新規出力。巻戻し可能、Stream.Null、または IRestartableOutput を実装する。</param>
         internal static void WriteVerified(ZipEntry entry, byte[] password, Stream output)
+        {
+            if (output == null) throw new ArgumentNullException("output");
+            long start = output.CanSeek ? output.Position : 0;
+            try { WriteVerifiedCore(entry, password, output, false); }
+            catch (NativeDeflateException ex)
+            {
+                Program.CheckCancel();
+                // 通常成功時には二重解凍しない。HDIST=31/32 など従来受理できた入力の互換性を保つ。
+                // 失敗した標準展開の平文を残したまま追記しない。再読込は同じ入力ハンドルから行う。
+                if (Object.ReferenceEquals(output, Stream.Null)) { }
+                else if (output.CanSeek)
+                {
+                    output.Position = start;
+                    output.SetLength(start);
+                }
+                else
+                {
+                    IRestartableOutput restartable = output as IRestartableOutput;
+                    if (restartable == null)
+                        throw new InvalidDataException("従来 Deflate との互換再試行に必要な出力巻戻しができません。", ex);
+                    restartable.Restart();
+                }
+                // 旧 decoder も終端・木・距離・サイズ・CRC/AES 認証を省略しない。
+                // これにも失敗した入力を成功として採用することはない。
+                WriteVerifiedCore(entry, password, output, true);
+            }
+        }
+
+        /// <summary>一回分の復号・展開・完全性検証。再試行ごとに暗号と展開の状態をすべて作り直す。</summary>
+        /// <param name="entry">検証・展開する ZIP エントリ。</param>
+        /// <param name="password">復号パスワード。無暗号なら null。</param>
+        /// <param name="output">検証完了まで外部へ確定しない出力。</param>
+        /// <param name="useLegacyDeflate">標準 decoder が拒否した場合の互換再試行だけ true。</param>
+        private static void WriteVerifiedCore(ZipEntry entry, byte[] password, Stream output, bool useLegacyDeflate)
         {
             CheckSupported(entry);
             using (JoinedStream joined = new JoinedStream(entry.Archive.Parts))
@@ -3588,14 +4348,14 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             {
                 if (!entry.Encrypted)
                 {
-                    Decode(raw, raw.Length, entry, output);
+                    Decode(raw, raw.Length, entry, output, useLegacyDeflate);
                 }
                 else if (entry.Aes != null)
                 {
                     if (password == null) throw new InvalidDataException("暗号化エントリにパスワードが指定されていません。");
                     using (AesReadStream decoded = new AesReadStream(raw, entry.Aes, password))
                     {
-                        Decode(decoded, decoded.Length, entry, output);
+                        Decode(decoded, decoded.Length, entry, output, useLegacyDeflate);
                         decoded.VerifyAuthentication();
                     }
                 }
@@ -3604,12 +4364,12 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     if (password == null) throw new InvalidDataException("暗号化エントリにパスワードが指定されていません。");
                     using (ZipCryptoStream decoded = new ZipCryptoStream(raw, password,
                         ((entry.Flags & 8) != 0) ? (byte)(entry.DosTime >> 8) : (byte)(entry.Crc >> 24)))
-                        Decode(decoded, decoded.Length, entry, output);
+                        Decode(decoded, decoded.Length, entry, output, useLegacyDeflate);
                 }
                 if (raw.Position != raw.Length) throw new InvalidDataException("エントリの圧縮データが完全には消費されていません。");
             }
         }
-        private static void Decode(Stream input, long compressedLength, ZipEntry entry, Stream output)
+        private static void Decode(Stream input, long compressedLength, ZipEntry entry, Stream output, bool useLegacyDeflate)
         {
             OutputWindow window = new OutputWindow(output, entry.Size);
             if (entry.Compression == 0)
@@ -3623,10 +4383,129 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                     window.Stored(buffer, n);
                 }
             }
-            else StrictDeflate.Inflate(input, compressedLength, window);
+            else if (useLegacyDeflate) StrictDeflate.Inflate(input, compressedLength, window);
+            else NativeDeflate.Inflate(input, compressedLength, window);
             window.Finish();
             if ((entry.Aes == null || entry.Aes.Version == 1) && window.Crc != entry.Crc)
                 throw new InvalidDataException("CRC-32 が一致しません。破損または不正なパスワードです。");
+        }
+    }
+
+    /// <summary>標準 decoder の互換再試行を、容量制限付き出力にも順序を保って通知する。</summary>
+    internal interface IRestartableOutput
+    {
+        /// <summary>このエントリの未確定出力を先頭へ戻す。後続の平文に先行して適用する。</summary>
+        void Restart();
+    }
+
+    /// <summary>標準 inflater の入力解釈差を、全検証を伴う従来方式への再試行へ伝える。</summary>
+    /// <remarks>InvalidDataException は sealed。呼出元は本例外だけを捕捉し、入力と出力を最初からやり直す。</remarks>
+    internal sealed class NativeDeflateException : IOException
+    {
+        internal NativeDeflateException(InvalidDataException reason)
+            : base("標準 Deflate 展開で入力データを解釈できませんでした。", reason) { }
+    }
+
+    /// <summary>圧縮データの最終 byte を分離し、終端未成立での EOF と終端後の余分な byte を検出する。</summary>
+    /// <remarks>
+    /// .NET Framework 4.7.2 以降の native DeflateStream は、終端成立を確認してから次の入力を要求する。
+    /// 最後の 1 byte を直前の Read に含めないため、終端後に余分な byte があれば必ず最低 1 byte が未読で残る。
+    /// 宣言した圧縮長をすべて渡した後の追加 Read は、native 側が終端を認識できていないことを示す。
+    /// Read(count=0) はこの検査の対象外。元 stream は呼出元の所有物なので Dispose で閉じない。
+    /// この順序は対象 Framework の実装に基づく。別ランタイムへ移植するときは境界の回帰試験を再実施する。
+    /// </remarks>
+    internal sealed class NativeDeflateInput : Stream
+    {
+        private readonly Stream source;
+        private readonly long length;
+        private long position;
+        private bool disposed;
+
+        internal NativeDeflateInput(Stream input, long compressedLength)
+        {
+            if (input == null) throw new ArgumentNullException("input");
+            if (!input.CanRead) throw new ArgumentException("入力ストリームを読み取れません。", "input");
+            // 空内容の Deflate でも終端ブロックは必須。Store の空エントリにはこの wrapper を用いない。
+            if (compressedLength <= 0) throw new InvalidDataException("Deflate の圧縮データが空、または圧縮サイズが不正です。");
+            source = input;
+            length = compressedLength;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Bytes.CheckBuffer(buffer, offset, count);
+            if (disposed) throw new ObjectDisposedException("NativeDeflateInput");
+            if (count == 0) return 0;
+            Program.CheckCancel();
+            long remaining = length - position;
+            if (remaining == 0)
+                throw new InvalidDataException("Deflate 終端ブロックを認識する前に圧縮データが終了しました。");
+
+            // remaining > 1 の間は、最後の 1 byte を必ず留保する。通常の入力は大きな単位で読み出せる。
+            long available = remaining == 1 ? 1 : remaining - 1;
+            int request = (int)Math.Min((long)count, available);
+            int got = source.Read(buffer, offset, request);
+            if (got == 0) throw new InvalidDataException("Deflate の圧縮データが宣言サイズより前に切れています。");
+            if (got < 0 || got > request) throw new IOException("入力ストリームが不正な読取サイズを返しました。");
+            position += got;
+            return got;
+        }
+
+        /// <summary>非 0 サイズの DeflateStream.Read が 0 を返してから呼び出す。</summary>
+        internal void VerifyComplete()
+        {
+            if (disposed) throw new ObjectDisposedException("NativeDeflateInput");
+            if (position != length)
+                throw new InvalidDataException("Deflate 終端後に余分なデータがあるか、圧縮サイズが不一致です。");
+        }
+
+        public override bool CanRead { get { return !disposed && source.CanRead; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return false; } }
+        public override long Length { get { return length; } }
+        public override long Position { get { return position; } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+        protected override void Dispose(bool disposing)
+        {
+            disposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>平文の生成を .NET Framework 標準 DeflateStream の native inflater に任せる。</summary>
+    internal static class NativeDeflate
+    {
+        /// <summary>展開結果を block 単位でサイズ・CRC 検証用 window へ渡す。出力確定は呼出元が行う。</summary>
+        internal static void Inflate(Stream input, long compressedLength, OutputWindow window)
+        {
+            byte[] buffer = new byte[131072];
+            using (NativeDeflateInput bounded = new NativeDeflateInput(input, compressedLength))
+            using (System.IO.Compression.DeflateStream inflater = new System.IO.Compression.DeflateStream(
+                bounded, System.IO.Compression.CompressionMode.Decompress, true))
+            {
+                while (true)
+                {
+                    Program.CheckCancel();
+                    int got;
+                    try
+                    {
+                        // 必ず非 0 サイズで終端まで読む。宣言された平文サイズへ到達しただけでは終了しない。
+                        got = inflater.Read(buffer, 0, buffer.Length);
+                    }
+                    catch (InvalidDataException ex)
+                    {
+                        // HDIST=31/32 等、native と従来 inflater で受理範囲が異なる入力は従来方式で完全再検証する。
+                        // 出力、CRC、サイズ、認証のエラーはこの catch の外に置き、互換再試行の理由にしない。
+                        throw new NativeDeflateException(ex);
+                    }
+                    if (got == 0) break;
+                    window.Stored(buffer, got);
+                }
+                bounded.VerifyComplete();
+            }
         }
     }
 
@@ -3804,7 +4683,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
     {
         private readonly Stream destination;
         private readonly long expected;
-        private readonly byte[] history = new byte[32768], pending = new byte[131072];
+        // 通常の native / Store 経路では不要。従来 inflater の互換再試行で初めて確保する。
+        private byte[] history, pending;
         private int cursor, pendingCount;
         private long count;
         private uint crc = 0xffffffffU;
@@ -3813,6 +4693,11 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal void Literal(byte value)
         {
             if (count >= expected) throw new InvalidDataException("展開サイズが ZIP ヘッダの宣言値を超えました。");
+            if (history == null)
+            {
+                history = new byte[32768];
+                pending = new byte[131072];
+            }
             history[cursor] = value;
             cursor = (cursor + 1) & 32767;
             pending[pendingCount++] = value;
