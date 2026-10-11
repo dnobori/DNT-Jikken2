@@ -1,10 +1,11 @@
 ﻿/*
-DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
+DNNT 261011_SQVCB3 分割 ZIP 結合展開ユーティリティ R06
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r05_261008_usw6su.cs
-今回バージョン: R05 (入力ソースの指定バージョン: R04)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r06_261011_sqvcb3.cs
+今回バージョン: R06 (入力ソースの指定バージョン: R05)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
+前回標題: DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
+R04 標題: DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
 R03 標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
 R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
 初版標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
@@ -22,6 +23,9 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       危険な ZIP パス・リンク、および既存分類で回復不能な例外は全体中断する。
       回復可能と判定される保存等の失敗は警告して継続する。CRC 等の InvalidDataException は
       既存 Recoverable に含まれず全体中断となる点も維持する（README の R04 新規指摘参照）。
+      /d の採用差分だけ、宣言 11～16 bytes の内容をメモリ上で完全検証して削除マークを判定する。
+      マークの名前を含む元ツリーで基準を照合し、完全一致するベースラインとマーク自体の展開を省略。
+      実際の削除対象によって空になる部分木は明示ディレクトリと日時計画からも除き、作成しない。
 注意: SFX/先頭・末尾ごみ、ZIP 自身のマルチディスク、Store/Deflate 以外は対象外。
       MAX_PATH を超える通常ドライブ/UNC パスに対応する。各要素と OS/ファイルシステムの上限は残る。
       ZIP 内の 8.3 短縮名と紛らわしい名前は安全側に拒否する。指定ルート/祖先のリンクは許容し、
@@ -31,6 +35,10 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       ZIP の符号化情報がない名前は既定 CP932、復号不能時 CP437。
       環境変数 DNNT_ZIP_CODEPAGE により未指定名のコードページを変更できる。
       新規ディレクトリだけに日時を設定する。既存ディレクトリは設定しない。
+      削除マークは __DELETED__ と末尾なし/CR/LF/CRLF、先頭 UTF-8 BOM 一個の有無だけを許容する。
+      通常モードおよびベースライン側の同じ本文は通常ファイル。既存出力の物理削除は行わない。
+      短小暗号差分は保存前にパスワードを質問する場合がある。判定不能なら差分を採用せず、
+      対応ベースラインを残して警告する。削除候補の CRC 等が不正なら従来の分類で出力前に中断する。
       自作コードであること自体は無脆弱性を保証しない。README の制約・検証範囲参照。
 
 入力 R01 に含まれる既存改修 [T261005_EL_SKCJM_04]: 展開先選択のダミー名は、入力物理ファイル名を
@@ -76,7 +84,27 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       /out: または -out: で既存の展開先を明示できる。未指定時のダイアログと既存モードは維持する。
       ZIP/codec/暗号/差分照合/並列制御/保存順/上書き確認/例外分類は変更しない。
 
-今回の生成情報 (R05):
+改修 R06 / DNNT 261011_SQVCB3 / 2026/10/11 17:11:27 (JST):
+      差分採用ファイルの完全検証後に、厳密な削除マーク八形式を認識する。
+      基準照合と重複の先勝ちを保持し、同じ再配置パスのベースラインファイルだけを省略する。
+      マーク自体と削除済みベースラインは出力計画・上書き確認・worker・復元候補へ渡さない。
+      回復可能な読取失敗/ignore の候補は差分採用から除き、対応ベースラインの通常展開を保つ。
+      実際の削除によって空になる出力部分木と元祖先の退避先を整理し、空の明示子も作らない。
+      対応なしマークだけでは既存の明示空ディレクトリを省略せず、ディレクトリへの削除指示は拒否。
+      展開前後にマーク数、削除省略数・bytes、対応なし数、空ディレクトリ省略数を表示する。
+      ZIP/codec/暗号/基準照合/並列/保存/リンク検査/長いパス/通常モードの各本体は変更しない。
+      実行時の追加ライブラリは不要。配布プロジェクトの参照名と既存の設定値を整合させた。
+
+今回の生成情報 (R06):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: 公開された設定値は取得不可のため推測しない。
+      セッション開始日時(JST): 正確な値は取得不可。
+      今回依頼の受信時刻(JST): 2026/10/11 16:50:08 (会話に供給された時刻情報)。
+      応答生成日時(JST): 2026/10/11 17:11:27 (JST)
+      実コンパイル・実 C# 検証と Windows 実機未検証の区別は README の R06 追記参照。
+
+前回の生成情報 (R05、過去の検証状況を保持):
       本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: 公開された設定値は取得不可のため推測しない。
@@ -213,8 +241,10 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                         baseline.Plan.ConfirmDuplicates();
                         Console.WriteLine("基準ディレクトリを計算中...");
                         ReferenceMatch match = DirectoryMatcher.Find(baseline.Plan, primary.Plan);
+                        Console.WriteLine("削除マークファイルを検査中...");
+                        DeletionMarkers deletions = DeletionMarkers.Scan(primary.Plan, passwords, warnings);
                         overlay = DifferenceOverlay.Build(baseline.Plan, primary.Plan, match,
-                            baseline.Sources[0], File.GetLastWriteTime(WindowsPaths.NativeName(baseline.Sources[0])));
+                            baseline.Sources[0], File.GetLastWriteTime(WindowsPaths.NativeName(baseline.Sources[0])), deletions);
                         plan = overlay.Plan;
                         overlay.Print();
                     }
@@ -3275,6 +3305,93 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         }
     }
 
+    /// <summary>
+    /// 差分の採用ファイルだけを完全検証し、削除マークと判定不能な小ファイルを分離する。
+    /// Keep と元の仮想ツリーは変更せず、基準照合・重複の先勝ち・通常モードの意味を保つ。
+    /// </summary>
+    internal sealed class DeletionMarkers
+    {
+        // 集合の要素は入力計画そのもののエントリ。名前だけの推測で別ファイルへ適用しない。
+        internal readonly HashSet<ZipEntry> Marked = new HashSet<ZipEntry>();
+        internal readonly HashSet<ZipEntry> Unavailable = new HashSet<ZipEntry>();
+        private const string Marker = "__DELETED__";
+
+        /// <summary>重複処理後の差分を読み、検証が完了した内容だけを削除指示として採用する。</summary>
+        /// <param name="delta">Keep を確定した差分の元計画。ベースラインや通常モードへは呼ばない。</param>
+        /// <param name="passwords">主スレッドの既存候補と ignore の状態。対話もこのスレッドで行う。</param>
+        /// <param name="warnings">回復可能な読取失敗・ignore を一度記録する既存の警告帳。</param>
+        /// <returns>検証済みの削除集合と、差分を採用せずベースラインを残す判定不能集合。</returns>
+        internal static DeletionMarkers Scan(ExtractionPlan delta, PasswordManager passwords, WarningBook warnings)
+        {
+            DeletionMarkers result = new DeletionMarkers();
+            foreach (ZipEntry entry in delta.Entries)
+            {
+                Program.CheckCancel();
+                // 本体 11 bytes、末尾 0～2 bytes、UTF-8 BOM 0 または 3 bytes 以外はマークにならない。
+                if (!entry.Keep || entry.IsDirectory || entry.Size < 11 || entry.Size > 16) continue;
+                byte[] password = null;
+                try
+                {
+                    EntryCodec.CheckSupported(entry);
+                    if (entry.Encrypted && !passwords.GetVerified(entry, out password))
+                    {
+                        result.RecordUnavailable(entry, warnings,
+                            "ignore 指定: 既知の候補パスワードでは完全性検証まで成功しませんでした。");
+                        continue;
+                    }
+                    // OutputWindow が宣言サイズ超過を拒否するので、候補の平文は最大 16 bytes。
+                    // seek 可能なため、標準 Deflate から従来方式への互換再試行もそのまま利用できる。
+                    using (MemoryStream content = new MemoryStream(16))
+                    {
+                        EntryCodec.WriteVerified(entry, password, content);
+                        // 部分的に得られた平文は使わず、サイズ・終端・CRC/AES 認証が成功した後だけ判定。
+                        if (IsMarker(content.ToArray())) result.Marked.Add(entry);
+                    }
+                }
+                catch (InvalidDataException ex)
+                {
+                    // CRC 等を全体中断する R05 の例外分類は変えない。出力先に触れる前に止める。
+                    throw new InvalidDataException("削除マーク候補の完全性検証に失敗しました: " + entry.Label + " / " + ex.Message, ex);
+                }
+                catch (Exception ex)
+                {
+                    if (!Program.Recoverable(ex)) throw;
+                    result.RecordUnavailable(entry, warnings, ex.Message);
+                }
+                finally { if (password != null) Array.Clear(password, 0, password.Length); }
+            }
+            return result;
+        }
+
+        /// <summary>UTF-8 BOM 一個の有無と、末尾なし / CR / LF / CRLF の計八形式だけを認める。</summary>
+        /// <param name="content">完全検証済みの展開内容。null や他のバイト列はマークではない。</param>
+        /// <returns>ASCII 本体まで全バイトが一致するときだけ true。Trim や他の BOM 自動判定はしない。</returns>
+        internal static bool IsMarker(byte[] content)
+        {
+            if (content == null || content.Length < 11 || content.Length > 16) return false;
+            int offset = content[0] == 0xef && content[1] == 0xbb && content[2] == 0xbf ? 3 : 0;
+            int ending = content.Length - offset - Marker.Length;
+            if (ending < 0 || ending > 2) return false;
+            for (int i = 0; i < Marker.Length; i++)
+                if (content[offset + i] != (byte)Marker[i]) return false;
+            int tail = offset + Marker.Length;
+            return ending == 0 || (ending == 1 && (content[tail] == 13 || content[tail] == 10))
+                || (ending == 2 && content[tail] == 13 && content[tail + 1] == 10);
+        }
+
+        /// <summary>判定不能な差分を後の通常展開へ戻さず、誤ったマーク保存と未検証の削除を防ぐ。</summary>
+        /// <param name="entry">今回の候補検査に失敗した差分。</param>
+        /// <param name="warnings">最終集計にも使う警告帳。</param>
+        /// <param name="reason">既存の例外分類で継続可能な失敗理由、または ignore の説明。</param>
+        private void RecordUnavailable(ZipEntry entry, WarningBook warnings, string reason)
+        {
+            Unavailable.Add(entry);
+            string message = "削除マークを判定できないため、この差分ファイルは展開せず、対応するベースラインを残します: " + reason;
+            warnings.Add(entry, message);
+            Console.WriteLine("  警告: " + Text.Safe(entry.Label) + " / " + Text.Safe(message));
+        }
+    }
+
     /// <summary>対応済みの二入力群を、差分側のルート配置を保った一つの出力計画へ変換する。</summary>
     internal sealed class DifferenceOverlay
     {
@@ -3284,6 +3401,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         internal bool HasMisc;
         internal long SupersededCount;
         internal decimal SupersededBytes;
+        // 削除は抽出計画からの省略。既存の出力ファイル・ディレクトリへ削除 API を発行しない。
+        internal long DeletedCount, DeletionMarkerCount, UnavailableCandidateCount, PrunedDirectoryCount;
+        internal decimal DeletedBytes, DeletionMarkerBytes;
 
         /// <summary>ベースラインを再配置し、差分で置換するファイルを省略した有効計画を返す。</summary>
         /// <param name="baseline">入力内の重複確認を終えたベースライン。</param>
@@ -3291,9 +3411,10 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// <param name="match">一意に決定済みの基準ディレクトリと統計。</param>
         /// <param name="firstBaselineFile">Ordinal 順の最初のベースライン物理 ZIP/断片名。</param>
         /// <param name="lastWriteLocal">日時文字列がない場合の同ファイルのローカル更新日時。</param>
+        /// <param name="deletions">差分の採用ファイルから事前に完全検証した削除判定結果。</param>
         /// <returns>出力計画・省略統計・失敗時にだけ用いるベースラインの対応表。</returns>
         internal static DifferenceOverlay Build(ExtractionPlan baseline, ExtractionPlan delta, ReferenceMatch match,
-            string firstBaselineFile, DateTime lastWriteLocal)
+            string firstBaselineFile, DateTime lastWriteLocal, DeletionMarkers deletions)
         {
             DifferenceOverlay overlay = new DifferenceOverlay();
             overlay.Plan = new ExtractionPlan();
@@ -3302,6 +3423,26 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             overlay.Plan.DuplicateCount = checked(baseline.DuplicateCount + delta.DuplicateCount);
             string baselineRoot = match.BaselineRoot.Relative;
             string deltaRoot = match.DeltaRoot.Relative;
+            overlay.DeletionMarkerCount = deletions.Marked.Count;
+            overlay.UnavailableCandidateCount = deletions.Unavailable.Count;
+            bool hasDeletions = deletions.Marked.Count != 0;
+            HashSet<string> affectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> originalDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> deletedSourceParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> retainedSourceParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ZipEntry marker in deletions.Marked)
+            {
+                Program.CheckCancel();
+                overlay.DeletionMarkerBytes += marker.Size;
+                if (IsAtOrBelow(marker.Relative, deltaRoot))
+                {
+                    string target = Combine(baselineRoot, RemoveRoot(marker.Relative, deltaRoot));
+                    // ファイル削除をディレクトリの再帰削除へ広げない。暗黙の親もここで検出する。
+                    if (baseline.Directories.ContainsKey(target))
+                        throw new InvalidDataException("削除マークの対応先がファイルではなくディレクトリです: "
+                            + marker.Label + " / ベースライン: " + target);
+                }
+            }
             foreach (ZipEntry entry in baseline.Entries)
             {
                 Program.CheckCancel();
@@ -3316,7 +3457,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (overlay.HasMisc && ReservedConflict(entry.Relative, entry.IsDirectory, overlay.MiscDirectory))
                     throw new InvalidDataException("差分 ZIP の内容とベースライン退避領域が衝突します: "
                         + entry.Relative + " / 退避領域: " + overlay.MiscDirectory + " / " + entry.Label);
-                if (!entry.IsDirectory) deltaFiles.Add(entry.Relative, entry);
+                if (!entry.IsDirectory && !deletions.Unavailable.Contains(entry)) deltaFiles.Add(entry.Relative, entry);
+                if (hasDeletions)
+                    AddAncestors(originalDirectories, entry.IsDirectory ? entry.Relative : WindowsPaths.Parent(entry.Relative), false);
             }
 
             // 通常時はベースラインの残す内容を先に、差分の全内容を後に処理する。
@@ -3327,21 +3470,33 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 if (!entry.Keep) continue;
                 string original = entry.Relative;
                 bool inReference = IsAtOrBelow(original, baselineRoot);
-                string suffix = inReference ? RemoveRoot(original, baselineRoot) : original;
-                string mapped = Combine(inReference ? deltaRoot : overlay.MiscDirectory, suffix);
-                mapped = WindowsPaths.Relative(mapped.Length == 0 && entry.IsDirectory ? "." : mapped, entry.IsDirectory);
+                string mapped = MapBaseline(original, entry.IsDirectory, baselineRoot, deltaRoot, overlay.MiscDirectory);
                 if (overlay.HasMisc && inReference && ReservedConflict(mapped, entry.IsDirectory, overlay.MiscDirectory))
                     throw new InvalidDataException("再配置したベースライン基準配下の内容と退避領域が衝突します: "
                         + mapped + " / 元: " + original + " / 退避領域: " + overlay.MiscDirectory);
                 entry.Relative = mapped;
+                if (hasDeletions)
+                    AddAncestors(originalDirectories, entry.IsDirectory ? mapped : WindowsPaths.Parent(mapped), false);
                 ZipEntry replacement;
                 if (!entry.IsDirectory && inReference && deltaFiles.TryGetValue(mapped, out replacement))
                 {
+                    if (deletions.Marked.Contains(replacement))
+                    {
+                        overlay.DeletedCount++;
+                        overlay.DeletedBytes += entry.Size;
+                        AddAncestors(deletedSourceParents, WindowsPaths.Parent(original), true);
+                        AddAncestors(affectedDirectories, WindowsPaths.Parent(mapped), false);
+                        // 完全検証済みの削除対象は復元候補にも保存対象にも入れない。
+                        continue;
+                    }
+                    if (hasDeletions) AddAncestors(retainedSourceParents, WindowsPaths.Parent(original), true);
                     overlay.Plan.Fallbacks.Add(replacement, entry);
                     overlay.SupersededCount++;
                     overlay.SupersededBytes += entry.Size;
                     continue;
                 }
+                if (hasDeletions && !entry.IsDirectory)
+                    AddAncestors(retainedSourceParents, WindowsPaths.Parent(original), true);
                 overlay.Plan.AddEntry(entry, false);
             }
             // 同じ入力群内の明示ディレクトリ日時は先勝ちを保ち、群間では差分側を優先する。
@@ -3349,12 +3504,92 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             foreach (ZipEntry entry in delta.Entries)
             {
                 Program.CheckCancel();
-                if (!entry.Keep) continue;
+                if (!entry.Keep || deletions.Marked.Contains(entry) || deletions.Unavailable.Contains(entry)) continue;
                 bool replaceTimes = entry.IsDirectory && entry.Times.ModifiedUtc.HasValue && deltaDirectoryTimes.Add(entry.Relative);
                 overlay.Plan.AddEntry(entry, replaceTimes);
             }
+            if (hasDeletions)
+            {
+                // 基準より上の明示ディレクトリは退避側へ写る。元ツリーでも全ファイルが削除された
+                // 祖先だけを候補にし、通常の置換・残存ファイルがある元祖先は巻き込まない。
+                foreach (string original in deletedSourceParents)
+                {
+                    Program.CheckCancel();
+                    if (!retainedSourceParents.Contains(original))
+                        AddAncestors(affectedDirectories, MapBaseline(original, true, baselineRoot, deltaRoot, overlay.MiscDirectory), false);
+                }
+                overlay.PrunedDirectoryCount = PruneEmptyDirectories(overlay.Plan, originalDirectories, affectedDirectories);
+                if (overlay.HasMisc) overlay.HasMisc = overlay.Plan.Directories.ContainsKey(overlay.MiscDirectory);
+            }
             overlay.Plan.CheckCollisions(true);
             return overlay;
+        }
+
+        /// <summary>元の基準配下は差分の基準へ、それ以外は従来の退避領域へ写し、安全な相対名にする。</summary>
+        /// <param name="original">ベースラインの元の正規化済み相対名。</param>
+        /// <param name="directory">明示・暗黙のディレクトリなら true。</param>
+        /// <param name="baselineRoot">ベースラインの基準名。</param>
+        /// <param name="deltaRoot">差分の基準名。</param>
+        /// <param name="miscDirectory">基準外の退避先。</param>
+        /// <returns>R05 と同じ規則による正規化済み出力相対名。</returns>
+        private static string MapBaseline(string original, bool directory, string baselineRoot, string deltaRoot, string miscDirectory)
+        {
+            bool inReference = IsAtOrBelow(original, baselineRoot);
+            string suffix = inReference ? RemoveRoot(original, baselineRoot) : original;
+            string mapped = Combine(inReference ? deltaRoot : miscDirectory, suffix);
+            return WindowsPaths.Relative(mapped.Length == 0 && directory ? "." : mapped, directory);
+        }
+
+        /// <summary>ディレクトリ自身と親を集合へ追加する。既登録の祖先から上は登録済みなので終了する。</summary>
+        /// <param name="directories">Windows の大小文字を無視する集合。</param>
+        /// <param name="relative">最初に登録するディレクトリの相対名。</param>
+        /// <param name="includeRoot">元ツリーの全ファイル残存判定用なら空文字の仮想ルートも登録。</param>
+        private static void AddAncestors(HashSet<string> directories, string relative, bool includeRoot)
+        {
+            while (relative.Length != 0 || includeRoot)
+            {
+                Program.CheckCancel();
+                if (!directories.Add(relative) || relative.Length == 0) break;
+                relative = WindowsPaths.Parent(relative);
+            }
+        }
+
+        /// <summary>削除の影響がある空の部分木だけを、明示エントリと日時計画の両方から除外する。</summary>
+        /// <param name="plan">マークと判定不能差分を除いた採用計画。残すファイルは全て登録済み。</param>
+        /// <param name="originalDirectories">省略前なら存在した出力ディレクトリ名。暗黙の親も含む。</param>
+        /// <param name="affectedDirectories">削除対象の出力祖先と、全ファイルが削除された元祖先の写像。</param>
+        /// <returns>作成を省略する正規化済みディレクトリの重複なし個数。出力ルートは含まない。</returns>
+        private static long PruneEmptyDirectories(ExtractionPlan plan, HashSet<string> originalDirectories,
+            HashSet<string> affectedDirectories)
+        {
+            HashSet<string> live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ZipEntry entry in plan.Entries)
+            {
+                Program.CheckCancel();
+                if (entry.Keep && !entry.IsDirectory) AddAncestors(live, WindowsPaths.Parent(entry.Relative), false);
+            }
+            // 親は必ず子より短い。長さ順なら一回の走査で空部分木の子孫へ省略を伝播できる。
+            List<string> ordered = new List<string>(originalDirectories);
+            ordered.Sort(delegate(string x, string y) { return x.Length.CompareTo(y.Length); });
+            HashSet<string> omitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string directory in ordered)
+            {
+                Program.CheckCancel();
+                if (!live.Contains(directory) && (affectedDirectories.Contains(directory)
+                    || omitted.Contains(WindowsPaths.Parent(directory)))) omitted.Add(directory);
+            }
+            // ファイルを持つ祖先は live で保護済み。groups/Fallbacks はファイルだけなので変更不要。
+            plan.Entries.RemoveAll(delegate(ZipEntry entry)
+            {
+                Program.CheckCancel();
+                return entry.IsDirectory && omitted.Contains(entry.Relative);
+            });
+            foreach (string directory in omitted)
+            {
+                Program.CheckCancel();
+                plan.Directories.Remove(directory);
+            }
+            return omitted.Count;
         }
 
         /// <summary>正規化済みの path が root 自身またはその子孫かを、区切り境界付きで判定する。</summary>
@@ -3445,6 +3680,16 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             Console.WriteLine("一致したファイル: {0:N0} 個、一致したディレクトリ: {1:N0} 個", Match.MatchedFiles, Match.MatchedDirectories);
             Console.WriteLine("差分 ZIP によりベースライン ZIP が上書きされることとなるファイル個数: {0:N0} 個 (合計 {1:N0} bytes)",
                 SupersededCount, SupersededBytes);
+            Console.WriteLine("削除マークファイル: {0:N0} 個 (合計 {1:N0} bytes。マーク自体は展開しません)",
+                DeletionMarkerCount, DeletionMarkerBytes);
+            Console.WriteLine("削除マークによりベースラインの展開を省略するファイル: {0:N0} 個 (合計 {1:N0} bytes)",
+                DeletedCount, DeletedBytes);
+            Console.WriteLine("対応するベースラインファイルがない削除マーク: {0:N0} 個 / 空になるため作成を省略するディレクトリ: {1:N0} 個",
+                DeletionMarkerCount - DeletedCount, PrunedDirectoryCount);
+            if (UnavailableCandidateCount != 0)
+                Console.WriteLine("削除判定不能で採用しない差分ファイル: {0:N0} 個 (対応するベースラインは維持)", UnavailableCandidateCount);
+            if (DeletionMarkerCount != 0)
+                Console.WriteLine("削除は今回の展開計画からの省略です。展開先に既に存在するファイルやディレクトリは削除しません。");
             if (HasMisc) Console.WriteLine("ベースライン基準外の保存先: " + Text.Safe(MiscDirectory + "\\"));
         }
 
