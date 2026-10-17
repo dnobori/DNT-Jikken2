@@ -1,16 +1,17 @@
 ﻿/*
-DNNT 261011_SQVCB3 分割 ZIP 結合展開ユーティリティ R06
+DNNT 261014_CXH85B 分割 ZIP 結合展開ユーティリティ R07
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r06_261011_sqvcb3.cs
-今回バージョン: R06 (入力ソースの指定バージョン: R05)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r07_261017_cxh85b.cs
+今回バージョン: R07 (入力ソースの指定バージョン: R06)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
+前回標題: DNNT 261011_SQVCB3 分割 ZIP 結合展開ユーティリティ R06
+R05 標題: DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
 R04 標題: DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
 R03 標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
 R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
 初版標題: DNNT 261004_QCT5NR 分割 ZIP 結合展開ユーティリティ
 
-目的: ZIP / UNIX split 断片 / その混在群を認識し、通常展開またはベースラインへの差分展開を行う。
+目的: ZIP / UNIX split 断片 / その混在群を認識し、通常・差分・ziphist の各展開を行う。
 対象: .NET Framework 4.8 が動作する Windows / .NET Framework 4.8 API / AnyCPU。
       Visual Studio 2026 と 4.8 targeting pack でビルドする。既存プロジェクトの Exe 設定を継承。
       本体は C# 4 構文を保ち、既存 Lib.cs を含むプロジェクトでは C# 7.3 を指定する。
@@ -36,7 +37,8 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       環境変数 DNNT_ZIP_CODEPAGE により未指定名のコードページを変更できる。
       新規ディレクトリだけに日時を設定する。既存ディレクトリは設定しない。
       削除マークは __DELETED__ と末尾なし/CR/LF/CRLF、先頭 UTF-8 BOM 一個の有無だけを許容する。
-      通常モードおよびベースライン側の同じ本文は通常ファイル。既存出力の物理削除は行わない。
+      従来の通常モードおよび /d のベースライン側では、同じ本文も通常ファイル。
+      ziphist ではベースラインを含む全世代の最終候補へマーク判定を適用する。既存出力の物理削除は行わない。
       短小暗号差分は保存前にパスワードを質問する場合がある。判定不能なら差分を採用せず、
       対応ベースラインを残して警告する。削除候補の CRC 等が不正なら従来の分類で出力前に中断する。
       自作コードであること自体は無脆弱性を保証しない。README の制約・検証範囲参照。
@@ -95,7 +97,31 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       ZIP/codec/暗号/基準照合/並列/保存/リンク検査/長いパス/通常モードの各本体は変更しない。
       実行時の追加ライブラリは不要。配布プロジェクトの参照名と既存の設定値を整合させた。
 
-今回の生成情報 (R06):
+改修 R07 / DNNT 261014_CXH85B / 2026/10/17 21:40:28 (JST):
+      一ファイル選択から .listzip.txt と .listfile.txt を一意特定し、/d より ziphist 展開モードを優先する。
+      付随ファイル未特定時は従来モード。特定後の不正なマニフェスト・ZIP 欠損・サイズ/SHA 不一致は中断。
+      UTF-8 BOM 任意・CR/LF/CRLF 混在・末尾改行を検査し、連続世代と TYPE、後勝ち listfile を解釈する。
+      全世代の物理 ZIP と付随ファイルの読取ハンドルを保持し、全 ZIP のサイズ・SHA-256 を出力前に検証。
+      宣言 TYPE に従い論理 ZIP を構成し、zip_type_c の同一 Q 群の P だけを Ordinal 順で仮想結合する。
+      すべての旧版を含む危険パスを検査した上で、各出力パスの最終候補だけを採用する。
+      最終候補の短小本文を既存 codec で完全検証し、削除・更新で不要になる旧版とマークを展開しない。
+      ファイル/ディレクトリ遷移を最終状態で検査し、削除で空になる部分木は明示エントリの順にかかわらず省略。
+      開始時の既存ファイル一覧を取得し、終了後に実出力のサイズ・SHA-256・余分ファイルを照合してから完了表示。
+      全ゼロ SHA の不存在指定にも、開始時から存在する余分ファイルの例外を適用する。既存出力を物理削除しない。
+      ZIP と両マニフェストの自己上書きは禁止。指定ルートのリンク許容、配下リンク拒否、長いパスを継承。
+      最終内容の読取時は可能なら当該ハンドルによるアクセス日時自動更新を抑止。不可なら内容検証後に警告。
+      新規ディレクトリの日時復元は最終照合の後。既存の ZIP/codec/暗号/worker/保存および /d 本体を維持。
+
+今回の生成情報 (R07):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: この環境から公開された設定値は取得不可のため推測しない。
+      セッション開始日時(JST): 正確な起動時刻は取得不可。
+      今回依頼の受信時刻・作業開始基準(JST): 2026/10/17 21:19:24 (会話に供給された時刻情報)。
+      応答生成日時(JST): 2026/10/17 21:40:28 (JST)
+      実コンパイル・実 C# テストと Windows/Visual Studio 2026 実機未検証の区別は README の R07 追記参照。
+
+前回の生成情報 (R06、過去の検証状況を保持):
       本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: 公開された設定値は取得不可のため推測しない。
@@ -189,7 +215,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         private const string BaselineDialogDirectoryValue = "BaselineSourceDialogDirectory";
         private const string DestinationDialogParentValue = "DestinationDialogParentDirectory";
 
-        /// <summary>入力ファイル群と /d または -d を受け取り、Win32 に準じた終了コードを返す。</summary>
+        /// <summary>一ファイルからの ziphist 自動認識または従来の入力群と /d を受け取り、Win32 に準じた終了コードを返す。</summary>
         [STAThread]
         private static int Main(string[] args)
         {
@@ -211,7 +237,6 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 bool differential;
                 string specifiedDestination;
                 string[] fileArguments = GetFileArguments(args, out differential, out specifiedDestination);
-                Console.WriteLine(differential ? "【差分 ZIP モード】" : "【通常 ZIP モード】");
                 Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
                 {
                     e.Cancel = true;
@@ -223,70 +248,82 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 PasswordManager passwords = new PasswordManager();
                 passwords.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "password_list.txt"));
 
-                // 両入力群は、ハンドル、認識結果、重複判定をそれぞれ独立して所有する。
-                // 差分側の認識・仮想パス検査が完了してから、必ず別ダイアログでベースラインを選ぶ。
-                using (InputGroup primary = ReadInputGroup(fileArguments,
+                // R07: 入力を一度だけ選択し、従来の zip 文字列による除外・ZIP 自動検出より先に判定する。
+                string[] primaryPaths = GetInputs(fileArguments,
                     differential ? "(1) まず、差分 zip 群を指定してください" : "入力ファイル群を選択",
-                    SourceDialogDirectoryValue, differential ? "差分 ZIP 群" : null))
-                using (InputGroup baseline = differential ? ReadInputGroup(new string[0],
-                    "(2) 次に、ベースライン zip 群を指定してください",
-                    BaselineDialogDirectoryValue, "ベースライン ZIP 群") : null)
+                    SourceDialogDirectoryValue);
+                ZiphistSelection historySelection = ZiphistSelection.TryIdentify(primaryPaths);
+                if (historySelection != null)
                 {
-                    WarningBook warnings = new WarningBook();
-                    ExtractionPlan plan = primary.Plan;
-                    DifferenceOverlay overlay = null;
-                    if (differential)
+                    Console.WriteLine("【ziphist 展開モード】");
+                    result = RunZiphist(historySelection, specifiedDestination, passwords, out successfulDestination);
+                }
+                else
+                {
+                    Console.WriteLine(differential ? "【差分 ZIP モード】" : "【通常 ZIP モード】");
+                    // 両入力群は、ハンドル、認識結果、重複判定をそれぞれ独立して所有する。
+                    // 差分側の認識・仮想パス検査が完了してから、必ず別ダイアログでベースラインを選ぶ。
+                    using (InputGroup primary = ReadSelectedInputGroup(primaryPaths, differential ? "差分 ZIP 群" : null))
+                    using (InputGroup baseline = differential ? ReadInputGroup(new string[0],
+                        "(2) 次に、ベースライン zip 群を指定してください",
+                        BaselineDialogDirectoryValue, "ベースライン ZIP 群") : null)
                     {
-                        primary.Plan.ConfirmDuplicates();
-                        baseline.Plan.ConfirmDuplicates();
-                        Console.WriteLine("基準ディレクトリを計算中...");
-                        ReferenceMatch match = DirectoryMatcher.Find(baseline.Plan, primary.Plan);
-                        Console.WriteLine("削除マークファイルを検査中...");
-                        DeletionMarkers deletions = DeletionMarkers.Scan(primary.Plan, passwords, warnings);
-                        overlay = DifferenceOverlay.Build(baseline.Plan, primary.Plan, match,
-                            baseline.Sources[0], File.GetLastWriteTime(WindowsPaths.NativeName(baseline.Sources[0])), deletions);
-                        plan = overlay.Plan;
-                        overlay.Print();
-                    }
-                    string root = specifiedDestination == null
-                        ? SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, differential)
-                        : WindowsPaths.TrimSlash(WindowsPaths.Full(specifiedDestination));
-                    if (specifiedDestination != null) Console.WriteLine("指定された展開先: " + Text.Safe(root));
-                    using (SafeRoot safeRoot = new SafeRoot(root, warnings))
-                    {
-                        SourceSet[] inputs = differential
-                            ? new SourceSet[] { primary.SourceSet, baseline.SourceSet }
-                            : new SourceSet[] { primary.SourceSet };
-                        plan.BindDestination(safeRoot, inputs);
-                        if (!differential) plan.ConfirmDuplicates();
-                        plan.BuildDirectoryTimes();
-                        OverwritePolicy policy = new OverwritePolicy(plan, safeRoot, warnings);
-                        policy.Preflight();
-                        Extractor extractor = new Extractor(plan, safeRoot, passwords, policy, warnings);
-                        try { extractor.Run(); }
-                        finally { safeRoot.RestoreCreatedDirectoryTimes(plan.Directories); }
-                        if (overlay != null)
+                        WarningBook warnings = new WarningBook();
+                        ExtractionPlan plan = primary.Plan;
+                        DifferenceOverlay overlay = null;
+                        if (differential)
                         {
-                            Console.WriteLine("【差分 ZIP モードでの展開終了】");
+                            primary.Plan.ConfirmDuplicates();
+                            baseline.Plan.ConfirmDuplicates();
+                            Console.WriteLine("基準ディレクトリを計算中...");
+                            ReferenceMatch match = DirectoryMatcher.Find(baseline.Plan, primary.Plan);
+                            Console.WriteLine("削除マークファイルを検査中...");
+                            DeletionMarkers deletions = DeletionMarkers.Scan(primary.Plan, passwords, warnings);
+                            overlay = DifferenceOverlay.Build(baseline.Plan, primary.Plan, match,
+                                baseline.Sources[0], File.GetLastWriteTime(WindowsPaths.NativeName(baseline.Sources[0])), deletions);
+                            plan = overlay.Plan;
                             overlay.Print();
-                            Console.WriteLine("差分の失敗時にベースラインから復元できたファイル: {0:N0} 個", extractor.FallbackSuccessCount);
                         }
-                        int sourceCount = primary.Sources.Count + (baseline == null ? 0 : baseline.Sources.Count);
-                        string mode = baseline == null ? primary.Detected.Mode
-                            : "差分 ZIP モード / 差分: " + primary.Detected.Mode + " / ベースライン: " + baseline.Detected.Mode;
-                        string summary = String.Format(NumberCulture,
-                            "【{0:N0} 個の zip ファイル群 (モード: {1}) から、{2:N0} 個のファイル (合計 {3:N0} bytes) を展開完了】",
-                            sourceCount, mode, extractor.SuccessCount, extractor.SuccessBytes);
-                        Console.WriteLine(summary);
-                        warnings.Print();
-                        Console.WriteLine("意図的な省略: 重複 {0:N0} 個 / 上書きしない指定 {1:N0} 個", plan.DuplicateCount, extractor.SkippedCount);
-                        if (overlay != null)
-                            Console.WriteLine("差分優先によるベースライン展開省略予定: {0:N0} 個 (合計 {1:N0} bytes)",
-                                overlay.SupersededCount, overlay.SupersededBytes);
-                        Console.WriteLine(summary);
-                        Console.WriteLine("展開先ディレクトリフルパス:\n" + Text.Safe(WindowsPaths.WithSlash(root)));
-                        result = warnings.HasWarnings ? 299 : 0; // ERROR_PARTIAL_COPY
-                        if (result == 0) successfulDestination = root;
+                        string root = specifiedDestination == null
+                            ? SelectDestination(Path.GetDirectoryName(primary.Sources[0]), primary.Sources, differential)
+                            : WindowsPaths.TrimSlash(WindowsPaths.Full(specifiedDestination));
+                        if (specifiedDestination != null) Console.WriteLine("指定された展開先: " + Text.Safe(root));
+                        using (SafeRoot safeRoot = new SafeRoot(root, warnings))
+                        {
+                            SourceSet[] inputs = differential
+                                ? new SourceSet[] { primary.SourceSet, baseline.SourceSet }
+                                : new SourceSet[] { primary.SourceSet };
+                            plan.BindDestination(safeRoot, inputs);
+                            if (!differential) plan.ConfirmDuplicates();
+                            plan.BuildDirectoryTimes();
+                            OverwritePolicy policy = new OverwritePolicy(plan, safeRoot, warnings);
+                            policy.Preflight();
+                            Extractor extractor = new Extractor(plan, safeRoot, passwords, policy, warnings);
+                            try { extractor.Run(); }
+                            finally { safeRoot.RestoreCreatedDirectoryTimes(plan.Directories); }
+                            if (overlay != null)
+                            {
+                                Console.WriteLine("【差分 ZIP モードでの展開終了】");
+                                overlay.Print();
+                                Console.WriteLine("差分の失敗時にベースラインから復元できたファイル: {0:N0} 個", extractor.FallbackSuccessCount);
+                            }
+                            int sourceCount = primary.Sources.Count + (baseline == null ? 0 : baseline.Sources.Count);
+                            string mode = baseline == null ? primary.Detected.Mode
+                                : "差分 ZIP モード / 差分: " + primary.Detected.Mode + " / ベースライン: " + baseline.Detected.Mode;
+                            string summary = String.Format(NumberCulture,
+                                "【{0:N0} 個の zip ファイル群 (モード: {1}) から、{2:N0} 個のファイル (合計 {3:N0} bytes) を展開完了】",
+                                sourceCount, mode, extractor.SuccessCount, extractor.SuccessBytes);
+                            Console.WriteLine(summary);
+                            warnings.Print();
+                            Console.WriteLine("意図的な省略: 重複 {0:N0} 個 / 上書きしない指定 {1:N0} 個", plan.DuplicateCount, extractor.SkippedCount);
+                            if (overlay != null)
+                                Console.WriteLine("差分優先によるベースライン展開省略予定: {0:N0} 個 (合計 {1:N0} bytes)",
+                                    overlay.SupersededCount, overlay.SupersededBytes);
+                            Console.WriteLine(summary);
+                            Console.WriteLine("展開先ディレクトリフルパス:\n" + Text.Safe(WindowsPaths.WithSlash(root)));
+                            result = warnings.HasWarnings ? 299 : 0; // ERROR_PARTIAL_COPY
+                            if (result == 0) successfulDestination = root;
+                        }
                     }
                 }
             }
@@ -330,6 +367,69 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             return result;
         }
 
+        /// <summary>ziphist を独立モードで復元し、listfile の最終照合が済んだ場合だけ完了を表示する。</summary>
+        /// <param name="selection">一つの指定から一意に特定した付随マニフェスト。</param>
+        /// <param name="specifiedDestination">/out: による既存出力先。null は保存ダイアログ。</param>
+        /// <param name="passwords">通常・差分と同じ候補ファイルおよび主スレッド対話を使う管理器。</param>
+        /// <param name="successfulDestination">警告なしの成功時だけ Explorer 用に返す出力先。</param>
+        /// <returns>警告なしは 0、日時等の補助警告があれば 299。内容不一致は例外で中断する。</returns>
+        private static int RunZiphist(ZiphistSelection selection, string specifiedDestination,
+            PasswordManager passwords, out string successfulDestination)
+        {
+            successfulDestination = null;
+            WarningBook warnings = new WarningBook();
+            using (ZiphistRestore history = new ZiphistRestore(selection))
+            {
+                ZiphistFinalPlan combined = history.VerifyAndPlan(passwords);
+                combined.Print();
+                string root = specifiedDestination == null
+                    ? SelectDestination(Path.GetDirectoryName(selection.SelectedPath), history.Sources, false,
+                        "【ziphist 展開モード】で展開する先を指定してください")
+                    : WindowsPaths.TrimSlash(WindowsPaths.Full(specifiedDestination));
+                if (specifiedDestination != null) Console.WriteLine("指定された展開先: " + Text.Safe(root));
+                using (SafeRoot safeRoot = new SafeRoot(root, warnings))
+                {
+                    ExtractionPlan plan = combined.Plan;
+                    history.BindDestination(plan, safeRoot);
+                    plan.BuildDirectoryTimes();
+                    OverwritePolicy policy = new OverwritePolicy(plan, safeRoot, warnings);
+                    policy.Preflight();
+                    Console.WriteLine("ziphist 展開開始時の既存ファイル一覧を確認中...");
+                    HashSet<string> initial = ZiphistOutput.Capture(safeRoot);
+                    Extractor extractor = new Extractor(plan, safeRoot, passwords, policy, warnings);
+                    ZiphistVerification verification;
+                    try
+                    {
+                        extractor.Run();
+                        Console.WriteLine("ziphist 展開後の全ファイルを listfile のサイズ・SHA-256・不存在指定と照合中...");
+                        verification = ZiphistOutput.Verify(safeRoot, history.Manifest.Files, initial);
+                    }
+                    catch { warnings.Print(); throw; }
+                    finally { safeRoot.RestoreCreatedDirectoryTimes(plan.Directories); }
+                    if (verification.AccessTimePreservationFailureCount != 0)
+                        warnings.Add("ziphist: 最終内容検証時のアクセス日時",
+                            String.Format(NumberCulture,
+                                "{0:N0} 個のファイルで読取時のアクセス日時更新を抑止できませんでした。内容のサイズ・SHA-256 は一致しましたが、アクセス日時は OS / ファイルシステムにより変化する場合があります。",
+                                verification.AccessTimePreservationFailureCount));
+                    Console.WriteLine("【ziphist 展開モード】展開と最終照合が完了しました。");
+                    combined.Print();
+                    string summary = String.Format(NumberCulture,
+                        "【{0:N0} 世代・{1:N0} 個の zip ファイル群 (モード: ziphist 展開モード) から、{2:N0} 個のファイル (合計 {3:N0} bytes) を展開完了】",
+                        history.Manifest.Generations.Count, history.Sources.Count, extractor.SuccessCount, extractor.SuccessBytes);
+                    Console.WriteLine(summary);
+                    Console.WriteLine("listfile 最終照合: {0:N0} 個 / {1:N0} bytes が一致。開始時からある余分ファイル {2:N0} 個を保持。",
+                        verification.VerifiedCount, verification.VerifiedBytes, verification.PreservedExtraCount);
+                    Console.WriteLine("上書きしない指定による保存省略: {0:N0} 個（必要なファイルは省略時も最終内容を検証）。", extractor.SkippedCount);
+                    warnings.Print();
+                    Console.WriteLine(summary);
+                    Console.WriteLine("展開先ディレクトリフルパス:\n" + Text.Safe(WindowsPaths.WithSlash(root)));
+                    int result = warnings.HasWarnings ? 299 : 0;
+                    if (result == 0) successfulDestination = root;
+                    return result;
+                }
+            }
+        }
+
         /// <summary>モード/展開先オプションを除き、入力ファイル引数だけを元の順序で返す。</summary>
         /// <param name="args">コマンドライン引数。スイッチはどの位置でも指定可能。</param>
         /// <param name="differential">/d または -d（大文字も許容）があれば true。</param>
@@ -364,7 +464,15 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// <returns>呼出元が Dispose する入力群。</returns>
         private static InputGroup ReadInputGroup(string[] args, string title, string historyValue, string label)
         {
-            string[] paths = GetInputs(args, title, historyValue);
+            return ReadSelectedInputGroup(GetInputs(args, title, historyValue), label);
+        }
+
+        /// <summary>選択・実在検査を済ませた入力へ、従来の除外・ソート・ZIP 自動認識だけを適用する。</summary>
+        /// <param name="paths">GetInputs が一度だけ取得した同じディレクトリの入力群。</param>
+        /// <param name="label">表示する群名。通常モードなら null。</param>
+        /// <returns>呼出元が Dispose する、従来モードの入力群。</returns>
+        private static InputGroup ReadSelectedInputGroup(string[] paths, string label)
+        {
             if (label != null) Console.WriteLine(label + ":");
             Console.WriteLine("入力ファイル群 ({0:N0} 個のファイル) の認識中...", paths.Length);
             List<string> sources = new List<string>();
@@ -552,8 +660,9 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// <param name="initial">履歴がない場合に使用する初期ディレクトリ。</param>
         /// <param name="sources">展開対象の検証済み物理ファイルのフルパス一覧。1 件以上必要。順序は変更しない。</param>
         /// <param name="differential">差分モードなら true。保存ダイアログのタイトルに反映する。</param>
+        /// <param name="titleOverride">ziphist では指定の専用タイトル。null は従来のタイトル。</param>
         /// <returns>ユーザーが指定した架空ファイルを含む、実際の展開先絶対ディレクトリ。</returns>
-        private static string SelectDestination(string initial, IList<string> sources, bool differential)
+        private static string SelectDestination(string initial, IList<string> sources, bool differential, string titleOverride = null)
         {
             if (sources == null) throw new ArgumentNullException("sources");
             if (sources.Count == 0) throw new ArgumentException("展開対象の物理ファイルがありません。", "sources");
@@ -574,8 +683,8 @@ namespace dnnt_261004_qct5nr_split_zip_extract
 
             using (SaveFileDialog dialog = new SaveFileDialog())
             {
-                dialog.Title = differential ? "差分 ZIP モードで展開する先を指定してください"
-                    : "通常 ZIP モードで展開する先を指定してください";
+                dialog.Title = titleOverride ?? (differential ? "差分 ZIP モードで展開する先を指定してください"
+                    : "通常 ZIP モードで展開する先を指定してください");
                 dialog.Filter = "すべてのファイル (*.*)|*.*";
                 dialog.FileName = dummyFileName;
 
@@ -635,6 +744,1069 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             int hr = Marshal.GetHRForException(ex);
             if ((hr & unchecked((int)0xffff0000)) == unchecked((int)0x80070000)) return hr & 0xffff;
             return 31;
+        }
+    }
+
+    /// <summary>一ファイルの指定から、同じベース名に属する二つの ziphist 付随ファイルを特定する。</summary>
+    internal sealed class ZiphistSelection
+    {
+        internal readonly string ListZipPath, ListFilePath, BasePath, SelectedPath;
+        internal readonly bool SelectedManifest;
+        private const string ZipListSuffix = ".listzip.txt";
+        private const string FileListSuffix = ".listfile.txt";
+
+        /// <summary>存在確認を済ませた一組を保持する。ここではファイル内容やリンク実体を読まない。</summary>
+        /// <param name="basePath">付随ファイルの共通ベース名を含む通常表記の絶対パス。</param>
+        /// <param name="selectedPath">ユーザーが実際に指定したファイルの絶対パス。</param>
+        /// <param name="selectedManifest">付随ファイルそのものを指定した場合は true。</param>
+        private ZiphistSelection(string basePath, string selectedPath, bool selectedManifest)
+        {
+            BasePath = basePath;
+            SelectedPath = selectedPath;
+            SelectedManifest = selectedManifest;
+            ListZipPath = basePath + ZipListSuffix;
+            ListFilePath = basePath + FileListSuffix;
+        }
+
+        /// <summary>一つの指定に対し両付随ファイルが一意に存在するときだけ候補を返す。内容は読まない。</summary>
+        /// <param name="selected">検査済みの入力パス。一つ以外の指定は従来モードのため null を返す。</param>
+        /// <returns>特定した一組。候補なし、片方のみ、複数候補の場合は null。</returns>
+        internal static ZiphistSelection TryIdentify(string[] selected)
+        {
+            if (selected == null || selected.Length != 1) return null;
+            string path = WindowsPaths.Full(selected[0]);
+            string name = Path.GetFileName(path);
+            string directory = Path.GetDirectoryName(path);
+            if (name.EndsWith(ZipListSuffix, StringComparison.OrdinalIgnoreCase))
+                return ExistingPair(directory, name.Substring(0, name.Length - ZipListSuffix.Length), path, true);
+            if (name.EndsWith(FileListSuffix, StringComparison.OrdinalIgnoreCase))
+                return ExistingPair(directory, name.Substring(0, name.Length - FileListSuffix.Length), path, true);
+
+            // 詳細な命名例の参照先が仕様に存在しないため、末尾のドット成分を一段ずつ剥ぐ。
+            // foo.zip.listzip.txt の形にも対応し、より短い候補を暗黙に優先しない。
+            ZiphistSelection found = null;
+            string candidate = name;
+            while (candidate.Length != 0)
+            {
+                Program.CheckCancel();
+                ZiphistSelection current = ExistingPair(directory, candidate, path, false);
+                if (current != null)
+                {
+                    if (found != null) return null;
+                    found = current;
+                }
+                int dot = candidate.LastIndexOf('.');
+                if (dot < 0) break;
+                candidate = candidate.Substring(0, dot);
+            }
+            return found;
+        }
+
+        /// <summary>ベース名候補に二つの付随接尾辞を付け、両方が存在する場合だけ選択を構成する。</summary>
+        /// <param name="directory">選択ファイルがある通常表記の絶対ディレクトリ。</param>
+        /// <param name="baseName">空でない候補ファイル名。ディレクトリ部分は含まない。</param>
+        /// <param name="selectedPath">ユーザー指定の元パス。</param>
+        /// <param name="selectedManifest">付随ファイルを直接指定した場合は true。</param>
+        /// <returns>存在する一組。名前なし、片方欠落、長さ上限超過なら null。</returns>
+        private static ZiphistSelection ExistingPair(string directory, string baseName, string selectedPath, bool selectedManifest)
+        {
+            if (baseName.Length == 0) return null;
+            string basePath = Path.Combine(directory, baseName);
+            try
+            {
+                string zipPath = WindowsPaths.NativeName(basePath + ZipListSuffix);
+                string filePath = WindowsPaths.NativeName(basePath + FileListSuffix);
+                if (!File.Exists(zipPath) || !File.Exists(filePath)) return null;
+                return new ZiphistSelection(basePath, selectedPath, selectedManifest);
+            }
+            catch (PathTooLongException) { return null; }
+        }
+    }
+
+    /// <summary>listzip の一行。宣言順、正規化済み相対名、検証用サイズと SHA-256 を保持する。</summary>
+    internal sealed class ZiphistZipRecord
+    {
+        internal string Relative, FullPath, Hash;
+        internal long Size;
+        internal int LineNumber;
+    }
+
+    /// <summary>ベースラインまたは差分の一世代。Files の順序はマニフェストの記載順を保つ。</summary>
+    internal sealed class ZiphistGeneration
+    {
+        internal int Number, LineNumber;
+        internal string Type;
+        internal readonly List<ZiphistZipRecord> Files = new List<ZiphistZipRecord>();
+    }
+
+    /// <summary>listfile の有効な最終レコード。全ゼロ SHA-256 はサイズにかかわらず不存在を表す。</summary>
+    internal sealed class ZiphistFileRecord
+    {
+        internal string Relative, Hash;
+        internal long Size;
+        internal int LineNumber;
+        internal bool IsDeleted
+        {
+            get { return Hash == "0000000000000000000000000000000000000000000000000000000000000000"; }
+        }
+    }
+
+    /// <summary>固定済み入力ハンドルから二つのマニフェストを厳密に読み、全世代と最終ファイル状態を保持する。</summary>
+    internal sealed class ZiphistManifest
+    {
+        internal readonly List<ZiphistGeneration> Generations = new List<ZiphistGeneration>();
+        internal readonly Dictionary<string, ZiphistFileRecord> Files = new Dictionary<string, ZiphistFileRecord>(StringComparer.OrdinalIgnoreCase);
+        private readonly ZiphistSelection selection;
+        private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
+
+        /// <summary>二つの付随ファイルを識別する選択結果を保持する。</summary>
+        /// <param name="value">存在確認を済ませた一意な選択。</param>
+        private ZiphistManifest(ZiphistSelection value) { selection = value; }
+
+        /// <summary>listzip と listfile を開き直さず読み取る。渡された SourcePart の所有権は移動しない。</summary>
+        /// <param name="selection">二つの付随ファイルとユーザー指定ファイルを示す選択。</param>
+        /// <param name="listzip">listzip に対して既に開いて保持している入力。</param>
+        /// <param name="listfile">listfile に対して既に開いて保持している入力。</param>
+        /// <returns>順序を保持した世代一覧と、後勝ちで確定したファイル辞書。</returns>
+        internal static ZiphistManifest Read(ZiphistSelection selection, SourcePart listzip, SourcePart listfile)
+        {
+            if (selection == null) throw new ArgumentNullException("selection");
+            if (listzip == null) throw new ArgumentNullException("listzip");
+            if (listfile == null) throw new ArgumentNullException("listfile");
+            ZiphistManifest result = new ZiphistManifest(selection);
+            result.ReadZipList(listzip);
+            result.ReadFileList(listfile);
+            return result;
+        }
+
+        /// <summary>指定ファイルが、保持しているマニフェストの終着世代を指すかを確認する。</summary>
+        /// <returns>付随ファイル直接指定、または最後の世代に指定 ZIP が含まれる場合は true。</returns>
+        internal bool MatchesSelection() { return MatchesSelection(selection); }
+
+        /// <summary>付随ファイル直接指定を認め、ZIP 指定は最終世代の正規化済み物理パスと照合する。</summary>
+        /// <param name="value">確認するユーザー指定。null は不一致。</param>
+        /// <returns>最後の世代を指す指定なら true。過去世代や無関係な ZIP なら false。</returns>
+        internal bool MatchesSelection(ZiphistSelection value)
+        {
+            if (value == null || Generations.Count == 0) return false;
+            if (!String.Equals(value.ListZipPath, selection.ListZipPath, StringComparison.OrdinalIgnoreCase)
+                || !String.Equals(value.ListFilePath, selection.ListFilePath, StringComparison.OrdinalIgnoreCase)) return false;
+            if (value.SelectedManifest) return true;
+            foreach (ZiphistZipRecord record in Generations[Generations.Count - 1].Files)
+                if (String.Equals(record.FullPath, value.SelectedPath, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>begin/end、連続世代、宣言 TYPE、物理ファイル名と検証値を解析する。</summary>
+        /// <param name="source">listzip の固定済み入力。所有権は呼出元に残す。</param>
+        private void ReadZipList(SourcePart source)
+        {
+            bool began = false, ended = false;
+            ZiphistGeneration current = null;
+            Dictionary<string, ZiphistZipRecord> inGeneration = null;
+            Dictionary<string, ZiphistZipRecord> allFiles = new Dictionary<string, ZiphistZipRecord>(StringComparer.OrdinalIgnoreCase);
+            string directory = Path.GetDirectoryName(selection.ListZipPath);
+            ReadLines(source, delegate(string line, int number)
+            {
+                if (ended || String.IsNullOrWhiteSpace(line)) return;
+                if (!began)
+                {
+                    if (line == "/ziphist_begin") began = true;
+                    return;
+                }
+                if (line.StartsWith("/#", StringComparison.Ordinal)) return;
+                if (line == "/ziphist_end")
+                {
+                    CheckGeneration(source, current);
+                    ended = true;
+                    return;
+                }
+                if (line[0] == '/')
+                {
+                    if (line == "/ziphist_begin") throw Error(source, number, "/ziphist_begin が重複しています。");
+                    if (!line.StartsWith("/base:", StringComparison.Ordinal) && !line.StartsWith("/diff:", StringComparison.Ordinal))
+                        throw Error(source, number, "未対応または不正な指令行です: " + line);
+                    CheckGeneration(source, current);
+                    string[] fields = line.Split(':');
+                    int generationNumber;
+                    if (fields.Length != 3 || !Int32.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out generationNumber))
+                        throw Error(source, number, "世代指令は /base:0:TYPE または /diff:N:TYPE の形式で指定してください。");
+                    string expectedCommand = Generations.Count == 0 ? "/base" : "/diff";
+                    if (fields[0] != expectedCommand || generationNumber != Generations.Count)
+                        throw Error(source, number, "ベースライン 0 から差分 1, 2, ... の連続した世代が必要です。期待値: "
+                            + expectedCommand + ":" + Generations.Count.ToString(CultureInfo.InvariantCulture));
+                    if (fields[2] != "zip_type_0" && fields[2] != "zip_type_a" && fields[2] != "zip_type_b" && fields[2] != "zip_type_c")
+                        throw Error(source, number, "未対応の ZIP TYPE です: " + fields[2]);
+                    current = new ZiphistGeneration { Number = generationNumber, Type = fields[2], LineNumber = number };
+                    Generations.Add(current);
+                    inGeneration = new Dictionary<string, ZiphistZipRecord>(StringComparer.OrdinalIgnoreCase);
+                    return;
+                }
+                if (current == null) throw Error(source, number, "ファイル一覧より前に /base:0:TYPE が必要です。");
+                int last = line.LastIndexOf('/');
+                int previous = last > 0 ? line.LastIndexOf('/', last - 1) : -1;
+                if (previous <= 0 || last <= previous + 1 || last == line.Length - 1)
+                    throw Error(source, number, "ZIP レコードは ファイル相対パス/サイズ/SHA-256 の形式で指定してください。");
+                string relative = ReadRelative(source, number, line.Substring(0, previous));
+                string fullPath = Path.Combine(directory, relative);
+                WindowsPaths.CheckLength(fullPath, false);
+                ZiphistZipRecord record = new ZiphistZipRecord
+                {
+                    Relative = relative, FullPath = fullPath, LineNumber = number,
+                    Size = ReadSize(source, number, line.Substring(previous + 1, last - previous - 1)),
+                    Hash = ReadHash(source, number, line.Substring(last + 1))
+                };
+                ZiphistZipRecord before;
+                if (inGeneration.TryGetValue(fullPath, out before))
+                    throw Error(source, number, "同一世代で ZIP パスが重複しています（正規化後の別名を含む）: "
+                        + relative + " / 先行行 " + before.LineNumber.ToString(CultureInfo.InvariantCulture));
+                if (allFiles.TryGetValue(fullPath, out before))
+                {
+                    if (before.Size != record.Size || before.Hash != record.Hash)
+                        throw Error(source, number, "別世代から再参照した同じ ZIP のサイズまたは SHA-256 が不一致です: "
+                            + relative + " / 先行行 " + before.LineNumber.ToString(CultureInfo.InvariantCulture));
+                }
+                else allFiles.Add(fullPath, record);
+                inGeneration.Add(fullPath, record);
+                current.Files.Add(record);
+            });
+            if (!began) throw Error(source, 0, "/ziphist_begin がありません。");
+            if (Generations.Count == 0) throw Error(source, 0, "/base:0:TYPE とベースライン ZIP 一覧がありません。");
+            CheckGeneration(source, current);
+        }
+
+        /// <summary>世代の空一覧を拒否し、zip_type_0 の単一物理ファイル条件を確認する。</summary>
+        /// <param name="source">エラー位置の表示に用いるマニフェスト入力。</param>
+        /// <param name="generation">直前または最後の世代。まだ存在しない場合は何もしない。</param>
+        private static void CheckGeneration(SourcePart source, ZiphistGeneration generation)
+        {
+            if (generation == null) return;
+            if (generation.Files.Count == 0)
+                throw Error(source, generation.LineNumber, "世代 " + generation.Number.ToString(CultureInfo.InvariantCulture) + " の ZIP ファイル一覧が空です。");
+            if (generation.Type == "zip_type_0" && generation.Files.Count != 1)
+                throw Error(source, generation.LineNumber, "zip_type_0 の物理 ZIP ファイルは一つだけである必要があります。");
+        }
+
+        /// <summary>SHA-256、サイズ、相対パスを解析し、正規化後の同一パスでは最後のレコードを採用する。</summary>
+        /// <param name="source">listfile の固定済み入力。所有権は呼出元に残す。</param>
+        private void ReadFileList(SourcePart source)
+        {
+            ReadLines(source, delegate(string line, int number)
+            {
+                if (String.IsNullOrWhiteSpace(line)) return;
+                char first = line[0];
+                if (first == '/' || first == '#' || first == '!' || first == ';') return;
+                int hashEnd = 0;
+                while (hashEnd < line.Length && !IsSeparator(line[hashEnd])) hashEnd++;
+                int sizeStart = hashEnd;
+                while (sizeStart < line.Length && IsSeparator(line[sizeStart])) sizeStart++;
+                int sizeEnd = sizeStart;
+                while (sizeEnd < line.Length && !IsSeparator(line[sizeEnd])) sizeEnd++;
+                int pathStart = sizeEnd;
+                while (pathStart < line.Length && IsSeparator(line[pathStart])) pathStart++;
+                if (hashEnd == 0 || sizeStart == sizeEnd || pathStart == line.Length)
+                    throw Error(source, number, "コンテンツレコードは SHA-256 サイズ ファイル相対パス の形式で指定してください。");
+                string relative = ReadRelative(source, number, line.Substring(pathStart));
+                Files[relative] = new ZiphistFileRecord
+                {
+                    Relative = relative, LineNumber = number,
+                    Size = ReadSize(source, number, line.Substring(sizeStart, sizeEnd - sizeStart)),
+                    Hash = ReadHash(source, number, line.Substring(0, hashEnd))
+                };
+            });
+        }
+
+        /// <summary>最初の二項目を区切る ASCII スペースとタブだけを認める。</summary>
+        /// <param name="value">検査する文字。</param>
+        /// <returns>項目区切りとして許可されるとき true。</returns>
+        private static bool IsSeparator(char value) { return value == ' ' || value == '\t'; }
+
+        /// <summary>非負の Int64 バイト数を、符号や桁区切りを許さず解析する。</summary>
+        /// <param name="source">診断に用いる入力。</param>
+        /// <param name="line">一から始まるレコード行番号。</param>
+        /// <param name="value">空でない十進数文字列。</param>
+        /// <returns>宣言されたバイト数。不正値や上限超過は例外。</returns>
+        private static long ReadSize(SourcePart source, int line, string value)
+        {
+            long result;
+            if (!Int64.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result) || result < 0)
+                throw Error(source, line, "サイズは 0 以上の Int64 十進整数である必要があります: " + value);
+            return result;
+        }
+
+        /// <summary>64 桁の小文字十六進 SHA-256 を検査する。大文字への暗黙変換は行わない。</summary>
+        /// <param name="source">診断に用いる入力。</param>
+        /// <param name="line">一から始まるレコード行番号。</param>
+        /// <param name="value">マニフェストに記載された SHA-256。</param>
+        /// <returns>検査済みの元の文字列。不正値は例外。</returns>
+        private static string ReadHash(SourcePart source, int line, string value)
+        {
+            bool valid = value.Length == 64;
+            for (int index = 0; valid && index < value.Length; index++)
+                valid = (value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f');
+            if (!valid) throw Error(source, line, "SHA-256 は小文字十六進数 64 桁である必要があります: " + value);
+            return value;
+        }
+
+        /// <summary>既存 ZIP と同じ規則で相対パスを正規化し、遡り・絶対パス・ADS 等を拒否する。</summary>
+        /// <param name="source">診断に用いる入力。</param>
+        /// <param name="line">一から始まるレコード行番号。</param>
+        /// <param name="value">レコードに記載された相対ファイル名。</param>
+        /// <returns>出力・入力の親ディレクトリに安全に結合できる正規化済み相対名。</returns>
+        private static string ReadRelative(SourcePart source, int line, string value)
+        {
+            try { return WindowsPaths.Relative(value, false); }
+            catch (SafetyException ex)
+            {
+                throw new SafetyException(Location(source, line) + " / 相対パスが不正です: " + ex.Message);
+            }
+        }
+
+        /// <summary>固定ハンドルを仮想ストリームで包み、厳密 UTF-8 と混在改行を一行ずつ処理する。</summary>
+        /// <param name="source">呼出元が所有する入力。ここでは Dispose しない。</param>
+        /// <param name="consume">先頭 BOM 一個を除去した行と、一から始まる行番号の受取先。</param>
+        private static void ReadLines(SourcePart source, Action<string, int> consume)
+        {
+            using (JoinedStream stream = new JoinedStream(new SourcePart[] { source }))
+            {
+                if (stream.Length == 0) throw Error(source, 0, "マニフェストの末尾には改行コードが必要です（空ファイル）。");
+                stream.Seek(-1, SeekOrigin.End);
+                int last = stream.ReadByte();
+                if (last != 13 && last != 10) throw Error(source, 0, "マニフェストの末尾に改行コードがありません。");
+                stream.Position = 0;
+                byte[] buffer = new byte[65536];
+                int lineNumber = 1;
+                bool afterCr = false;
+                using (MemoryStream line = new MemoryStream())
+                {
+                    int count;
+                    while ((count = stream.Read(buffer, 0, buffer.Length)) != 0)
+                    {
+                        Program.CheckCancel();
+                        int start = 0;
+                        for (int index = 0; index < count; index++)
+                        {
+                            byte value = buffer[index];
+                            if (afterCr)
+                            {
+                                afterCr = false;
+                                if (value == 10) { start = index + 1; continue; }
+                            }
+                            if (value != 13 && value != 10) continue;
+                            line.Write(buffer, start, index - start);
+                            string text;
+                            try { text = StrictUtf8.GetString(line.GetBuffer(), 0, checked((int)line.Length)); }
+                            catch (DecoderFallbackException ex)
+                            {
+                                throw new InvalidDataException(Location(source, lineNumber) + " / UTF-8 として不正なバイト列です。", ex);
+                            }
+                            if (lineNumber == 1 && text.Length != 0 && text[0] == '\ufeff') text = text.Substring(1);
+                            consume(text, lineNumber);
+                            line.SetLength(0);
+                            line.Position = 0;
+                            lineNumber = checked(lineNumber + 1);
+                            afterCr = value == 13;
+                            start = index + 1;
+                        }
+                        if (start < count) line.Write(buffer, start, count - start);
+                    }
+                    if (line.Length != 0) throw Error(source, lineNumber, "マニフェストの末尾行が改行で終わっていません。");
+                }
+            }
+        }
+
+        /// <summary>ファイル名と行番号を付けた致命的なマニフェスト形式エラーを作る。</summary>
+        /// <param name="source">問題の入力。</param>
+        /// <param name="line">一から始まる行番号。ファイル全体のエラーは 0。</param>
+        /// <param name="message">原因の説明。</param>
+        /// <returns>通常の recoverable I/O エラーと区別される形式エラー。</returns>
+        private static InvalidDataException Error(SourcePart source, int line, string message)
+        {
+            return new InvalidDataException(Location(source, line) + " / " + message);
+        }
+
+        /// <summary>マニフェストの通常表記のパスと、必要に応じて行番号を組み立てる。</summary>
+        /// <param name="source">問題の入力。</param>
+        /// <param name="line">一から始まる行番号。0 の場合はファイル名だけを表示する。</param>
+        /// <returns>上位の安全なコンソール表示へ渡す位置情報。</returns>
+        private static string Location(SourcePart source, int line)
+        {
+            return "ziphist マニフェスト: " + source.PathName
+                + (line > 0 ? " / 行 " + line.ToString(CultureInfo.InvariantCulture) : "");
+        }
+    }
+
+    /// <summary>ziphist 入出力に共通する、キャンセル可能な定量メモリの SHA-256 検証。</summary>
+    internal static class ZiphistHash
+    {
+        [ThreadStatic]
+        private static byte[] workBuffer;
+        /// <summary>現在位置から EOF までを読み、小文字 64 桁の SHA-256 を返す。ストリームは所有しない。</summary>
+        /// <param name="source">呼出元が保持する読取ストリーム。データをメモリに全収容しない。</param>
+        /// <returns>読み取った全バイトの SHA-256。</returns>
+        internal static string Compute(Stream source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            // 多数の小ファイルでも毎回 large object heap に大配列を作らない。
+            // 同時に検査する呼出元がある場合も、バッファはスレッドごとに独立する。
+            byte[] buffer = workBuffer;
+            if (buffer == null) workBuffer = buffer = new byte[131072];
+            using (SHA256 hash = SHA256.Create())
+            {
+                while (true)
+                {
+                    Program.CheckCancel();
+                    int count = source.Read(buffer, 0, buffer.Length);
+                    if (count == 0) break;
+                    hash.TransformBlock(buffer, 0, count, buffer, 0);
+                }
+                hash.TransformFinalBlock(Bytes.Empty, 0, 0);
+                StringBuilder result = new StringBuilder(64);
+                foreach (byte value in hash.Hash) result.Append(value.ToString("x2", CultureInfo.InvariantCulture));
+                return result.ToString();
+            }
+        }
+
+        /// <summary>展開にも使用する同じ固定済み入力ハンドルで、宣言サイズと SHA-256 を検証する。</summary>
+        /// <param name="part">書込・削除共有を禁止して保持中の物理 ZIP または断片。</param>
+        /// <param name="size">listzip に宣言された非負のバイト数。</param>
+        /// <param name="hash">listzip に宣言された小文字 SHA-256。</param>
+        internal static void VerifyPart(SourcePart part, long size, string hash)
+        {
+            if (part.Length != size)
+                throw new InvalidDataException("ziphist 入力サイズ不一致: " + part.PathName
+                    + " / 期待 " + size.ToString(CultureInfo.InvariantCulture)
+                    + " bytes / 実際 " + part.Length.ToString(CultureInfo.InvariantCulture) + " bytes");
+            string actual;
+            using (JoinedStream stream = new JoinedStream(new SourcePart[] { part })) actual = Compute(stream);
+            if (!String.Equals(actual, hash, StringComparison.Ordinal))
+                throw new InvalidDataException("ziphist 入力 SHA-256 不一致: " + part.PathName
+                    + " / 期待 " + hash + " / 実際 " + actual);
+        }
+    }
+
+    /// <summary>listzip の TYPE 宣言を強制して論理 ZIP を構成する。通常モードの自動検出は変更しない。</summary>
+    internal static class ZiphistArchiveReader
+    {
+        /// <summary>同一の物理親と Q.zip を持つ候補群。初出位置は Groups の追加順で保つ。</summary>
+        private sealed class Group
+        {
+            internal readonly List<SourcePart> Parts = new List<SourcePart>();
+            internal bool Named;
+        }
+
+        /// <summary>一世代の物理ファイルを宣言に従って結合し、すべての論理 ZIP の構造を検証する。</summary>
+        /// <param name="parts">listzip に記載された順の、固定済み物理入力。</param>
+        /// <param name="type">zip_type_0 / zip_type_a / zip_type_b / zip_type_c。</param>
+        /// <returns>この世代で適用する順序の論理 ZIP。中間結合ファイルは作らない。</returns>
+        internal static List<ZipArchiveData> Read(IList<SourcePart> parts, string type)
+        {
+            if (parts == null) throw new ArgumentNullException("parts");
+            if (parts.Count == 0) throw new InvalidDataException("ziphist の世代に ZIP ファイルがありません。");
+            List<ZipArchiveData> archives = new List<ZipArchiveData>();
+            if (type == "zip_type_0")
+            {
+                if (parts.Count != 1) throw new InvalidDataException("zip_type_0 は物理 ZIP 一個だけである必要があります。");
+                archives.Add(ReadOne(parts, type));
+            }
+            else if (type == "zip_type_a") archives.Add(ReadOne(parts, type));
+            else if (type == "zip_type_b")
+            {
+                foreach (SourcePart part in parts) archives.Add(ReadOne(new SourcePart[] { part }, type));
+            }
+            else if (type == "zip_type_c")
+            {
+                List<Group> groups = new List<Group>();
+                Dictionary<string, Group> named = new Dictionary<string, Group>(StringComparer.OrdinalIgnoreCase);
+                foreach (SourcePart part in parts)
+                {
+                    Program.CheckCancel();
+                    string name = Path.GetFileName(part.PathName);
+                    int separator = name.LastIndexOf(".zip.", StringComparison.OrdinalIgnoreCase);
+                    Group group;
+                    if (separator >= 0)
+                    {
+                        // 同名 Q が別ディレクトリにある場合は混ぜない。群中の P だけを後でソートする。
+                        string stem = part.PathName.Substring(0, part.PathName.Length - name.Length + separator + 4);
+                        if (!named.TryGetValue(stem, out group))
+                        {
+                            group = new Group { Named = true };
+                            named.Add(stem, group);
+                            groups.Add(group);
+                        }
+                    }
+                    else { group = new Group(); groups.Add(group); }
+                    group.Parts.Add(part);
+                }
+                foreach (Group group in groups)
+                {
+                    Program.CheckCancel();
+                    if (group.Named && group.Parts.Count > 1)
+                    {
+                        int length = Suffix(group.Parts[0]).Length;
+                        HashSet<string> suffixes = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (SourcePart part in group.Parts)
+                        {
+                            string suffix = Suffix(part);
+                            bool valid = suffix.Length != 0 && suffix.Length == length && suffixes.Add(suffix);
+                            foreach (char value in suffix)
+                                if (!((value >= '0' && value <= '9') || (value >= 'A' && value <= 'Z')
+                                    || (value >= 'a' && value <= 'z'))) valid = false;
+                            if (!valid) throw new InvalidDataException("zip_type_c の同一 Q.zip.P 群は P が等桁の半角英数字で、重複なしである必要があります: " + part.PathName);
+                        }
+                        group.Parts.Sort(delegate(SourcePart left, SourcePart right)
+                        { return StringComparer.Ordinal.Compare(Suffix(left), Suffix(right)); });
+                    }
+                    // 一個だけの .zip.P は単独 ZIP として完全構造を検査する。断片ならここで失敗する。
+                    archives.Add(ReadOne(group.Parts, type));
+                }
+            }
+            else throw new InvalidDataException("未対応の ziphist TYPE: " + type);
+            return archives;
+        }
+
+        /// <summary>Q.zip.P の P 部分を返す。命名候補として検出済みのファイルにだけ使用する。</summary>
+        private static string Suffix(SourcePart part)
+        {
+            string name = Path.GetFileName(part.PathName);
+            return name.Substring(name.LastIndexOf(".zip.", StringComparison.OrdinalIgnoreCase) + 5);
+        }
+
+        /// <summary>既存 ZipReader の全構造検査へ渡し、宣言方式と対象をエラーに付加する。</summary>
+        private static ZipArchiveData ReadOne(IList<SourcePart> parts, string type)
+        {
+            Program.CheckCancel();
+            try { return ZipReader.Read(parts); }
+            catch (Exception ex)
+            {
+                if (!(ex is InvalidDataException) && !(ex is EndOfStreamException)
+                    && !(ex is OverflowException) && !(ex is FormatException)) throw;
+                throw new InvalidDataException("ziphist " + type + " の ZIP 構造不整合: " + parts[0].PathName
+                    + " / " + parts.Count.ToString(CultureInfo.InvariantCulture) + " 断片 / " + ex.Message, ex);
+            }
+        }
+    }
+
+    /// <summary>世代順の後勝ちと削除を解決し、最終状態だけを既存の保存エンジンへ渡す。</summary>
+    internal sealed class ZiphistFinalPlan
+    {
+        /// <summary>同じ出力パスの最終エントリ、出現順、歴代の同名ファイルレコード数。</summary>
+        private sealed class Choice
+        {
+            internal ZipEntry Entry;
+            internal long Order, Occurrences;
+        }
+
+        internal ExtractionPlan Plan;
+        internal long SupersededRecordCount, FinalMarkerCount, PrunedDirectoryCount;
+        internal decimal SupersededRecordBytes;
+
+        /// <summary>全エントリを安全検査した後、最終ファイル候補だけ復号判定し、最終計画を返す。</summary>
+        /// <param name="archives">ベースラインから対象世代まで、manifest / 論理 ZIP / ローカルヘッダの順。</param>
+        /// <param name="passwords">既存のパスワード候補・対話を所有する主スレッドの管理器。</param>
+        /// <returns>最新生存ファイルと必要ディレクトリだけを含み、Fallbacks が空の計画。</returns>
+        internal static ZiphistFinalPlan Build(List<ZipArchiveData> archives, PasswordManager passwords)
+        {
+            if (archives == null) throw new ArgumentNullException("archives");
+            if (passwords == null) throw new ArgumentNullException("passwords");
+            ZiphistFinalPlan result = new ZiphistFinalPlan { Plan = new ExtractionPlan() };
+            Dictionary<string, Choice> files = new Dictionary<string, Choice>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, Choice> directories = new Dictionary<string, Choice>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> originalDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            long order = 0;
+            foreach (ZipArchiveData archive in archives)
+            {
+                foreach (ZipEntry entry in archive.Entries)
+                {
+                    Program.CheckCancel();
+                    order = checked(order + 1);
+                    // 後で省略する旧版でも、危険名・特殊オブジェクトを隠して通過させない。
+                    if (entry.SpecialObject != null) throw new SafetyException("危険な ZIP オブジェクト: " + entry.SpecialObject + " / " + entry.Label);
+                    entry.Relative = WindowsPaths.Relative(entry.Name, entry.IsDirectory);
+                    WindowsPaths.Relative(entry.RawDecodedName, entry.IsDirectory);
+                    WindowsPaths.Relative(entry.LocalDecodedName, entry.IsDirectory);
+                    entry.Keep = true;
+                    if (entry.IsDirectory)
+                    {
+                        directories[entry.Relative] = new Choice { Entry = entry, Order = order, Occurrences = 1 };
+                        AddAncestors(originalDirectories, entry.Relative);
+                    }
+                    else
+                    {
+                        Choice previous;
+                        long count = 1;
+                        if (files.TryGetValue(entry.Relative, out previous))
+                        {
+                            count = checked(previous.Occurrences + 1);
+                            result.SupersededRecordCount++;
+                            result.SupersededRecordBytes += previous.Entry.Size;
+                        }
+                        files[entry.Relative] = new Choice { Entry = entry, Order = order, Occurrences = count };
+                        AddAncestors(originalDirectories, WindowsPaths.Parent(entry.Relative));
+                    }
+                }
+            }
+
+            // 各パスの旧版は後で必ず置き換わるため本文を展開しない。最終候補だけを調べれば、
+            // 削除→再作成も自然に後勝ちとなり、不要な古い暗号化小ファイルの対話も発生しない。
+            List<Choice> orderedFiles = new List<Choice>(files.Values);
+            orderedFiles.Sort(delegate(Choice left, Choice right) { return left.Order.CompareTo(right.Order); });
+            HashSet<string> affected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Choice choice in orderedFiles)
+            {
+                Program.CheckCancel();
+                if (IsFinalMarker(choice.Entry, passwords))
+                {
+                    result.FinalMarkerCount++;
+                    files.Remove(choice.Entry.Relative);
+                    // 対応する過去ファイルがないマークだけでは、元から明示された空の枝を消さない。
+                    if (choice.Occurrences > 1)
+                    {
+                        AddAncestors(affected, WindowsPaths.Parent(choice.Entry.Relative));
+                    }
+                }
+                else AddAncestors(live, WindowsPaths.Parent(choice.Entry.Relative));
+            }
+
+            // 古いディレクトリが後代のファイルへ変わった場合だけ、古いディレクトリ定義を省略する。
+            // 明示ディレクトリの ZIP 内出現順を「削除後に空フォルダを再作成する意思」と推測しない。
+            // 削除によって空になる部分木は、その後ろに明示ディレクトリがあっても作成しない。
+            List<Choice> selected = new List<Choice>();
+            foreach (Choice choice in directories.Values)
+            {
+                Program.CheckCancel();
+                string relative = choice.Entry.Relative;
+                bool obsolete = false;
+                string ancestor = relative;
+                while (ancestor.Length != 0)
+                {
+                    Choice file;
+                    if (files.TryGetValue(ancestor, out file) && file.Order > choice.Order) obsolete = true;
+                    ancestor = WindowsPaths.Parent(ancestor);
+                }
+                if (obsolete) continue;
+                selected.Add(choice);
+            }
+            List<string> orderedDirectories = new List<string>(originalDirectories);
+            orderedDirectories.Sort(delegate(string left, string right) { return left.Length.CompareTo(right.Length); });
+            HashSet<string> omitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string directory in orderedDirectories)
+            {
+                Program.CheckCancel();
+                if (!live.Contains(directory) && (affected.Contains(directory)
+                    || omitted.Contains(WindowsPaths.Parent(directory)))) omitted.Add(directory);
+            }
+            selected.RemoveAll(delegate(Choice choice) { return omitted.Contains(choice.Entry.Relative); });
+            foreach (Choice choice in files.Values) selected.Add(choice);
+            selected.Sort(delegate(Choice left, Choice right) { return left.Order.CompareTo(right.Order); });
+            foreach (Choice choice in selected) result.Plan.AddEntry(choice.Entry, true);
+            result.Plan.CheckCollisions(true);
+            foreach (string directory in originalDirectories)
+                if (!result.Plan.Directories.ContainsKey(directory)) result.PrunedDirectoryCount++;
+            return result;
+        }
+
+        /// <summary>最終候補の宣言 11～16 bytes を完全検証してからだけ、八形式のマークと比較する。</summary>
+        /// <param name="entry">その相対パスに最後に登場したファイル。ベースラインも対象。</param>
+        /// <param name="passwords">主スレッドのパスワード対話。</param>
+        /// <returns>完全検証済みの本文が削除マークなら true。判定不能は全体中断。</returns>
+        private static bool IsFinalMarker(ZipEntry entry, PasswordManager passwords)
+        {
+            if (entry.Size < 11 || entry.Size > 16) return false;
+            byte[] password = null;
+            try
+            {
+                EntryCodec.CheckSupported(entry);
+                if (entry.Encrypted && !passwords.GetVerified(entry, out password))
+                    throw new InvalidDataException("ziphist の最終削除候補を ignore したため、正しい復元状態を確定できません: " + entry.Label);
+                using (MemoryStream content = new MemoryStream(16))
+                {
+                    EntryCodec.WriteVerified(entry, password, content);
+                    return DeletionMarkers.IsMarker(content.ToArray());
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!(ex is InvalidDataException) && !Program.Recoverable(ex)) throw;
+                throw new InvalidDataException("ziphist の最終削除候補の完全性検証失敗: " + entry.Label + " / " + ex.Message, ex);
+            }
+            finally { if (password != null) Array.Clear(password, 0, password.Length); }
+        }
+
+        /// <summary>仮想ルートを除き、自身と全祖先を登録する。登録済みなら祖先の走査を省略する。</summary>
+        private static void AddAncestors(HashSet<string> target, string relative)
+        {
+            while (relative.Length != 0 && target.Add(relative)) relative = WindowsPaths.Parent(relative);
+        }
+
+        /// <summary>後勝ちと削除のため保存を省略したレコード、および最終計画の統計を表示する。</summary>
+        internal void Print()
+        {
+            Console.WriteLine("ziphist 最終計画: 生存ファイル {0:N0} 個 / 最終削除マーク {1:N0} 個 / ディレクトリ {2:N0} 個",
+                Plan.FileCount, FinalMarkerCount, Plan.Directories.Count);
+            Console.WriteLine("展開省略: 古い同名ファイルレコード {0:N0} 個 ({1:N0} bytes) / 不要ディレクトリ {2:N0} 個",
+                SupersededRecordCount, SupersededRecordBytes, PrunedDirectoryCount);
+        }
+    }
+
+    /// <summary>ziphist の二つのマニフェストと全世代の物理 ZIP ハンドルを復元終了まで所有する。</summary>
+    internal sealed class ZiphistRestore : IDisposable
+    {
+        internal readonly ZiphistSelection Selection;
+        internal readonly ZiphistManifest Manifest;
+        internal readonly List<string> Sources = new List<string>();
+        internal readonly List<SourceSet> InputSets = new List<SourceSet>();
+        private readonly Dictionary<string, SourcePart> byPath = new Dictionary<string, SourcePart>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ZiphistZipRecord> records = new Dictionary<string, ZiphistZipRecord>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>一意特定済みの付随ファイルを読み、必要な全物理入力を所有する。出力先には触れない。</summary>
+        /// <param name="selection">Program が一意に特定した ZIP または付随ファイル。</param>
+        internal ZiphistRestore(ZiphistSelection selection)
+        {
+            Selection = selection;
+            try
+            {
+                SourceSet manifests = new SourceSet(new List<string> { selection.ListZipPath, selection.ListFilePath });
+                InputSets.Add(manifests);
+                Manifest = ZiphistManifest.Read(selection, manifests.Parts[0], manifests.Parts[1]);
+                if (!Manifest.MatchesSelection(selection))
+                    throw new InvalidDataException("指定した ZIP は、一意に特定された listzip の最終世代に所属していません: " + selection.SelectedPath);
+                foreach (ZiphistGeneration generation in Manifest.Generations)
+                {
+                    foreach (ZiphistZipRecord record in generation.Files)
+                    {
+                        Program.CheckCancel();
+                        ZiphistZipRecord previous;
+                        if (records.TryGetValue(record.FullPath, out previous))
+                        {
+                            if (record.Size != previous.Size || record.Hash != previous.Hash)
+                                throw new InvalidDataException("同じ ZIP の宣言サイズまたは SHA-256 が世代間で矛盾します: " + record.FullPath);
+                        }
+                        else { records.Add(record.FullPath, record); Sources.Add(record.FullPath); }
+                    }
+                }
+                SourceSet archives = new SourceSet(Sources);
+                InputSets.Add(archives);
+                foreach (SourcePart part in archives.Parts) byPath.Add(part.PathName, part);
+            }
+            catch { Dispose(); throw; }
+        }
+
+        /// <summary>全 ZIP のサイズとハッシュを先に検証し、世代順の論理 ZIP と最終出力計画を構築する。</summary>
+        /// <param name="passwords">削除マーク候補に必要な既存のパスワード候補と対話。</param>
+        /// <returns>既存の Extractor に渡せる最終状態の計画。</returns>
+        internal ZiphistFinalPlan VerifyAndPlan(PasswordManager passwords)
+        {
+            int number = 0;
+            foreach (string path in Sources)
+            {
+                Program.CheckCancel();
+                ZiphistZipRecord record = records[path];
+                Console.WriteLine("ZIP 完全性検査 ({0:N0}/{1:N0}): {2}", ++number, Sources.Count, Text.Safe(path));
+                ZiphistHash.VerifyPart(byPath[path], record.Size, record.Hash);
+            }
+            Console.WriteLine("すべての ZIP のサイズ・SHA-256 が一致しました。世代順の ZIP 構造を検査中...");
+            List<ZipArchiveData> archives = new List<ZipArchiveData>();
+            foreach (ZiphistGeneration generation in Manifest.Generations)
+            {
+                List<SourcePart> parts = new List<SourcePart>();
+                foreach (ZiphistZipRecord record in generation.Files) parts.Add(byPath[record.FullPath]);
+                Console.WriteLine("世代 {0:N0}: {1} / 物理ファイル {2:N0} 個", generation.Number, generation.Type, parts.Count);
+                try { archives.AddRange(ZiphistArchiveReader.Read(parts, generation.Type)); }
+                catch (InvalidDataException ex)
+                { throw new InvalidDataException("ziphist 世代 " + generation.Number.ToString(CultureInfo.InvariantCulture) + ": " + ex.Message, ex); }
+            }
+            Console.WriteLine("世代を合成し、最終ファイルの削除マーク候補を完全検証中...");
+            return ZiphistFinalPlan.Build(archives, passwords);
+        }
+
+        /// <summary>入力 ZIP と両マニフェストへの自己上書き、および事前検査の失敗を出力前に拒否する。</summary>
+        /// <param name="plan">後勝ち・削除を解決済みの出力計画。</param>
+        /// <param name="root">既存の安全な出力ルート。</param>
+        internal void BindDestination(ExtractionPlan plan, SafeRoot root)
+        {
+            plan.BindDestination(root, InputSets);
+            HashSet<string> protectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (SourceSet inputs in InputSets)
+                foreach (SourcePart part in inputs.Parts) protectedPaths.Add(part.PathName);
+            foreach (ZipEntry entry in plan.Entries)
+            {
+                Program.CheckCancel();
+                if (protectedPaths.Contains(root.Destination(entry.Relative)))
+                    throw new SafetyException("ziphist 入力 ZIP またはマニフェスト自身への上書きは禁止です: " + root.Destination(entry.Relative));
+                if (entry.PlanError != null) throw new InvalidDataException("ziphist 出力先の事前検査失敗: " + entry.PlanError);
+            }
+        }
+
+        /// <summary>コンストラクタの途中失敗でも、開いた順序と逆順で全入力を解放する。</summary>
+        public void Dispose()
+        {
+            for (int index = InputSets.Count - 1; index >= 0; index--) InputSets[index].Dispose();
+            InputSets.Clear();
+        }
+    }
+
+    /// <summary>ziphist の最終内容検査で一致したファイルと、開始時から残る余分ファイルの集計。</summary>
+    internal sealed class ZiphistVerification
+    {
+        internal long VerifiedCount;
+        internal decimal VerifiedBytes;
+        internal long PreservedExtraCount;
+        internal long AccessTimePreservationFailureCount;
+    }
+
+    /// <summary>
+    /// 展開先の開始時ファイル一覧を記憶し、展開後の全ファイルを listfile と照合する。
+    /// 指定ルートのリンクは許可するが、その配下のリンク境界は既存 SafeRoot と同様に拒否する。
+    /// </summary>
+    internal static class ZiphistOutput
+    {
+        /// <summary>アクセス時刻だけの自動更新を、本文を読む同じハンドルに対して抑止する Win32 API。</summary>
+        [DllImport("kernel32.dll", EntryPoint = "SetFileTime", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetAccessTimeSuppression(SafeFileHandle handle, IntPtr creation,
+            ref Native.FileTime access, IntPtr write);
+
+        /// <summary>親の列挙で観測したディレクトリの位置と実体。再訪時の入れ替わりを検出する。</summary>
+        private sealed class PendingDirectory
+        {
+            internal string Relative;
+            internal FileStamp Expected;
+        }
+
+        /// <summary>展開前の全ファイル名を、配下リンクをたどらずに記憶する。既存内容は変更しない。</summary>
+        /// <param name="root">ユーザーが指定した既存の展開先を保持する安全境界。</param>
+        /// <returns>開始時に存在した、大小文字を区別しない正規化済み相対ファイル名の集合。</returns>
+        internal static HashSet<string> Capture(SafeRoot root)
+        {
+            if (root == null) throw new ArgumentNullException("root");
+            HashSet<string> initial = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            WalkFiles(root, delegate(string relative, FileStamp stamp, PathLease parents)
+            {
+                if (!initial.Add(relative))
+                    throw new InvalidDataException("ziphist: 開始時一覧に同じ Windows ファイル名が重複しています: " + relative);
+            });
+            return initial;
+        }
+
+        /// <summary>
+        /// 展開後の生存ファイルはサイズと SHA-256 を必ず検証し、余分なファイルは開始時一覧だけを例外とする。
+        /// 全ゼロハッシュの項目にも同じ開始時例外を適用する。既存ファイルを物理削除しない。
+        /// </summary>
+        /// <param name="root">保存にも使用した展開先の安全境界。</param>
+        /// <param name="expected">listfile の後勝ち解釈で得た最終レコード。</param>
+        /// <param name="initial">Capture が返した展開開始時のファイル一覧。</param>
+        /// <returns>一致したファイル数・bytes と、開始時例外で残る余分ファイル数。</returns>
+        internal static ZiphistVerification Verify(SafeRoot root,
+            Dictionary<string, ZiphistFileRecord> expected, HashSet<string> initial)
+        {
+            if (root == null) throw new ArgumentNullException("root");
+            if (expected == null) throw new ArgumentNullException("expected");
+            if (initial == null) throw new ArgumentNullException("initial");
+            ZiphistVerification result = new ZiphistVerification();
+            HashSet<string> observed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            WalkFiles(root, delegate(string relative, FileStamp stamp, PathLease parents)
+            {
+                if (!observed.Add(relative))
+                    throw new InvalidDataException("ziphist: 最終一覧に同じ Windows ファイル名が重複しています: " + relative);
+                ZiphistFileRecord record = CheckMembership(relative, expected, initial);
+                if (record == null)
+                {
+                    result.PreservedExtraCount = checked(result.PreservedExtraCount + 1);
+                    return;
+                }
+                if (!VerifyFile(root, relative, record, stamp, parents))
+                    result.AccessTimePreservationFailureCount = checked(result.AccessTimePreservationFailureCount + 1);
+                result.VerifiedCount = checked(result.VerifiedCount + 1);
+                result.VerifiedBytes = checked(result.VerifiedBytes + record.Size);
+            });
+            foreach (KeyValuePair<string, ZiphistFileRecord> pair in expected)
+            {
+                Program.CheckCancel();
+                ZiphistFileRecord record = pair.Value;
+                if (record.IsDeleted || observed.Contains(record.Relative)) continue;
+                FileStamp actual = root.Probe(record.Relative);
+                string reason = actual == null ? "必要なファイルが存在しません"
+                    : actual.IsDirectory ? "必要なファイルの場所にディレクトリがあります"
+                    : "必要なファイルが全体列挙の後で出現しました";
+                throw new InvalidDataException("ziphist: " + reason + ": " + root.Destination(record.Relative));
+            }
+            return result;
+        }
+
+        /// <summary>実在する一ファイルを、生存必須か開始時からの余分ファイルかに分類する。</summary>
+        /// <param name="relative">安全検査済みの出力相対ファイル名。</param>
+        /// <param name="expected">後勝ちで確定した listfile のレコード。</param>
+        /// <param name="initial">開始時に存在していた相対ファイル名。</param>
+        /// <returns>生存必須なら検証対象レコード、開始時の余分ファイルなら null。新しい余分ファイルは例外。</returns>
+        internal static ZiphistFileRecord CheckMembership(string relative,
+            Dictionary<string, ZiphistFileRecord> expected, HashSet<string> initial)
+        {
+            ZiphistFileRecord record;
+            if (expected.TryGetValue(relative, out record) && !record.IsDeleted) return record;
+            if (initial.Contains(relative)) return null;
+            throw new InvalidDataException("ziphist: 開始時にはなかった余分なファイルが存在します"
+                + (record != null && record.IsDeleted ? "（listfile は不存在を指定）" : "（listfile に生存指定なし）")
+                + ": " + relative);
+        }
+
+        /// <summary>先頭からの全読取りで、期待するサイズと SHA-256 を検証する。ストリームを閉じない。</summary>
+        /// <param name="content">先頭位置で開いた、読取り・シークが可能な内容ストリーム。</param>
+        /// <param name="record">listfile に記載された生存必須ファイルの最終レコード。</param>
+        /// <param name="label">不一致時の説明に使用するファイル名または保存先パス。</param>
+        internal static void VerifyContent(Stream content, ZiphistFileRecord record, string label)
+        {
+            if (content == null) throw new ArgumentNullException("content");
+            if (record == null) throw new ArgumentNullException("record");
+            if (!content.CanRead || !content.CanSeek)
+                throw new ArgumentException("ziphist の内容検査には読取りとシークが可能なストリームが必要です。", "content");
+            if (content.Position != 0)
+                throw new InvalidDataException("ziphist: 最終内容の検査がファイル先頭から開始されていません: " + label);
+            long length = content.Length;
+            if (length != record.Size)
+                throw new InvalidDataException("ziphist: 展開後ファイルのサイズが一致しません: " + label
+                    + " / 期待 " + record.Size.ToString(CultureInfo.InvariantCulture)
+                    + " bytes / 実際 " + length.ToString(CultureInfo.InvariantCulture) + " bytes");
+            string actualHash = ZiphistHash.Compute(content);
+            if (content.Position != record.Size || content.Length != length)
+                throw new InvalidDataException("ziphist: 最終内容の読取りが途中で終了したか、読取り中に長さが変化しました: " + label);
+            if (!String.Equals(record.Hash, actualHash, StringComparison.Ordinal))
+                throw new InvalidDataException("ziphist: 展開後ファイルの SHA-256 が一致しません: " + label
+                    + " / 期待 " + record.Hash + " / 実際 " + actualHash);
+        }
+
+        /// <summary>各ディレクトリを直下だけ列挙する。再帰スタックや配下リンクの追跡は使用しない。</summary>
+        /// <param name="root">展開先ルートと既存の no-follow パス検査。</param>
+        /// <param name="visitFile">親の lease を保持している間に、一つの通常ファイルを処理する。</param>
+        private static void WalkFiles(SafeRoot root, Action<string, FileStamp, PathLease> visitFile)
+        {
+            Stack<PendingDirectory> pending = new Stack<PendingDirectory>();
+            pending.Push(new PendingDirectory { Relative = "", Expected = root.Probe("") });
+            HashSet<string> visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> listedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (pending.Count != 0)
+            {
+                Program.CheckCancel();
+                PendingDirectory directory = pending.Pop();
+                if (!visitedDirectories.Add(directory.Relative))
+                    throw new InvalidDataException("ziphist: 同じ Windows ディレクトリ名が重複しています: " + directory.Relative);
+                using (PathLease lease = root.DirectoryLease(directory.Relative, false, null, false))
+                {
+                    if (lease.Missing)
+                        throw new InvalidDataException("ziphist: 列挙するディレクトリが消失しました: " + root.Destination(directory.Relative));
+                    FileStamp before = CheckDirectory(root, directory.Relative, lease, directory.Expected);
+                    string full = root.Destination(directory.Relative);
+                    foreach (string path in Directory.EnumerateFileSystemEntries(WindowsPaths.NativeName(full)))
+                    {
+                        Program.CheckCancel();
+                        // 拡張長パスが列挙結果に含まれても、親の prefix を文字数で削らず一要素だけを使う。
+                        string name = Path.GetFileName(path);
+                        if (String.IsNullOrEmpty(name) || name == "." || name == ".."
+                            || name.IndexOf('\\') >= 0 || name.IndexOf('/') >= 0)
+                            throw new SafetyException("ziphist: 列挙されたファイル名を安全に解釈できません: " + path);
+                        string relative = directory.Relative.Length == 0 ? name : directory.Relative + "\\" + name;
+                        if (!listedNames.Add(relative))
+                            throw new InvalidDataException("ziphist: 列挙中に同じ Windows パスが重複しています: " + relative);
+                        // 末尾の空白・ピリオド等を黙って別名へ変換し、別の既存ファイルを検査しない。
+                        string normalized = WindowsPaths.Relative(relative, true);
+                        if (!String.Equals(relative, normalized, StringComparison.Ordinal))
+                            throw new SafetyException("ziphist: 列挙名の正規化で別の場所になるため中断します: " + relative);
+                        FileStamp stamp = root.ProbeLeaf(relative, lease);
+                        if (stamp == null)
+                            throw new InvalidDataException("ziphist: 列挙された対象が検査前に消失しました: " + root.Destination(relative));
+                        if (stamp.IsDirectory)
+                            pending.Push(new PendingDirectory { Relative = relative, Expected = stamp });
+                        else visitFile(relative, stamp, lease);
+                    }
+                    // 共有を許可する従来の親 lease だけでは名前の固定にならないため、列挙後も再照合する。
+                    // 別プロセスによる瞬間的な差替えまで完全に防ぐ保証ではなく、既存の競合制約は残る。
+                    CheckDirectory(root, directory.Relative, lease, before);
+                }
+            }
+        }
+
+        /// <summary>保持したディレクトリと現在の同じパスの実体を、列挙前後に照合する。</summary>
+        /// <param name="root">展開先の安全境界。</param>
+        /// <param name="relative">検査するディレクトリの相対名。空なら指定ルート。</param>
+        /// <param name="lease">既存の配下 no-follow 検査で開いたディレクトリ。</param>
+        /// <param name="expected">親の列挙時、または当該ディレクトリ列挙前に観測した実体情報。</param>
+        /// <returns>現在も同一であると確認したディレクトリの情報。</returns>
+        private static FileStamp CheckDirectory(SafeRoot root, string relative, PathLease lease, FileStamp expected)
+        {
+            string full = root.Destination(relative);
+            FileStamp held = Native.Stamp(lease.Leaf);
+            if (expected == null || expected.Identity == null || !expected.Same(held)
+                || !held.IsDirectory || held.IsReparse)
+                throw new SafetyException("ziphist: 列挙対象ディレクトリの実体または更新状態が変化しました: " + full);
+            // ルートだけはユーザーが選択したリンクの到達先を開く。配下の leaf は必ず no-follow。
+            bool isRoot = relative.Length == 0;
+            using (SafeFileHandle current = Native.OpenDirectory(full, isRoot, false, isRoot))
+            {
+                FileStamp named = Native.Stamp(current);
+                if (!held.Same(named) || !named.IsDirectory || named.IsReparse)
+                    throw new SafetyException("ziphist: 列挙対象ディレクトリの同じパスが別の実体へ変わりました: " + full);
+                return named;
+            }
+        }
+
+        /// <summary>一つの生存必須ファイルを同じ no-follow 読取りハンドルで最後までハッシュ検証する。</summary>
+        /// <param name="root">展開先の安全境界。</param>
+        /// <param name="relative">列挙と安全検査を終えた相対ファイル名。</param>
+        /// <param name="record">listfile が要求するサイズと SHA-256。</param>
+        /// <param name="anticipated">直前の leaf 検査で観測した実体情報。</param>
+        /// <param name="parents">このファイルの親ディレクトリを保持する既存 lease。</param>
+        /// <returns>内容検証に成功し、かつ当該ハンドルのアクセス時刻自動更新も抑止できた場合 true。</returns>
+        private static bool VerifyFile(SafeRoot root, string relative, ZiphistFileRecord record,
+            FileStamp anticipated, PathLease parents)
+        {
+            Program.CheckCancel();
+            string full = root.Destination(relative);
+            string nativeName = WindowsPaths.NativeName(full);
+            bool canPreserveAccessTime = true;
+            // 内容検査で ZIP から設定したアクセス時刻を更新しないため、属性書込だけを任意に追加する。
+            // READ_DATA のみ許可された既存ファイルも検証できるよう、Win32 の失敗時は読取りだけで再試行する。
+            SafeFileHandle handle = Native.CreateFileW(nativeName, Native.GenericRead | Native.ReadAttributes | Native.WriteAttributes,
+                Native.ShareRead, IntPtr.Zero, Native.OpenExisting, Native.OpenReparsePoint | Native.BackupSemantics, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                Program.CheckCancel();
+                canPreserveAccessTime = false;
+                handle = Native.CreateFileW(nativeName, Native.GenericRead | Native.ReadAttributes,
+                    Native.ShareRead, IntPtr.Zero, Native.OpenExisting, Native.OpenReparsePoint | Native.BackupSemantics, IntPtr.Zero);
+            }
+            if (handle.IsInvalid)
+            {
+                Win32Exception error = Native.Error("ziphist: 最終内容を安全に読み取れません", full);
+                handle.Dispose();
+                throw error;
+            }
+            using (handle)
+            using (FileStream stream = new FileStream(handle, FileAccess.Read, 65536, false))
+            {
+                FileStamp opened = Native.Stamp(stream.SafeFileHandle);
+                if (opened.IsDirectory || opened.IsReparse || opened.Links > 1
+                    || anticipated.Identity == null || !anticipated.Same(opened))
+                    throw new SafetyException("ziphist: 内容検査時にファイルの実体または種類が変化しました: " + full);
+                bool accessTimePreserved = false;
+                if (canPreserveAccessTime)
+                {
+                    // NULL の creation/write は変更せず、全ビット 1 の access は当該ハンドルによる自動更新を止める。
+                    // API が対応しない場合もハッシュは検証し、呼出元が失敗件数を警告としてまとめる。
+                    Native.FileTime preserve = new Native.FileTime { Low = UInt32.MaxValue, High = UInt32.MaxValue };
+                    accessTimePreserved = SetAccessTimeSuppression(handle, IntPtr.Zero, ref preserve, IntPtr.Zero);
+                }
+                VerifyContent(stream, record, full);
+                FileStamp after = Native.Stamp(stream.SafeFileHandle);
+                if (!opened.Same(after) || after.IsDirectory || after.IsReparse || after.Links > 1
+                    || stream.Position != record.Size)
+                    throw new SafetyException("ziphist: ハッシュ読取り中にファイルの内容または実体情報が変化しました: " + full);
+                FileStamp named = root.ProbeLeaf(relative, parents);
+                if (!opened.Same(named))
+                    throw new SafetyException("ziphist: ハッシュ検査後に同じファイル名の実体を確認できません: " + full);
+                return accessTimePreserved;
+            }
         }
     }
 
