@@ -1,13 +1,21 @@
 ﻿/*
-DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
+DNNT 261018_RSHMK2 dn_zip_packer zip ファイル圧縮プログラム R04
 
-ソース: dnnt_261003_zwces4_zip_split_merge_r03_261008_wfg4dj.cs
+ソース: dnnt_261003_zwces4_zip_split_merge_r04_261018_rshmk2.cs
 生成 AI: OpenAI ChatGPT / GPT-6 Astra Pro。生成 AI により改修。
   モデルの詳細ビルド番号・思考レベル設定値は、このセッションから確認できない。
-セッション開始日時 (JST): 2026/10/08 20:17:17 (本依頼の受信時刻を基準)
-応答生成日時 (JST): 2026/10/08 20:33:29
+セッション開始日時 (JST): 2026/10/18 15:57:52 (本依頼の受信時刻を基準)
+応答生成日時 (JST): 2026/10/18 16:18:49
 
 変更履歴:
+  R04 / 2026/10/18 16:18:49 (JST) / DNNT 261018_RSHMK2:
+    複数 ZIP の全パートを 01of60 等の番号of総数に変更。既定個数上限を99に変更。
+    単一/複数とも zip_type_b のベースラインとし、同じフォルダへ .listfile.txt と
+    .listzip.txt を必須出力。既存の平文SHA-256を再利用し、完成ZIPもSHA-256を計算。
+    両一覧を所有ハンドルによる成功確定・失敗時削除へ統合し、完全な出力だけを成功とする。
+    保存既定名は日時_第1入力の親名.zip。保存先フォルダをOK確定直後にHKCUへ記憶。
+    既存のZIP内格納構造・暗号・圧縮・配置・入力長パス/リンク実体追跡を維持。
+    前版ヘッダ標題: DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
   R03 / 2026/10/08 / DNNT 261008_WFG4DJ:
     .NET Framework 4.8 の長いパス対応を起動直後に有効化し、列挙・属性取得・
     CreateFileW の I/O 境界だけを拡張長表記へ変換。入力リンクの実体追跡を維持。
@@ -19,13 +27,17 @@ DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
 
 目的:
   ファイル、フォルダ、および明示的に指定された ZIP の内容を、相対パスを保った
-  独立した暗号化 ZIP にまとめる。最大数の既定値は 18、1 個の目安は 31,500,000 bytes。
+  独立した暗号化 ZIP にまとめる。最大数の既定値は 99、1 個の目安は 31,500,000 bytes。
   個数上限が絶対優先。必要なら目安容量を緩和し、できるだけ均等に配分する。
   これは .z01 等のマルチボリューム ZIP ではなく、各 ZIP を単独で展開できる形式。
-  生成が 1 個なら指定名.zip、2～99 個なら指定名.01.zip から始まる 2 桁連番。
-  100～999 個なら 3 桁、1000～9999 個なら 4 桁で、1 個目から同じ桁数を付ける。
+  生成が 1 個なら指定名.zip、2～99 個なら指定名.01ofNN.zip の 2 桁連番/総数。
+  100～999 個なら 3 桁、1000～9999 個なら 4 桁で、番号・総数を同じ桁数にする。
   桁数は設定上限でなく確定した生成数で決める。生成数 10000 個以上は、
   旧出力の削除・新規出力の作成前に例外とし、9999 個へ自動的に丸めない。
+  指定名.listfile.txt に全内容ファイルの平文SHA-256・サイズ・ZIP内相対名を記録。
+  指定名.listzip.txt に完成ZIPの実ファイル名・実サイズ・SHA-256をパート順で記録。
+  両一覧はUTF-8 BOMなし、CRLF、末尾改行付き。空ディレクトリはZIPにだけ保存する。
+  ZIP個数上限とZIP容量の集計には付随テキスト2個を含めない。
 
 環境:
   C# 4.0 互換の構文 / .NET Framework 4.8 / AnyCPU。外部 DLL・NuGet は不要。
@@ -47,11 +59,14 @@ DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
   最小個数や完全な大域最適は保証しないが、指定上限・9999 個以下・実サイズ一致は検査する。
   キャッシュ時も入力の実体・サイズ・日時を照合し、キャッシュを失った再圧縮時は
   平文 SHA-256・CRC・圧縮量も照合する。成功するまで新規出力を所有ハンドルで保持。
+  全ZIP完成後に両一覧を作成し、全出力のフラッシュと実サイズ検査後に成功確定する。
 
 安全性 / 解釈:
   旧出力の削除は、指定名そのもの、または
-  「ベース名 + '.' + ASCII 数字 2～4 桁 + '.zip'」に完全一致する直下の通常ファイルだけ。
+  「ベース名 + '.' + ASCII 数字 2～4 桁 + '.zip'」あるいは正規の番号of総数ZIP名、
+  正確な「ベース名.listfile.txt」「ベース名.listzip.txt」に一致する直下の通常ファイルだけ。
   旧規則の 00 は維持するが、新たな 000 / 0000 は対象外。候補は必ず一覧・確認する。
+  番号of総数は総数2～9999、番号1～総数、両者の正しい同一桁数を厳密に検査する。
   ワイルドカード削除、再帰削除、名前を再検索しての失敗時削除は行わない。
   新規出力は CREATE_NEW で作り、DELETE アクセス付きハンドルを成功まで保持する。
   書き込みストリームとは別に所有ハンドルを保持し、失敗時だけ削除保留にして閉じる。
@@ -61,7 +76,11 @@ DNNT 261008_WFG4DJ dn_zip_packer zip ファイル圧縮プログラム R03
   祖先へ戻る循環だけは警告し、その位置を通常フォルダとして残して再下降しない。
   出力フォルダもリンクを解決して固定し、以後の列挙・作成・削除は実体パスで行う。
   ただし旧出力の削除候補そのものがリンクなら、安全のため削除も追跡も行わない。
-  元の旧出力は確認後に削除するため、失敗しても旧出力の復元はしない。
+  元の旧出力は確認後に削除するため、失敗しても旧ZIP・旧一覧の復元はしない。
+  ZIP内相対名は従来どおり。listfileでは先頭スペースのある名前だけ ./ を付けて区別する。
+  保存先設定: HKCU\Software\DNNT\dn_zip_packer / LastOutputDirectory (REG_SZ)。
+  親なし入力の既定名はドライブ文字/共有名を使用。設定の不在・無効時はダイアログ既定位置。
+  レジストリの読書き失敗は理由を表示して圧縮を継続する。キャンセルでは設定を書き換えない。
   ZIP 入力 'a.zip' の内容は 'a/...' に入れる（末尾の .zip 拡張子だけを除去）。
   明示指定した ZIP だけが対象。名前が空または安全でない仮想ルートになる場合は拒否。
   フォルダの内部に存在する ZIP は通常のファイルであり、再帰的には展開しない。
@@ -98,13 +117,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
 /// <summary>単一ファイルで完結するアプリケーション。内部名は依頼の命名規則による。</summary>
 internal static class dnnt_261006_vqybr5_zip_split_merge
 {
     private const long MAX_ONE_ZIP_FILE_SIZE = 31500000L;
-    private static int MAX_NUM_ZIP_FILES = 18;
+    private static int MAX_NUM_ZIP_FILES = 99;
     // 設定上限とは別に、確定した生成数に適用する命名形式の絶対上限。
     private const int MaximumOutputZipFiles = 9999;
     private const string ZIP_PASSWORD = "m";
@@ -114,6 +134,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
     private const long Zip32Limit = 0xFFFFFFFFL;
     private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
     private static readonly CultureInfo NumberCulture = CultureInfo.InvariantCulture;
+    // R04: リビジョンや実行ファイルの配置に依存しない、ユーザー別の保存ダイアログ設定。
+    private const string SaveDialogRegistryKey = @"Software\DNNT\dn_zip_packer";
+    private const string SaveDialogRegistryValue = "LastOutputDirectory";
     private static volatile bool CancellationRequested;
 
     /// <summary>引数を入力パスとして受け取り、成功時 0、失敗時 Win32 形式のコードを返す。</summary>
@@ -183,7 +206,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
 
             Console.WriteLine();
 
-            string outputPath = SelectOutput();
+            string outputPath = SelectOutput(roots[0].Path);
             using (DirectoryGuard guard = new DirectoryGuard(System.IO.Path.GetDirectoryName(outputPath)))
             {
                 // 保存ダイアログのフォルダがリンクでも、以後は固定した実体にだけ書く。
@@ -207,6 +230,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                     transaction = new OutputTransaction(names, plan.Parts.Count);
                     transaction.RemovePreviousOutputs(manifest);
                     PackResult result = Pack(manifest, transaction, plan, cache);
+                    transaction.WriteBaselineManifests(manifest);
                     string resultText = FormatResult(result, names);
                     transaction.Commit();
                     TryWriteLine(resultText);
@@ -277,7 +301,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
     }
 
     /// <summary>STA 上で保存コモンダイアログを開き、連番付加前の絶対 .zip パスを返す。</summary>
-    private static string SelectOutput()
+    /// <param name="firstInputPath">最初に指定された入力の通常絶対パス。リンク解決前の名前を使う。</param>
+    /// <returns>検査済みの選択パス。OK で閉じた直後にその親を HKCU に保存する。</returns>
+    private static string SelectOutput(string firstInputPath)
     {
         using (SaveFileDialog dialog = new SaveFileDialog())
         {
@@ -289,14 +315,83 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             dialog.CheckPathExists = true;
             dialog.ValidateNames = true;
             dialog.RestoreDirectory = true;
-            dialog.FileName = DateTime.Now.ToString("yyMMdd_HHmmss", NumberCulture) + "_MaterialFiles.zip";
+            dialog.FileName = DefaultOutputFileName(firstInputPath, DateTime.Now);
+            string initialDirectory = LoadOutputDirectory();
+            if (initialDirectory != null) dialog.InitialDirectory = initialDirectory;
             DialogResult result = dialog.ShowDialog(new ConsoleOwner());
             if (result != DialogResult.OK) throw new AppError(1223, "保存先の選択がキャンセルされました。");
             string path = PathRules.FullPath(dialog.FileName);
             if (!String.Equals(System.IO.Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
                 throw new AppError(87, "保存ファイルの拡張子は .zip にしてください: " + path);
+            // 圧縮の成否を待たず、正常に確定した保存先を記憶する。キャンセル時には到達しない。
+            SaveOutputDirectory(System.IO.Path.GetDirectoryName(path));
             return path;
         }
+    }
+
+    /// <summary>指定された第1入力の親名と日時から、保存ダイアログの既定ファイル名を作る。</summary>
+    /// <param name="firstInputPath">ファイルまたはフォルダの通常絶対パス。</param>
+    /// <param name="now">表示に使うローカル日時。本番では DateTime.Now を渡す。</param>
+    /// <returns>yyMMdd_HHmmss_親名.zip。親のないルートはドライブ文字または共有名を使う。</returns>
+    private static string DefaultOutputFileName(string firstInputPath, DateTime now)
+    {
+        string path = PathRules.FullPath(firstInputPath);
+        string parent = System.IO.Path.GetDirectoryName(path);
+        string parentName = PathRules.RootName(String.IsNullOrEmpty(parent) ? path : parent);
+        return now.ToString("yyMMdd_HHmmss", NumberCulture) + "_" + parentName + ".zip";
+    }
+
+    /// <summary>前回の保存先を HKCU から読む。未設定・不存在・無効値の場合は null を返す。</summary>
+    private static string LoadOutputDirectory()
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(SaveDialogRegistryKey, false))
+            {
+                if (key == null) return null;
+                string value = key.GetValue(SaveDialogRegistryValue, null,
+                    RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                if (String.IsNullOrWhiteSpace(value)) return null;
+                string path = PathRules.FullPath(value);
+                if (Directory.Exists(path)) return path;
+                TryWriteLine("前回の保存先を利用できないため、保存ダイアログの既定の場所を使用します: " + path);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsOutputSettingError(ex)) throw;
+            TryWriteLine("保存先の設定を読み取れません。保存ダイアログの既定の場所を使用します。" +
+                Environment.NewLine + ex.Message);
+        }
+        return null;
+    }
+
+    /// <summary>OK で選択された保存先フォルダを HKCU の文字列値へ保存する。</summary>
+    /// <param name="directory">選択フルパスの親。リンク解決後の実体に置き換えない。</param>
+    private static void SaveOutputDirectory(string directory)
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(SaveDialogRegistryKey))
+            {
+                if (key == null) throw new IOException("保存先の設定用レジストリキーを開けません。");
+                key.SetValue(SaveDialogRegistryValue, directory, RegistryValueKind.String);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsOutputSettingError(ex)) throw;
+            // 保存先の記憶は補助機能。失敗を明示し、現在選ばれた保存先での圧縮は継続する。
+            TryWriteLine("保存先をレジストリに記憶できませんでした。今回の圧縮は選択した場所で継続します。" +
+                Environment.NewLine + ex.Message);
+        }
+    }
+
+    /// <summary>補助設定の失敗として継続できる例外だけを判定する。資源枯渇等は隠さない。</summary>
+    private static bool IsOutputSettingError(Exception error)
+    {
+        return error is AppError || error is IOException || error is UnauthorizedAccessException ||
+            error is System.Security.SecurityException || error is ArgumentException;
     }
 
     /// <summary>本圧縮と事前圧縮で共用する Deflate 設定。標準の既定レベルを両方に使う。</summary>
@@ -406,6 +501,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             output.ExpectedLength = writer.Finish();
             if (output.ExpectedLength != part.Layout.Size)
                 throw new AppError(13, "ZIP の物理サイズが事前計画と一致しません: " + output.Name);
+            // ローカルヘッダの書換えまで終了した実バイト列を、保持中の同じストリームで検証する。
+            Console.WriteLine("{0}: 完成 ZIP の SHA-256 を計算しています...", output.Name);
+            output.Digest = ZipHist.HashCompletedStream(output.Stream, output.ExpectedLength);
             result.AddPart(output.Name, output.ExpectedLength);
             Console.WriteLine("{0}: 完成サイズ {1} bytes{2}", output.Name, FormatNumber(output.ExpectedLength),
                 output.ExpectedLength > MAX_ONE_ZIP_FILE_SIZE ? " (31,500,000 bytes 超過)" : "");
@@ -430,6 +528,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             percent.ToString("F1", NumberCulture), FormatNumber(result.TotalZipBytes),
             result.LargestName, result.LargestIndex, FormatNumber(result.LargestBytes));
         text += Environment.NewLine + "圧縮後ファイル容量は圧縮データのみ。ZIP 総容量には暗号化・名前・各種ヘッダ等も含みます。";
+        text += Environment.NewLine + "ziphist ベースライン (zip_type_b):" + Environment.NewLine +
+            "  内容ファイル一覧: " + names.ListFilePath + Environment.NewLine +
+            "  ZIP 一覧: " + names.ListZipPath;
         if (percent < 0) text += Environment.NewLine + "削減率が負の場合は、その割合だけ増加したことを表します。";
         if (result.CycleCutCount != 0)
             text += Environment.NewLine + "注意: 祖先へ戻る循環リンク " + result.CycleCutCount.ToString(NumberCulture) +
@@ -1390,6 +1491,8 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 Console.WriteLine("  {0}: {1} bytes / {2} エントリ{3}", System.IO.Path.GetFileName(names.PartPath(i + 1, Parts.Count)),
                     FormatNumber(Parts[i].Layout.Size), Parts[i].Items.Count,
                     Parts[i].Layout.Size > MAX_ONE_ZIP_FILE_SIZE ? " (目安容量超過)" : "");
+            Console.WriteLine("付随一覧: {0}", names.ListFilePath);
+            Console.WriteLine("付随一覧: {0}", names.ListZipPath);
             if (Relaxed) Console.WriteLine("警告: 最大 {0} 個を優先し、容量の目安を緩和して均等化しました。ファイル内容は分割しません。", MAX_NUM_ZIP_FILES);
             else if (Maximum() > MAX_ONE_ZIP_FILE_SIZE)
                 Console.WriteLine("警告: 単独のファイルだけで目安容量を超える ZIP があります。");
@@ -1663,7 +1766,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         }
     }
 
-    /// <summary>分割 ZIP の命名と、旧出力を削除できる名前かの厳密な判定。</summary>
+    /// <summary>分割 ZIP・ziphist 一覧の命名と、旧出力を削除できる名前かの厳密な判定。</summary>
     private sealed class OutputNames
     {
         // 保存ダイアログの指定名。複数生成時の実際の先頭名とは区別する。
@@ -1671,6 +1774,18 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         internal readonly string DirectoryPath;
         internal readonly string BaseName;
         private readonly string requestedName;
+
+        /// <summary>ZIP 全体で共通の平文ファイル一覧。連番や総数を付けない。</summary>
+        internal string ListFilePath
+        {
+            get { return ValidateOutputPath(System.IO.Path.Combine(DirectoryPath, BaseName + ".listfile.txt")); }
+        }
+
+        /// <summary>ZIP 全体で共通のベースライン ZIP 一覧。単一 ZIP でも同じ命名。</summary>
+        internal string ListZipPath
+        {
+            get { return ValidateOutputPath(System.IO.Path.Combine(DirectoryPath, BaseName + ".listzip.txt")); }
+        }
 
         /// <summary>連番を付ける前の検査済み絶対パスを保持し、保存先とベース名を分離する。</summary>
         /// <param name="requestedPath">保存ダイアログで選んだ .zip 名を出力実体フォルダへ結合したパス。</param>
@@ -1695,7 +1810,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                     MaximumOutputZipFiles.ToString(NumberCulture) + " 個です。");
         }
 
-        /// <summary>1 個なら指定名、複数なら総数に応じた 2～4 桁を、1 個目から一律に付ける。</summary>
+        /// <summary>1 個なら指定名、複数なら番号of総数を、総数に応じた同じ 2～4 桁で付ける。</summary>
         /// <param name="number">1 始まりの出力番号。totalCount 以下であること。</param>
         /// <param name="totalCount">設定上限ではなく、計画で確定した実際の生成数。</param>
         /// <returns>生成時にそのまま使用する絶対パス。番号・個数・パスが不正なら例外。</returns>
@@ -1709,25 +1824,47 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             {
                 string format = totalCount < 100 ? "D2" : (totalCount < 1000 ? "D3" : "D4");
                 path = System.IO.Path.Combine(DirectoryPath,
-                    BaseName + "." + number.ToString(format, NumberCulture) + ".zip");
+                    BaseName + "." + number.ToString(format, NumberCulture) + "of" +
+                    totalCount.ToString(format, NumberCulture) + ".zip");
             }
+            return ValidateOutputPath(path);
+        }
+
+        /// <summary>ZIP と一覧ファイルに同じ出力パス制限を適用し、通常絶対パスを返す。</summary>
+        private static string ValidateOutputPath(string path)
+        {
             // 全名前を計画表示時に評価するため、連番付加による長さ超過も旧出力削除前に拒否する。
             if (path.Length >= 260 || System.IO.Path.GetFileName(path).Length > 255)
-                throw new AppError(206, "連番を含む出力パスが通常の Windows パス長上限を超えます: " + path);
+                throw new AppError(206, "ZIP または一覧の出力パスが通常の Windows パス長上限を超えます: " + path);
             return PathRules.FullPath(path);
         }
 
-        /// <summary>新旧出力に使われる無連番名と ASCII 2～4 桁名を、今回の桁数に依存せず判定する。</summary>
+        /// <summary>ZIP の最長名と両一覧のパスを、ファイル操作開始前に検査する。</summary>
+        internal void ValidatePaths(int totalCount)
+        {
+            PartPath(totalCount, totalCount);
+            ValidateOutputPath(System.IO.Path.Combine(DirectoryPath, BaseName + ".listfile.txt"));
+            ValidateOutputPath(System.IO.Path.Combine(DirectoryPath, BaseName + ".listzip.txt"));
+        }
+
+        /// <summary>新旧 ZIP 名を、今回の個数や桁数に依存せず厳密に判定する。</summary>
         internal bool IsOldName(string name)
         {
             return MatchesOldName(name, requestedName, BaseName);
+        }
+
+        /// <summary>今回のベース名に対応する 2 種類の一覧だけを完全一致で判定する。</summary>
+        internal bool IsManifestName(string name)
+        {
+            return String.Equals(name, BaseName + ".listfile.txt", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(name, BaseName + ".listzip.txt", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>削除規則の純粋関数。直下の通常ファイルかどうかは呼出側で別に必ず検査する。</summary>
         /// <param name="name">ディレクトリ部分を含まない候補名。</param>
         /// <param name="first">連番付加前の指定ファイル名。</param>
         /// <param name="stem">末尾の .zip だけを除去した指定ファイル名。</param>
-        /// <returns>無連番名、旧規則の 00～99、または 001～999 / 0001～9999 なら true。</returns>
+        /// <returns>無連番、従来の ASCII 2～4 桁連番、または R04 の正規な番号of総数なら true。</returns>
         internal static bool MatchesOldName(string name, string first, string stem)
         {
             if (name.IndexOf('/') >= 0 || name.IndexOf('\\') >= 0) return false;
@@ -1737,6 +1874,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                 !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
             int digits = name.Length - prefix.Length - suffix.Length;
+            // R04 のみを局所的に追加する。旧形式の判定範囲はこれまでどおり維持する。
+            if (digits > 4)
+                return MatchesTotalNumber(name.Substring(prefix.Length, digits));
             if (digits < 2 || digits > 4) return false;
             int number = 0;
             for (int i = prefix.Length; i < prefix.Length + digits; i++)
@@ -1746,6 +1886,133 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             }
             // 旧来の .00.zip は維持する。新形式では生成しない .000.zip / .0000.zip を削除対象に広げない。
             return digits == 2 || number != 0;
+        }
+
+        /// <summary>R04 の番号部分を検査する。ASCII 数字、桁数、番号範囲と総数をすべて照合する。</summary>
+        /// <param name="value">拡張子・ベース名を含まない、01of02 等の候補。</param>
+        /// <returns>生成可能な正規形だけ true。00、番号超過、余分な桁などは false。</returns>
+        private static bool MatchesTotalNumber(string value)
+        {
+            if (value.Length != 6 && value.Length != 8 && value.Length != 10) return false;
+            int width = (value.Length - 2) / 2;
+            if ((value[width] != 'o' && value[width] != 'O') ||
+                (value[width + 1] != 'f' && value[width + 1] != 'F')) return false;
+            int number = 0;
+            int total = 0;
+            for (int i = 0; i < width; i++)
+            {
+                char first = value[i];
+                char second = value[width + 2 + i];
+                if (first < '0' || first > '9' || second < '0' || second > '9') return false;
+                number = number * 10 + first - '0';
+                total = total * 10 + second - '0';
+            }
+            int expectedWidth = total < 100 ? 2 : (total < 1000 ? 3 : 4);
+            return total >= 2 && total <= MaximumOutputZipFiles && number >= 1 &&
+                number <= total && width == expectedWidth;
+        }
+    }
+
+    /// <summary>DN_ZIPHIST_RULE:VER20261017 のベースライン一覧を、既存の圧縮計測値から生成する。</summary>
+    private static class ZipHist
+    {
+        /// <summary>完成したストリーム全体の SHA-256 を求め、呼出時の読書位置へ戻す。</summary>
+        /// <param name="stream">書換えが完了した、読取・シーク可能な所有中の出力。</param>
+        /// <param name="expectedLength">完成 ZIP の実バイト数。長さ不一致は例外。</param>
+        /// <returns>最終物理バイト列の SHA-256、32 バイト。</returns>
+        internal static byte[] HashCompletedStream(Stream stream, long expectedLength)
+        {
+            if (!stream.CanRead || !stream.CanSeek || expectedLength < 0)
+                throw new AppError(13, "完成 ZIP のハッシュ計算に必要な読取・シーク条件が不足しています。");
+            long position = stream.Position;
+            try
+            {
+                CheckCancellation();
+                stream.Flush();
+                if (stream.Length != expectedLength)
+                    throw new AppError(13, "ハッシュ計算前の ZIP 物理サイズが一致しません。");
+                stream.Position = 0;
+                byte[] buffer = new byte[BufferSize];
+                long total = 0;
+                using (SHA256 hash = SHA256.Create())
+                {
+                    if (hash == null) throw new CryptographicException("SHA-256 プロバイダーがありません。");
+                    while (true)
+                    {
+                        CheckCancellation();
+                        int count = stream.Read(buffer, 0, buffer.Length);
+                        if (count == 0) break;
+                        total = checked(total + count);
+                        if (total > expectedLength)
+                            throw new AppError(13, "ハッシュ計算中に ZIP の物理サイズが増加しました。");
+                        hash.TransformBlock(buffer, 0, count, buffer, 0);
+                    }
+                    if (total != expectedLength)
+                        throw new AppError(13, "ハッシュ計算中に ZIP の物理サイズが変わりました。");
+                    hash.TransformFinalBlock(new byte[0], 0, 0);
+                    return hash.Hash;
+                }
+            }
+            finally { stream.Position = position; }
+        }
+
+        /// <summary>SHA-256 を小文字 64 桁の16進表記へ変換する。不正な長さは内部エラー。</summary>
+        internal static string DigestText(byte[] digest)
+        {
+            if (digest == null || digest.Length != 32)
+                throw new AppError(13, "ziphist 用の SHA-256 計測値がありません。");
+            const string hex = "0123456789abcdef";
+            char[] result = new char[64];
+            for (int i = 0; i < digest.Length; i++)
+            {
+                result[i * 2] = hex[digest[i] >> 4];
+                result[i * 2 + 1] = hex[digest[i] & 15];
+            }
+            return new string(result);
+        }
+
+        /// <summary>平文 SHA-256、平文サイズ、実際の ZIP 内相対パスを1行ずつ書く。</summary>
+        /// <param name="writer">UTF-8 の書込先。呼出側が所有し、この関数では閉じない。</param>
+        /// <param name="items">出力を完了した全入力。空ディレクトリは ZIP にだけ保存する。</param>
+        internal static void WriteFileList(TextWriter writer, IList<SourceItem> items)
+        {
+            writer.NewLine = "\r\n";
+            // ファイル0件でも、一覧ファイルの存在と末尾改行を保証する。
+            writer.WriteLine("# ziphist baseline: SHA-256 size relative-path");
+            foreach (SourceItem item in items)
+            {
+                CheckCancellation();
+                if (item.IsDirectory) continue;
+                Measurement measurement = item.Measurement;
+                if (measurement == null || measurement.UncompressedSize != item.Length)
+                    throw new AppError(13, "ziphist 用の平文サイズが一致しません: " + item.ZipPath);
+                string relative = PathRules.ArchivePath(item.ZipPath, false);
+                // 区切り空白と先頭スペースを区別できるよう、この場合だけ同値の ./ 相対表記にする。
+                if (relative[0] == ' ') relative = "./" + relative;
+                writer.WriteLine(DigestText(measurement.Digest) + " " +
+                    measurement.UncompressedSize.ToString(NumberCulture) + " " + relative);
+            }
+        }
+
+        /// <summary>完成 ZIP の実ファイル名・実サイズ・SHA-256 をベースラインとして書く。</summary>
+        /// <param name="writer">UTF-8 の書込先。この関数では閉じない。</param>
+        /// <param name="outputs">ZIP だけを番号順に格納した一覧。付随テキストは含めない。</param>
+        internal static void WriteZipList(TextWriter writer, IList<OwnedOutput> outputs)
+        {
+            if (outputs.Count == 0) throw new AppError(13, "ziphist に列挙する完成 ZIP がありません。");
+            writer.NewLine = "\r\n";
+            writer.WriteLine("/ziphist_begin");
+            // R04 の明示指定を優先し、ZIP が1個の場合も zip_type_b とする。
+            writer.WriteLine("/base:0:zip_type_b");
+            foreach (OwnedOutput item in outputs)
+            {
+                CheckCancellation();
+                string name = PathRules.ArchivePath(item.Name, false);
+                if (name.IndexOf('/') >= 0 || item.ExpectedLength < 22)
+                    throw new AppError(13, "ziphist 用の ZIP 名または物理サイズが不正です: " + item.Name);
+                writer.WriteLine(name + "/" + item.ExpectedLength.ToString(NumberCulture) + "/" + DigestText(item.Digest));
+            }
+            writer.WriteLine("/ziphist_end");
         }
     }
 
@@ -1792,6 +2059,8 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         internal FileStream Stream;
         internal SafeFileHandle Handle;
         internal long ExpectedLength;
+        // ZIP の完成バイト列の SHA-256。付随テキストのときは使用しない。
+        internal byte[] Digest;
     }
 
     /// <summary>旧出力の削除と新出力全体の成功/失敗を管理する。名前だけで後片付けしない。</summary>
@@ -1801,6 +2070,9 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         // 全出力で同じ桁数を使うため、削除開始前に確定した実際の生成数を固定して保持する。
         private readonly int plannedPartCount;
         private readonly List<OwnedOutput> outputs = new List<OwnedOutput>();
+        // ZIP 個数上限には数えないが、成功確定・失敗時の削除は ZIP と一体で扱う。
+        private readonly List<OwnedOutput> manifestOutputs = new List<OwnedOutput>();
+        private bool baselineManifestsWritten;
         private bool committed;
         private bool rolledBack;
 
@@ -1810,6 +2082,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         internal OutputTransaction(OutputNames outputNames, int partCount)
         {
             OutputNames.ValidatePartCount(partCount);
+            outputNames.ValidatePaths(partCount);
             names = outputNames;
             plannedPartCount = partCount;
         }
@@ -1827,7 +2100,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 {
                     CheckCancellation();
                     string name = System.IO.Path.GetFileName(path);
-                    if (!names.IsOldName(name)) continue;
+                    if (!names.IsOldName(name) && !names.IsManifestName(name)) continue;
                     FileAttributes attributes = Native.GetAttributes(path);
                     if ((attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
                         throw new AppError(50, "削除候補の名前に一致するフォルダまたはリンクがあります。削除しません: " + path);
@@ -1845,7 +2118,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 }
                 if (oldPaths.Count != 0)
                 {
-                    Console.WriteLine("次の既存ファイルを削除して作り直します。失敗しても元の ZIP は復元されません。");
+                    Console.WriteLine("次の既存ファイルを削除して作り直します。失敗しても元の ZIP・一覧ファイルは復元されません。");
                     foreach (string path in oldPaths) Console.WriteLine("  " + path);
                     if (!AskYesNo("上記 " + oldPaths.Count.ToString(NumberCulture) + " 個の削除を許可しますか?(y/n)"))
                         throw new AppError(1223, "既存ファイルの削除がキャンセルされました。既存ファイルは削除していません。");
@@ -1878,9 +2151,20 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         /// <summary>新規ファイルだけを作る。列挙後に出現した同名ファイルは絶対に上書きしない。</summary>
         internal OwnedOutput CreateNext()
         {
+            if (manifestOutputs.Count != 0 || committed || rolledBack)
+                throw new AppError(13, "一覧生成開始後または処理終了後に ZIP を追加することはできません。");
             if (outputs.Count >= plannedPartCount)
                 throw new AppError(13, "ZIP の生成数が事前計画 " + plannedPartCount.ToString(NumberCulture) + " 個を超えようとしました。");
             string path = names.PartPath(checked(outputs.Count + 1), plannedPartCount);
+            return CreateOwnedOutput(path, outputs);
+        }
+
+        /// <summary>ZIP と両一覧に共通の CREATE_NEW と所有ハンドル管理。成功したものだけを登録する。</summary>
+        /// <param name="path">検査済みの出力絶対パス。</param>
+        /// <param name="destination">ZIP 用または一覧用の所有リスト。</param>
+        /// <returns>開いたストリームと削除用ハンドルを保持した新規出力。</returns>
+        private OwnedOutput CreateOwnedOutput(string path, List<OwnedOutput> destination)
+        {
             OwnedOutput item = new OwnedOutput();
             item.Path = path;
             item.Name = System.IO.Path.GetFileName(path);
@@ -1894,7 +2178,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 borrowed = new SafeFileHandle(handle.DangerousGetHandle(), false);
                 // Stream の Dispose 後も削除用の所有ハンドルが残る。所有者は必ず item.Handle。
                 item.Stream = new FileStream(borrowed, FileAccess.ReadWrite, 4096, false);
-                outputs.Add(item);
+                destination.Add(item);
                 return item;
             }
             catch
@@ -1916,20 +2200,54 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             }
         }
 
+        /// <summary>全 ZIP の完成後、今回のベースラインに必須の両一覧を所有中の新規ファイルへ書く。</summary>
+        /// <param name="manifest">実際に ZIP へ書いた内容の一覧と、照合済みの平文計測値。</param>
+        internal void WriteBaselineManifests(Manifest manifest)
+        {
+            if (outputs.Count != plannedPartCount || manifestOutputs.Count != 0 || committed || rolledBack)
+                throw new AppError(13, "ziphist 一覧を生成できる出力状態ではありません。");
+            WriteManifest(names.ListFilePath, delegate(TextWriter writer) { ZipHist.WriteFileList(writer, manifest.Items); });
+            WriteManifest(names.ListZipPath, delegate(TextWriter writer) { ZipHist.WriteZipList(writer, outputs); });
+            baselineManifestsWritten = true;
+        }
+
+        /// <summary>UTF-8 BOMなし・CRLF の付随一覧を作成する。失敗時の削除は全出力と共通管理。</summary>
+        /// <param name="path">一覧ファイルの検査済みパス。</param>
+        /// <param name="writeContent">同じ出力ストリームへ内容を書く処理。</param>
+        private void WriteManifest(string path, Action<TextWriter> writeContent)
+        {
+            CheckCancellation();
+            OwnedOutput item = CreateOwnedOutput(path, manifestOutputs);
+            // leaveOpen を使い、Writer の破棄後もトランザクション側がストリームとハンドルを所有する。
+            using (StreamWriter writer = new StreamWriter(item.Stream, Utf8, 4096, true))
+                writeContent(writer);
+            item.ExpectedLength = item.Stream.Length;
+            Console.WriteLine("{0}: ziphist 一覧を作成しました ({1} bytes)。", item.Name, FormatNumber(item.ExpectedLength));
+        }
+
+        /// <summary>ZIP、次に付随一覧の順で、今回所有する全出力を返す。元のファイルは含まない。</summary>
+        private IEnumerable<OwnedOutput> AllOutputs()
+        {
+            foreach (OwnedOutput item in outputs) yield return item;
+            foreach (OwnedOutput item in manifestOutputs) yield return item;
+        }
+
         /// <summary>全体をディスクまでフラッシュして実サイズを検査する。完了するまでは全所有ハンドルを保持。</summary>
         internal void Commit()
         {
             if (outputs.Count != plannedPartCount)
                 throw new AppError(13, "ZIP の生成数が事前計画と一致しません。予定: " +
                     plannedPartCount.ToString(NumberCulture) + " 個、実際: " + outputs.Count.ToString(NumberCulture) + " 個。");
-            foreach (OwnedOutput item in outputs)
+            if (!baselineManifestsWritten || manifestOutputs.Count != 2)
+                throw new AppError(13, "ziphist の両一覧ファイルが完成していないため成功確定できません。");
+            foreach (OwnedOutput item in AllOutputs())
             {
                 CheckCancellation();
                 item.Stream.Flush(true);
                 if (item.Stream.Length != item.ExpectedLength)
-                    throw new AppError(13, "ZIP の最終物理サイズが一致しません: " + item.Path);
+                    throw new AppError(13, "出力の最終物理サイズが一致しません: " + item.Path);
             }
-            foreach (OwnedOutput item in outputs)
+            foreach (OwnedOutput item in AllOutputs())
             {
                 CheckCancellation();
                 // 非所有 SafeFileHandle を渡しているので、Stream を閉じても実体は固定されたまま。
@@ -1937,7 +2255,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             }
             CheckCancellation();
             committed = true;
-            foreach (OwnedOutput item in outputs) item.Handle.Dispose();
+            foreach (OwnedOutput item in AllOutputs()) item.Handle.Dispose();
         }
 
         /// <summary>書き込みを終了した後、今回所有したハンドルにだけ削除保留を設定して閉じる。</summary>
@@ -1945,7 +2263,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         {
             if (rolledBack || committed) return;
             rolledBack = true;
-            foreach (OwnedOutput item in outputs)
+            foreach (OwnedOutput item in AllOutputs())
             {
                 // 削除保留設定後には書込み等をせず、ハンドルを閉じるだけにする。
                 try { item.Stream.Dispose(); }
@@ -1958,14 +2276,14 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 }
                 finally { item.Handle.Dispose(); }
             }
-            if (outputs.Count > 0) TryWriteLine("今回の出力に対する後片付けを実行しました。上記に削除エラーがなければ中途半端な ZIP は残りません。");
+            if (outputs.Count + manifestOutputs.Count > 0) TryWriteLine("今回の出力に対する後片付けを実行しました。上記に削除エラーがなければ中途半端な ZIP・一覧ファイルは残りません。");
         }
 
         /// <summary>未確定なら後片付けを行い、確定済みなら保持資源だけを解放する。</summary>
         public void Dispose()
         {
             if (!committed) Rollback();
-            else foreach (OwnedOutput item in outputs) item.Handle.Dispose();
+            else foreach (OwnedOutput item in AllOutputs()) item.Handle.Dispose();
         }
     }
 
@@ -3481,12 +3799,15 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             try
             {
                 Console.WriteLine("DNNT ZIP 自己テスト (ディスクへのテストファイル作成なし)");
+                Check(MAX_NUM_ZIP_FILES == 99, "R04 の ZIP 個数初期値は99");
                 Check(Crc32.Compute(Encoding.ASCII.GetBytes("123456789")) == 0xCBF43926U, "CRC-32 既知値");
                 TestClassicVector();
                 TestNames();
                 TestLongInputPaths();
                 TestOutputNumbering();
                 TestOutputCountLimits();
+                TestDefaultOutputFileName();
+                TestZipHist();
                 TestInputZipRootNames();
                 TestLegacyNames();
                 TestDirectoryTraversalRules();
@@ -3500,7 +3821,7 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 TestPlannedLayouts();
                 TestPrecompressionCache();
                 Console.WriteLine("PASS: " + assertions.ToString(NumberCulture) + " assertions");
-                Console.WriteLine("長い実パス/UNC の列挙・読取、保存ダイアログ・Win32 リンク解決・削除保留・権限の試験は別途必要です。");
+                Console.WriteLine("長い実パス/UNC の列挙・読取、保存ダイアログ・レジストリ記憶・Win32 リンク解決・削除保留・権限の試験は別途必要です。");
                 return 0;
             }
             catch (Exception ex)
@@ -3548,9 +3869,15 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
         private static void TestNames()
         {
             string[] yes = { "a.zip", "A.ZIP", "a.02.zip", "A.00.ZIP", "a.01.zip", "a.19.zip", "a.20.zip", "a.99.zip",
-                "a.001.zip", "a.002.zip", "a.012.zip", "a.100.zip", "a.999.zip", "A.0001.ZIP", "a.0012.zip", "a.1000.zip", "a.9999.zip" };
+                "a.001.zip", "a.002.zip", "a.012.zip", "a.100.zip", "a.999.zip", "A.0001.ZIP", "a.0012.zip", "a.1000.zip", "a.9999.zip",
+                "a.01of02.zip", "a.02of02.zip", "a.01of60.zip", "a.60of60.zip", "a.99of99.zip",
+                "a.001of100.zip", "a.999of999.zip", "a.0001of1000.zip", "A.9999OF9999.ZIP" };
             string[] no = { "a.2.zip", "a.000.zip", "a.0000.zip", "a.00000.zip", "a.10000.zip", "a.０２.zip", "a.02.zip.bak",
-                "aX02.zip", "ab.02.zip", "a..zip", "a. 2.zip", "a.-2.zip", "a.02a.zip", "sub/a.02.zip", "sub\\a.02.zip" };
+                "aX02.zip", "ab.02.zip", "a..zip", "a. 2.zip", "a.-2.zip", "a.02a.zip", "sub/a.02.zip", "sub\\a.02.zip",
+                "a.00of02.zip", "a.03of02.zip", "a.01of01.zip", "a.01of00.zip", "a.001of099.zip",
+                "a.0001of0999.zip", "a.01of002.zip", "a.001of99.zip", "a.00001of10000.zip", "a.01of2.zip",
+                "a.０１of02.zip", "a.01of０２.zip", "a.01of02.zip.bak", "ab.01of02.zip", "a.01of02extra.zip",
+                "a.01of02of02.zip", "a.01off02.zip", "sub/a.01of02.zip", "sub\\a.01of02.zip" };
             foreach (string name in yes) Check(OutputNames.MatchesOldName(name, "a.zip", "a"), "削除対象: " + name);
             foreach (string name in no) Check(!OutputNames.MatchesOldName(name, "a.zip", "a"), "削除禁止: " + name);
             for (int width = 2; width <= 4; width++)
@@ -3677,8 +4004,8 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             OutputNames names = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.zip"));
             int[] counts = { 1, 2, 99, 100, 999, 1000, 9999 };
             int[] widths = { 0, 2, 2, 3, 3, 4, 4 };
-            string[] firstNames = { "a.zip", "a.01.zip", "a.01.zip", "a.001.zip", "a.001.zip", "a.0001.zip", "a.0001.zip" };
-            string[] lastNames = { "a.zip", "a.02.zip", "a.99.zip", "a.100.zip", "a.999.zip", "a.1000.zip", "a.9999.zip" };
+            string[] firstNames = { "a.zip", "a.01of02.zip", "a.01of99.zip", "a.001of100.zip", "a.001of999.zip", "a.0001of1000.zip", "a.0001of9999.zip" };
+            string[] lastNames = { "a.zip", "a.02of02.zip", "a.99of99.zip", "a.100of100.zip", "a.999of999.zip", "a.1000of1000.zip", "a.9999of9999.zip" };
             for (int test = 0; test < counts.Length; test++)
             {
                 int count = counts[test];
@@ -3690,7 +4017,8 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                 {
                     string actual = System.IO.Path.GetFileName(names.PartPath(number, count));
                     string expected = count == 1 ? "a.zip" :
-                        "a." + number.ToString(NumberCulture).PadLeft(widths[test], '0') + ".zip";
+                        "a." + number.ToString(NumberCulture).PadLeft(widths[test], '0') + "of" +
+                        count.ToString(NumberCulture).PadLeft(widths[test], '0') + ".zip";
                     Check(actual == expected, "同一セットの全番号で桁数一致: " + actual);
                     Check(generated.Add(actual), "出力名の一意性: " + actual);
                     Check(names.IsOldName(actual), "生成した名前を次回の旧出力判定で認識: " + actual);
@@ -3698,14 +4026,19 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                     previous = actual;
                 }
             }
-            Check(System.IO.Path.GetFileName(names.PartPath(12, 100)) == "a.012.zip", "3 桁の 12 個目");
-            Check(System.IO.Path.GetFileName(names.PartPath(12, 1000)) == "a.0012.zip", "4 桁の 12 個目");
+            Check(System.IO.Path.GetFileName(names.PartPath(12, 100)) == "a.012of100.zip", "3 桁の 12 個目");
+            Check(System.IO.Path.GetFileName(names.PartPath(12, 1000)) == "a.0012of1000.zip", "4 桁の 12 個目");
             OutputNames upper = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "A.ZIP"));
             Check(System.IO.Path.GetFileName(upper.PartPath(1, 1)) == "A.ZIP", "単一出力の指定名と拡張子を維持");
             OutputNames numberedStem = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a.07.zip"));
-            Check(System.IO.Path.GetFileName(numberedStem.PartPath(1, 2)) == "a.07.01.zip", "指定名中の既存数字は削らない");
+            Check(System.IO.Path.GetFileName(numberedStem.PartPath(1, 2)) == "a.07.01of02.zip", "指定名中の既存数字は削らない");
             OutputNames symbols = new OutputNames(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "a+b.[x].zip"));
-            Check(System.IO.Path.GetFileName(symbols.PartPath(1, 100)) == "a+b.[x].001.zip", "ベース名の記号をそのまま保持");
+            Check(System.IO.Path.GetFileName(symbols.PartPath(1, 100)) == "a+b.[x].001of100.zip", "ベース名の記号をそのまま保持");
+            Check(System.IO.Path.GetFileName(numberedStem.ListFilePath) == "a.07.listfile.txt", "一覧は指定ベース名を保持");
+            Check(System.IO.Path.GetFileName(names.ListZipPath) == "a.listzip.txt", "ZIP 一覧に連番を付けない");
+            Check(names.IsManifestName("A.LISTFILE.TXT") && names.IsManifestName("a.listzip.txt"), "一覧名は大小文字を無視して完全一致");
+            string[] unrelated = { "a.listfile.txt.bak", "ab.listzip.txt", "a.zip.listfile.txt", "a.01of02.listfile.txt", "sub/a.listfile.txt" };
+            foreach (string value in unrelated) Check(!names.IsManifestName(value), "無関係の一覧名を削除しない: " + value);
 
             int[] invalidNumbers = { -1, 0, 3 };
             foreach (int number in invalidNumbers)
@@ -3721,10 +4054,15 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             ExpectAppError(delegate { names.PartPath(1, Int32.MaxValue); }, 87, "極端な総数でも 5 桁以上を作らない");
 
             // 実ファイルを作らず、連番の付加で通常パス長をまたぐ条件だけを再現する。
-            OutputNames longName = new OutputNames("C:/x/" + new string('a', 247) + ".zip");
-            Check(longName.PartPath(1, 99).Length == 259, "2 桁付加後に 259 文字のパスは受理");
-            ExpectAppError(delegate { longName.PartPath(1, 100); }, 206, "3 桁付加で 260 文字になるパスは拒否");
+            OutputNames longName = new OutputNames("C:/x/" + new string('a', 243) + ".zip");
+            Check(longName.PartPath(1, 99).Length == 259, "2 桁of総数付加後に259文字のパスは受理");
+            ExpectAppError(delegate { longName.PartPath(1, 100); }, 206, "3 桁of総数付加で261文字になるパスは拒否");
             ExpectAppError(delegate { longName.PartPath(1, 1000); }, 206, "4 桁付加で上限超過するパスは拒否");
+            OutputNames manifestBoundary = new OutputNames("C:/x/" + new string('a', 241) + ".zip");
+            Check(manifestBoundary.ListFilePath.Length == 259, "listfile の259文字境界を受理");
+            OutputNames manifestTooLong = new OutputNames("C:/x/" + new string('a', 242) + ".zip");
+            Check(manifestTooLong.PartPath(1, 1).Length == 251, "ZIP 名だけなら上限内の境界素材");
+            ExpectAppError(delegate { new OutputTransaction(manifestTooLong, 1); }, 206, "一覧名が260文字なら旧出力削除前に拒否");
         }
 
         /// <summary>設定上限と実際の生成数を区別し、9999/10000 境界と不完全な成功確定を検査する。</summary>
@@ -3765,6 +4103,146 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
                     ExpectAppError(delegate { incomplete.Commit(); }, 13, "生成数が事前計画に足りない成功確定を拒否");
             }
             finally { MAX_NUM_ZIP_FILES = savedMaximum; }
+        }
+
+        /// <summary>親フォルダの選択、ルートの代替名、日時書式を、保存ダイアログを開かず検査する。</summary>
+        private static void TestDefaultOutputFileName()
+        {
+            DateTime time = new DateTime(2026, 10, 18, 15, 57, 52);
+            string[,] cases = {
+                { @"C:\tmp\x1\y2\z3", "y2" },
+                { @"C:\tmp\x1\y2\z3\", "y2" },
+                { @"C:\tmp\x1\y2\file.txt", "y2" },
+                { @"C:\tmp\x1\y2\archive.zip", "y2" },
+                { @"C:\parent\link_name", "parent" },
+                { @"C:\親 フォルダ\子", "親 フォルダ" },
+                { @"C:\file.txt", "C" },
+                { @"C:\", "C" },
+                { @"\\server\share\folder", "share" },
+                { @"\\server\share\", "share" }
+            };
+            CultureInfo savedCulture = Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
+                for (int i = 0; i < cases.GetLength(0); i++)
+                    Check(DefaultOutputFileName(cases[i, 0], time) == "261018_155752_" + cases[i, 1] + ".zip",
+                        "第1入力の親名と固定日時書式: " + cases[i, 0]);
+            }
+            finally { Thread.CurrentThread.CurrentCulture = savedCulture; }
+        }
+
+        /// <summary>独立した BCL の一括計算で比較用の SHA-256 小文字文字列を得る。</summary>
+        private static string IndependentDigest(byte[] bytes)
+        {
+            using (SHA256 hash = SHA256.Create())
+                return BitConverter.ToString(hash.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+        }
+
+        /// <summary>実際のメモリ ZIP と平文を使い、ziphist 書式・ハッシュ・空入力・中止を検査する。</summary>
+        private static void TestZipHist()
+        {
+            const string emptyDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+            byte[] largeBytes = new byte[BufferSize * 2 + 123];
+            new Random(404).NextBytes(largeBytes);
+            List<SourceItem> items = new List<SourceItem>();
+            items.Add(MakeSource("hello.txt", Encoding.ASCII.GetBytes("hello")));
+            items.Add(MakeSource("empty.txt", new byte[0]));
+            items.Add(MakeSource("日本語/空 白.txt", Utf8.GetBytes("日本語")));
+            items.Add(MakeSource(" leading.txt", new byte[0]));
+            items.Add(MakeSource("data.bin", largeBytes));
+            SourceItem directory = MakeSource("empty_folder", new byte[0]);
+            directory.IsDirectory = true;
+            directory.ZipPath = "empty_folder/";
+            directory.NameBytes = Utf8.GetBytes(directory.ZipPath);
+            items.Add(directory);
+
+            using (MemoryStream memory = new MemoryStream())
+            {
+                ZipOutput zip = new ZipOutput(memory);
+                foreach (SourceItem item in items) zip.Accept(zip.WriteCandidate(item));
+                long size = zip.Finish();
+                Check(size > BufferSize * 2, "ZIP ハッシュの複数ブロック読取用データ");
+                memory.Position = 7;
+                byte[] digest = ZipHist.HashCompletedStream(memory, size);
+                Check(memory.Position == 7, "完成 ZIP のハッシュ計算後に元の位置へ戻す");
+                string expected = IndependentDigest(memory.ToArray());
+                Check(ZipHist.DigestText(digest) == expected, "ヘッダ書換え後の完成 ZIP 全体を独立 SHA-256 と照合");
+                ExpectAppError(delegate { ZipHist.HashCompletedStream(memory, size + 1); }, 13, "ZIP サイズの不一致を拒否");
+                Check(memory.Position == 7, "ZIP サイズ不一致時も位置を戻す");
+
+                using (StringWriter writer = new StringWriter(NumberCulture))
+                {
+                    ZipHist.WriteFileList(writer, items);
+                    string text = writer.ToString();
+                    Check(text.Contains("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824 5 hello.txt\r\n"),
+                        "平文helloの既知SHA-256・サイズ・パス");
+                    Check(text.Contains(emptyDigest + " 0 empty.txt\r\n"), "空ファイルは不存在マークではなく空データのSHA-256");
+                    Check(text.Contains(IndependentDigest(Utf8.GetBytes("日本語")) + " 9 日本語/空 白.txt\r\n"), "日本語と内部空白を保持");
+                    Check(text.Contains(emptyDigest + " 0 ./ leading.txt\r\n"), "パスの先頭空白を ./ 表記で区別");
+                    Check(text.Contains(IndependentDigest(largeBytes) + " " + largeBytes.Length.ToString(NumberCulture) + " data.bin\r\n"),
+                        "平文サイズは圧縮量でなくバイト数、桁区切りなし");
+                    Check(!text.Contains("empty_folder"), "空ディレクトリはlistfileのデータ行に含めない");
+                    Check(text.EndsWith("\r\n", StringComparison.Ordinal) && text.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries).Length == 6,
+                        "全ファイルを1回ずつ列挙し末尾改行を付ける");
+                }
+
+                OwnedOutput first = new OwnedOutput();
+                first.Name = "test.zip";
+                first.ExpectedLength = size;
+                first.Digest = digest;
+                List<OwnedOutput> outputs = new List<OwnedOutput>();
+                outputs.Add(first);
+                using (StringWriter writer = new StringWriter(NumberCulture))
+                {
+                    ZipHist.WriteZipList(writer, outputs);
+                    Check(writer.ToString() == "/ziphist_begin\r\n/base:0:zip_type_b\r\ntest.zip/" +
+                        size.ToString(NumberCulture) + "/" + expected + "\r\n/ziphist_end\r\n", "単一ZIPもzip_type_bのベースライン");
+                }
+                first.Name = "test.01of02.zip";
+                OwnedOutput second = new OwnedOutput();
+                second.Name = "test.02of02.zip";
+                second.ExpectedLength = 5000000000L; // 書式だけの合成境界。実際の5GBファイルは作らない。
+                second.Digest = digest;
+                outputs.Add(second);
+                using (StringWriter writer = new StringWriter(NumberCulture))
+                {
+                    ZipHist.WriteZipList(writer, outputs);
+                    string text = writer.ToString();
+                    Check(text.Contains("test.02of02.zip/5000000000/" + expected + "\r\n"), "ZIP 実サイズの64bit十進表記");
+                    Check(text.IndexOf(first.Name, StringComparison.Ordinal) < text.IndexOf(second.Name, StringComparison.Ordinal), "ZIP 一覧はパート順");
+                    Check(text.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries).Length == 5, "ZIP 2個と3指令行だけを列挙");
+                }
+                bool previousCancellation = CancellationRequested;
+                bool canceled = false;
+                try
+                {
+                    CancellationRequested = true;
+                    ZipHist.HashCompletedStream(memory, size);
+                }
+                catch (OperationCanceledException) { canceled = true; }
+                finally { CancellationRequested = previousCancellation; }
+                Check(canceled && memory.Position == 7, "ZIP ハッシュ中の中止とストリーム位置復元");
+            }
+
+            using (StringWriter writer = new StringWriter(NumberCulture))
+            {
+                ZipHist.WriteFileList(writer, new List<SourceItem> { directory });
+                Check(writer.ToString().StartsWith("#", StringComparison.Ordinal) && writer.ToString().EndsWith("\r\n", StringComparison.Ordinal),
+                    "空ディレクトリだけでも有効な一覧と末尾改行");
+            }
+            using (MemoryStream bytes = new MemoryStream())
+            {
+                using (StreamWriter writer = new StreamWriter(bytes, Utf8, 4096, true))
+                    ZipHist.WriteFileList(writer, new List<SourceItem>());
+                byte[] textBytes = bytes.ToArray();
+                Check(textBytes.Length > 2 && textBytes[0] == (byte)'#' && textBytes[textBytes.Length - 2] == 13 && textBytes[textBytes.Length - 1] == 10,
+                    "UTF-8 BOMなしの空一覧にもCRLFを保存し所有ストリームを閉じない");
+            }
+            ExpectAppError(delegate { ZipHist.DigestText(new byte[0]); }, 13, "SHA-256未計測値を拒否");
+            using (StringWriter writer = new StringWriter(NumberCulture))
+                ExpectAppError(delegate { ZipHist.WriteFileList(writer, new List<SourceItem> { MakeSource("unmeasured.txt", new byte[0]) }); }, 13,
+                    "計測値のない平文を一覧に出さない");
         }
 
         /// <summary>入力 ZIP の拡張子除去、通常入力の維持、除去後の衝突、暗号化 ZIP の名前を検査。</summary>
@@ -3972,16 +4450,17 @@ internal static class dnnt_261006_vqybr5_zip_split_merge
             result.FileCount = 2;
             result.OriginalBytes = 1000;
             result.CompressedPayloadBytes = 600;
-            result.AddPart("a.01.zip", 120);
-            result.AddPart("a.02.zip", 560);
+            result.AddPart("a.01of02.zip", 120);
+            result.AddPart("a.02of02.zip", 560);
             string text = FormatResult(result, names);
             string newline = Environment.NewLine;
-            Check(text.StartsWith(newline + names.PartPath(1, 2) + " ～ a.02.zip", StringComparison.Ordinal),
-                "成功表示の先頭も実際の .01.zip を使用");
+            Check(text.StartsWith(newline + names.PartPath(1, 2) + " ～ a.02of02.zip", StringComparison.Ordinal),
+                "成功表示の先頭も実際の .01of02.zip を使用");
             Check(text.Contains("圧縮しました。" + newline + newline + "圧縮前ファイル容量: 1,000 bytes" + newline), "概要の後に空行");
             Check(text.Contains("圧縮後ファイル容量: 600 bytes (40.0 % 削減)" + newline), "圧縮後容量の改行");
-            Check(text.Contains("合計容量: 680 bytes" + newline + "このうち最大の .zip ファイルは、a.02.zip (2 個目) であり 560 bytes です。"),
+            Check(text.Contains("合計容量: 680 bytes" + newline + "このうち最大の .zip ファイルは、a.02of02.zip (2 個目) であり 560 bytes です。"),
                 "合計容量と最大 ZIP の書式");
+            Check(text.Contains(names.ListFilePath) && text.Contains(names.ListZipPath), "成功表示に両一覧のパスを含める");
             result.CycleCutCount = 1;
             Check(FormatResult(result, names).Contains("循環リンク 1 箇所"), "循環の打切りを成功表示でも報告");
             result.OriginalBytes = 0;
