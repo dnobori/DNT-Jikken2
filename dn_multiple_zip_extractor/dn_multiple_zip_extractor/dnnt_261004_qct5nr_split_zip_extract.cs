@@ -1,10 +1,11 @@
 ﻿/*
-DNNT 261014_CXH85B 分割 ZIP 結合展開ユーティリティ R07
+DNNT 261018_LQMPG7 分割 ZIP 結合展開ユーティリティ R08
 
-ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r07_261017_cxh85b.cs
-今回バージョン: R07 (入力ソースの指定バージョン: R06)
+ソースコードファイル名: dnnt_261004_qct5nr_split_zip_extract_r08_261018_lqmpg7.cs
+今回バージョン: R08 (入力ソースの指定バージョン: R07)
 内部識別名・名前空間: dnnt_261004_qct5nr_split_zip_extract (継続)
-前回標題: DNNT 261011_SQVCB3 分割 ZIP 結合展開ユーティリティ R06
+前回標題: DNNT 261014_CXH85B 分割 ZIP 結合展開ユーティリティ R07
+R06 標題: DNNT 261011_SQVCB3 分割 ZIP 結合展開ユーティリティ R06
 R05 標題: DNNT 261008_USW6SU 分割 ZIP 結合展開ユーティリティ R05
 R04 標題: DNNT 261008_FLVS83 分割 ZIP 結合展開ユーティリティ R04
 R03 標題: DNNT 261007_VGD8LA 分割 ZIP 結合展開ユーティリティ R03
@@ -39,6 +40,8 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       削除マークは __DELETED__ と末尾なし/CR/LF/CRLF、先頭 UTF-8 BOM 一個の有無だけを許容する。
       従来の通常モードおよび /d のベースライン側では、同じ本文も通常ファイル。
       ziphist ではベースラインを含む全世代の最終候補へマーク判定を適用する。既存出力の物理削除は行わない。
+      ziphist の保存ダイアログの既定名は、指定したマニフェストの最終世代の物理 ZIP 群から求める。
+      listzip/listfile は末尾改行のない最終行も通常行と同じ厳密 UTF-8・文法検査を行う。入力を書き換えない。
       短小暗号差分は保存前にパスワードを質問する場合がある。判定不能なら差分を採用せず、
       対応ベースラインを残して警告する。削除候補の CRC 等が不正なら従来の分類で出力前に中断する。
       自作コードであること自体は無脆弱性を保証しない。README の制約・検証範囲参照。
@@ -112,7 +115,24 @@ R02 標題: DNNT 261007_TFDXE5 分割 ZIP 結合展開ユーティリティ 2
       最終内容の読取時は可能なら当該ハンドルによるアクセス日時自動更新を抑止。不可なら内容検証後に警告。
       新規ディレクトリの日時復元は最終照合の後。既存の ZIP/codec/暗号/worker/保存および /d 本体を維持。
 
-今回の生成情報 (R07):
+改修 R08 / DNNT 261018_LQMPG7 / 2026/10/18 10:57:59 (JST):
+      ziphist の保存ダイアログへ最終世代の物理 ZIP 一覧だけを渡し、祖先世代の名前が選ばれる不具合を修正。
+      元の _<物理ファイル名>.txt と大小無視比較を維持し、全世代の入力・検証・復元順は変更しない。
+      listzip/listfile の末尾改行必須検査を除き、EOF に残る行を通常行と共通の UTF-8/BOM/文法処理へ渡す。
+      不正 UTF-8・SHA・サイズ・パス・世代構造等の拒否、および入力を読取専用で保持する方式は維持する。
+      空/BOM のみの listfile も改行一文字を加えた場合と同じ空一覧として扱う。listzip の必須構造検査は維持。
+      詳細な原因・仕様解釈・検証結果と Windows 実機未検証範囲は README の R08 追記を参照。
+
+今回の生成情報 (R08):
+      本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
+      AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
+      思考レベル: この環境から公開された設定値は取得不可のため推測しない。
+      セッション開始日時(JST): 正確な起動時刻は取得不可。
+      今回依頼の受信時刻・作業開始基準(JST): 2026/10/18 10:44:11 (会話に供給された時刻情報)。
+      応答生成日時(JST): 2026/10/18 10:57:59 (JST)
+      実コンパイル・実 C# テストと Windows/Visual Studio 2026 実機未検証の区別は README の R08 追記参照。
+
+前回の生成情報 (R07、入力ソースの記録を保持):
       本プログラムは生成 AI により生成され、今回の改修も生成 AI が実施。
       AI バージョン・モデル: GPT-6 Astra Pro (内部ビルド識別子は取得不可)。
       思考レベル: この環境から公開された設定値は取得不可のため推測しない。
@@ -383,7 +403,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                 ZiphistFinalPlan combined = history.VerifyAndPlan(passwords);
                 combined.Print();
                 string root = specifiedDestination == null
-                    ? SelectDestination(Path.GetDirectoryName(selection.SelectedPath), history.Sources, false,
+                    ? SelectDestination(Path.GetDirectoryName(selection.SelectedPath), history.Manifest.GetDestinationSources(), false,
                         "【ziphist 展開モード】で展開する先を指定してください")
                     : WindowsPaths.TrimSlash(WindowsPaths.Full(specifiedDestination));
                 if (specifiedDestination != null) Console.WriteLine("指定された展開先: " + Text.Safe(root));
@@ -658,7 +678,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         /// 前回選択先の 1 つ上のディレクトリ a がレジストリにあれば、それを初期位置として使用する。
         /// </summary>
         /// <param name="initial">履歴がない場合に使用する初期ディレクトリ。</param>
-        /// <param name="sources">展開対象の検証済み物理ファイルのフルパス一覧。1 件以上必要。順序は変更しない。</param>
+        /// <param name="sources">既定名の候補となる検証済み物理ファイルのフルパス一覧。ziphist は最終世代だけ。1 件以上必要。順序は変更しない。</param>
         /// <param name="differential">差分モードなら true。保存ダイアログのタイトルに反映する。</param>
         /// <param name="titleOverride">ziphist では指定の専用タイトル。null は従来のタイトル。</param>
         /// <returns>ユーザーが指定した架空ファイルを含む、実際の展開先絶対ディレクトリ。</returns>
@@ -897,6 +917,18 @@ namespace dnnt_261004_qct5nr_split_zip_extract
             return false;
         }
 
+        /// <summary>復元終着世代の物理 ZIP だけを、保存ダイアログの既定名候補として返す。</summary>
+        /// <returns>解析済み最終世代の宣言順を保つ新しいパス一覧。元の世代一覧や全入力一覧は変更しない。</returns>
+        internal List<string> GetDestinationSources()
+        {
+            // R08: Sources の全世代比較では、名前が辞書順で先になる祖先 ZIP が選ばれてしまう。
+            // 指定 ZIP の任意の断片・付随ファイルのどちらから起動しても、同じ終着世代を基準とする。
+            ZiphistGeneration generation = Generations[Generations.Count - 1];
+            List<string> result = new List<string>(generation.Files.Count);
+            foreach (ZiphistZipRecord record in generation.Files) result.Add(record.FullPath);
+            return result;
+        }
+
         /// <summary>begin/end、連続世代、宣言 TYPE、物理ファイル名と検証値を解析する。</summary>
         /// <param name="source">listzip の固定済み入力。所有権は呼出元に残す。</param>
         private void ReadZipList(SourcePart source)
@@ -1069,11 +1101,6 @@ namespace dnnt_261004_qct5nr_split_zip_extract
         {
             using (JoinedStream stream = new JoinedStream(new SourcePart[] { source }))
             {
-                if (stream.Length == 0) throw Error(source, 0, "マニフェストの末尾には改行コードが必要です（空ファイル）。");
-                stream.Seek(-1, SeekOrigin.End);
-                int last = stream.ReadByte();
-                if (last != 13 && last != 10) throw Error(source, 0, "マニフェストの末尾に改行コードがありません。");
-                stream.Position = 0;
                 byte[] buffer = new byte[65536];
                 int lineNumber = 1;
                 bool afterCr = false;
@@ -1094,14 +1121,7 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                             }
                             if (value != 13 && value != 10) continue;
                             line.Write(buffer, start, index - start);
-                            string text;
-                            try { text = StrictUtf8.GetString(line.GetBuffer(), 0, checked((int)line.Length)); }
-                            catch (DecoderFallbackException ex)
-                            {
-                                throw new InvalidDataException(Location(source, lineNumber) + " / UTF-8 として不正なバイト列です。", ex);
-                            }
-                            if (lineNumber == 1 && text.Length != 0 && text[0] == '\ufeff') text = text.Substring(1);
-                            consume(text, lineNumber);
+                            ConsumeLine(source, line, lineNumber, consume);
                             line.SetLength(0);
                             line.Position = 0;
                             lineNumber = checked(lineNumber + 1);
@@ -1110,9 +1130,28 @@ namespace dnnt_261004_qct5nr_split_zip_extract
                         }
                         if (start < count) line.Write(buffer, start, count - start);
                     }
-                    if (line.Length != 0) throw Error(source, lineNumber, "マニフェストの末尾行が改行で終わっていません。");
+                    // R08: EOF の最終行も、末尾へ改行を一つ加えた場合と同じ検査・レコード処理を行う。
+                    // 入力へ追記せず、途中で切れた UTF-8 や不正な最終レコードは通常行と同じく拒否する。
+                    if (line.Length != 0) ConsumeLine(source, line, lineNumber, consume);
                 }
             }
+        }
+
+        /// <summary>改行で終わる行と EOF で終わる行を、同じ厳密 UTF-8・先頭 BOM 規則で解釈する。</summary>
+        /// <param name="source">エラー位置の表示に用いる、呼出元所有の入力。</param>
+        /// <param name="line">改行コードを含まない一行のバイト列。ここでは変更・破棄しない。</param>
+        /// <param name="lineNumber">一から始まる行番号。先頭行のみ先頭 BOM 一個を除く。</param>
+        /// <param name="consume">復号した文字列を既存のマニフェスト文法で検査する受取先。</param>
+        private static void ConsumeLine(SourcePart source, MemoryStream line, int lineNumber, Action<string, int> consume)
+        {
+            string text;
+            try { text = StrictUtf8.GetString(line.GetBuffer(), 0, checked((int)line.Length)); }
+            catch (DecoderFallbackException ex)
+            {
+                throw new InvalidDataException(Location(source, lineNumber) + " / UTF-8 として不正なバイト列です。", ex);
+            }
+            if (lineNumber == 1 && text.Length != 0 && text[0] == '\ufeff') text = text.Substring(1);
+            consume(text, lineNumber);
         }
 
         /// <summary>ファイル名と行番号を付けた致命的なマニフェスト形式エラーを作る。</summary>
