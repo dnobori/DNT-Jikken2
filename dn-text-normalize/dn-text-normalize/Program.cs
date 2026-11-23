@@ -98,7 +98,7 @@ internal class Program
             }
             else if (mode == Mode.YymmddAndRandTag5AndBracket)
             {
-                string tag1 = "T" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + GenerateTimeBasedRandTag() + "_" + GetAndIncrementSeqNo().ToString("D2");
+                string tag1 = "T" + DateTime.Now.ToString("yyMMdd") + "_" + GenerateTimeBasedRandTag() + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + GetAndIncrementSeqNo().ToString("D2");
 
                 str = "[" + tag1 + "]";
                 //strAppendTail = " ";
@@ -109,7 +109,7 @@ internal class Program
             }
             else if (mode == Mode.BeginEndSectionWithTag)
             {
-                string tag1 = "T" + DateTime.Now.ToString("yyMMdd") + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + "_" + GenerateTimeBasedRandTag() + "_" + GetAndIncrementSeqNo().ToString("D2");
+                string tag1 = "T" + DateTime.Now.ToString("yyMMdd") + "_" + GenerateTimeBasedRandTag() + "_" + Lib.StrHashToTag(Environment.MachineName.ToLowerInvariant(), 2) + GetAndIncrementSeqNo().ToString("D2");
 
                 str = $"\r\n--- [{tag1}] ここから ---\r\n\r\n--- [{tag1}] ここまで ---\r\n";
             }
